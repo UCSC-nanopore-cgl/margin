@@ -1756,6 +1756,9 @@ stList *runLengthEncodeAlignment(stList *alignment,
  */
 
 inline double *repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount) {
+    // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
+    if(base == repeatSubMatrix->alphabet->alphabetSize - 1) {base = 0;}
+    // santiy check
     if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
         st_errAbort("[repeatSubMatrix_setLogProb] base 'Nn' not supported for repeat estimation\n");
     }
