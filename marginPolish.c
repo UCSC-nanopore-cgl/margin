@@ -520,34 +520,6 @@ int main(int argc, char *argv[]) {
         Poa *poa = NULL; // The poa alignment
         char *polishedConsensusString = NULL; // The polished reference string
 
-        //todo rle-ing moved to convertToReadsAndAlignmentsOrWhatever
-        // prep for RLE work
-//        stList *rleNucleotides = stList_construct3(0, (void (*)(void *)) rleString_destruct);
-//        stList *rleReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-//        stList *rleAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-//        uint64_t totalNucleotides = 0;
-//
-//        // RLE the reads
-//        for (int64_t j = 0; j < stList_length(reads); j++) {
-//            BamChunkRead *read = stList_get(reads, j);
-//            stList *alignment = stList_get(alignments, j);
-//            RleString *rleNucleotideString = NULL;
-//
-//            // Perform or skip RLE
-//            if (params->polishParams->useRunLengthEncoding) {
-//                rleNucleotideString = rleString_construct(read->nucleotides);
-//            } else {
-//                rleNucleotideString = rleString_constructNoRLE(read->nucleotides);
-//            }
-//            totalNucleotides += rleNucleotideString->length;
-//
-//            // Do RLE follow up regardless of whether RLE is applied
-//            stList_append(rleNucleotides, rleNucleotideString);
-//            stList_append(rleReads, bamChunkRead_constructRLECopy(read, rleNucleotideString));
-//            stList_append(rleAlignments, runLengthEncodeAlignment(alignment, rleReference, rleNucleotideString));
-//        }
-
-
         // Run the polishing method
         int64_t totalNucleotides = 0;
         if (st_getLogLevel() >= info) {
