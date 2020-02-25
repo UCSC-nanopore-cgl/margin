@@ -230,11 +230,13 @@ int main(int argc, char *argv[]) {
             outputPoaDotBase = getFileBase(optarg, "poa");
             break;
         case 'F':
-            if (stString_eq(optarg, "simpleWeight")) {
+            if (stString_eqcase(optarg, "simpleWeight")) {
                 helenFeatureType = HFEAT_SIMPLE_WEIGHT;
-            } else if (stString_eq(optarg, "splitRleWeight")) {
+            } else if (stString_eqcase(optarg, "rleWeight")) {
                 helenFeatureType = HFEAT_SPLIT_RLE_WEIGHT;
-            } else if (stString_eq(optarg, "channelRleWeight")) {
+            } else if (stString_eqcase(optarg, "splitRleWeight")) {
+                helenFeatureType = HFEAT_SPLIT_RLE_WEIGHT;
+            } else if (stString_eqcase(optarg, "channelRleWeight")) {
                 helenFeatureType = HFEAT_CHANNEL_RLE_WEIGHT;
             } else {
                 fprintf(stderr, "Unrecognized featureType for HELEN: %s\n\n", optarg);
@@ -382,6 +384,10 @@ int main(int argc, char *argv[]) {
     st_logCritical("> Set up bam chunker with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
     		   (int)bamChunker->chunkSize, (int)bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr,
     		   bamChunker->chunkCount);
+    if (bamChunker->chunkCount == 0) {
+        st_errAbort("> Found no valid reads!\n");
+    }
+
 
     // for feature generation
     BamChunker *trueReferenceBamChunker = NULL;

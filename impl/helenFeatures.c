@@ -170,18 +170,19 @@ void handleHelenFeatures(
         // poor man's "do we have a unique alignment"
         if (trueAlignmentCount == 1) {
             BamChunkRead *trueRefRead = stList_get(trueRefReads, 0);
+            char *trueRefExpanded = rleString_expand(trueRefRead->rleRead);
 
-            stList *trueRefAlignmentRawSpace = alignConsensusAndTruth(polishedConsensusString, trueRefRead->rleRead->rleString);
+            stList *trueRefAlignmentRawSpace = alignConsensusAndTruth(polishedConsensusString, trueRefExpanded);
             if (st_getLogLevel() == debug) {
-                printMEAAlignment(polishedConsensusString, trueRefRead->rleRead->rleString,
-                                  strlen(polishedConsensusString), strlen(trueRefRead->rleRead->rleString),
+                printMEAAlignment(polishedConsensusString, trueRefExpanded,
+                                  strlen(polishedConsensusString), strlen(trueRefExpanded),
                                   trueRefAlignmentRawSpace, NULL, NULL);
             }
 
 
             // convert to rleSpace if appropriate
             if (params->polishParams->useRunLengthEncoding) {
-                trueRefRleString = rleString_construct(trueRefRead->rleRead->rleString);
+                trueRefRleString = rleString_construct(trueRefExpanded);
 
                 uint64_t *polishedRleConsensus_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensus);
                 uint64_t *trueRefRleString_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleString);
@@ -199,7 +200,7 @@ void handleHelenFeatures(
                 }
                 stList_destruct(trueRefAlignmentRawSpace);
             } else {
-                trueRefRleString = rleString_construct_no_rle(trueRefRead->rleRead->rleString);
+                trueRefRleString = rleString_construct_no_rle(trueRefExpanded);
                 trueRefAlignment = trueRefAlignmentRawSpace;
             }
 
@@ -217,6 +218,9 @@ void handleHelenFeatures(
                            " ratio (true/polished) %f, aligned pairs length ratio (true/polished): %f\n",
                            logIdentifier, polishedRleConsensus->length, refLengthRatio, alnLengthRatio);
             }
+
+            //cleanup
+            free(trueRefExpanded);
         }
 
         stList_destruct(trueRefReads);
