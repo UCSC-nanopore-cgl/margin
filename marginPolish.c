@@ -95,6 +95,7 @@ void usage() {
     fprintf(stderr, "    -o --outputBase          : Name to use for output files [default = 'output']\n");
     fprintf(stderr, "    -r --region              : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
+    fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
 
     # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
@@ -159,6 +160,7 @@ int main(int argc, char *argv[]) {
     char *outputRepeatCountBase = NULL;
     char *outputPoaTsvBase = NULL;
     char *outputPoaDotBase = NULL;
+    int64_t maxDepth = -1;
 
     // for feature generation
     HelenFeatureType helenFeatureType = HFEAT_NONE;
@@ -189,6 +191,7 @@ int main(int argc, char *argv[]) {
                 #endif
                 { "outputBase", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
+                { "depth", required_argument, 0, 'p'},
                 { "produceFeatures", no_argument, 0, 'f'},
                 { "featureType", required_argument, 0, 'F'},
                 { "trueReferenceBam", required_argument, 0, 'u'},
@@ -199,7 +202,7 @@ int main(int argc, char *argv[]) {
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:fF:u:hL:i:j:d:t:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:p:fF:u:hL:i:j:d:t:", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -220,6 +223,11 @@ int main(int argc, char *argv[]) {
         case 'r':
             regionStr = stString_copy(optarg);
             break;
+        case 'p':
+            maxDepth = atoi(optarg);
+            if (maxDepth < 0) {
+                st_errAbort("Invalid maxDepth: %s", optarg);
+            }
         case 'i':
             outputRepeatCountBase = getFileBase(optarg, "repeatCount");
             break;
@@ -327,6 +335,12 @@ int main(int argc, char *argv[]) {
     // Parse parameters
     st_logCritical("> Parsing model parameters from file: %s\n", paramsFile);
     Params *params = params_readParams(paramsFile);
+
+    // update depth (if set)
+    if (maxDepth >= 0) {
+        st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth, maxDepth);
+        params->polishParams->maxDepth = (uint64_t) maxDepth;
+    }
 
     // Set no RLE if appropriate feature type is set
     if (helenFeatureType == HFEAT_SIMPLE_WEIGHT) {
