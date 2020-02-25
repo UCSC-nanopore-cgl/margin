@@ -1196,7 +1196,8 @@ char **getTwoDArrayChar(int64_t rowCount, int64_t columnCount) {
 }
 
 
-#define MAX_TOTAL_WEIGHT 64.0
+// todo rethink this
+#define MAX_TOTAL_WEIGHT 256.0
 uint8_t convertTotalWeightToUInt8(double totalWeight) {
     // convert to "depth space"
     totalWeight /= PAIR_ALIGNMENT_PROB_1;
