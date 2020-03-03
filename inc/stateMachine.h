@@ -25,7 +25,7 @@ Symbol symbol_getRepeatLength(Symbol s);
 
 Symbol symbol_stripRepeatCount(Symbol s);
 
-Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength);
+Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength, uint64_t maxRepeatCountExclusive);
 
 SymbolString symbolString_construct(const char *sequence, int64_t start, int64_t length, Alphabet *a);
 

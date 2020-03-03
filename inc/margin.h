@@ -834,7 +834,7 @@ char *rleString_expand(RleString *rleString);
 /*
  * Gets a symbol sub-string from a given RLE string.
  */
-SymbolString rleString_constructSymbolString(RleString *s, int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts);
+SymbolString rleString_constructSymbolString(RleString *s, int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts, uint64_t maxRunLengthExclusive);
 
 /*
  * Gets an array giving the position in the rleString of a corresponding position in the expanded string.

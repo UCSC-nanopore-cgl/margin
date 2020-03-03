@@ -897,7 +897,7 @@ BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, Polis
 						SymbolString alleleSymbolStrings[b->alleleNo];
 						for(int64_t j=0; j<b->alleleNo; j++) {
 							alleleSymbolStrings[j] = rleString_constructSymbolString(b->alleles[j], 0, b->alleles[j]->length,
-									params->alphabet, params->useRepeatCountsInAlignment);
+									params->alphabet, params->useRepeatCountsInAlignment, poa->maxRepeatCount);
 						}
 
 						stHash *cachedScores = stHash_construct3(rleString_stringKey, rleString_expandedStringEqualKey,
@@ -906,7 +906,7 @@ BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, Polis
 						for(int64_t k=0; k<b->readNo; k++) {
 							RleString *readSubstring = bamChunkReadSubstring_getRleString(b->reads[k]);
 							SymbolString rS = rleString_constructSymbolString(readSubstring, 0, readSubstring->length,
-									params->alphabet, params->useRepeatCountsInAlignment);
+									params->alphabet, params->useRepeatCountsInAlignment, poa->maxRepeatCount);
 							StateMachine *sM = b->reads[k]->read->forwardStrand ? params->stateMachineForForwardStrandRead : params->stateMachineForReverseStrandRead;
 
 							uint64_t *index = stHash_search(cachedScores, readSubstring);

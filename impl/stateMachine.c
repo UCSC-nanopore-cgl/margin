@@ -121,21 +121,24 @@ Symbol symbol_stripRepeatCount(Symbol s) {
 	return s & 255; // First eight bits encode symbol
 }
 
-Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength) {
+Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength, uint64_t maxRepeatCountExclusive) {
 	assert(character <= 255);
 	assert(runLength <= 255);
+	if (runLength >= maxRepeatCountExclusive) {
+	    runLength = maxRepeatCountExclusive - 1;
+	}
 	return (runLength << 8) | character;
 }
 
 SymbolString rleString_constructSymbolString(RleString *s,
-		int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts) {
+		int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts, uint64_t maxRepeatCountExclusive) {
 	assert(start+length <= s->length);
 	SymbolString symbolString;
 	symbolString.alphabet = a;
 	symbolString.sequence = symbol_convertStringToSymbols(s->rleString, start, length, a);
 	if(includeRepeatCounts) {
 		for (int64_t i = 0; i < length; i++) {
-			symbolString.sequence[i] = symbol_addRepeatCount(symbolString.sequence[i], s->repeatCounts[i+start]);
+			symbolString.sequence[i] = symbol_addRepeatCount(symbolString.sequence[i], s->repeatCounts[i+start], maxRepeatCountExclusive);
 		}
 	}
 	symbolString.length = length;

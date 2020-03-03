@@ -328,8 +328,11 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
 		int64_t j = stIntTuple_get(match, 2), weight = stIntTuple_get(match, 0);
 		assert(poa->alphabet->convertCharToSymbol(read->rleString[j]) < poa->alphabet->alphabetSize);
 		node->baseWeights[poa->alphabet->convertCharToSymbol(read->rleString[j])] += weight;
-		assert(read->repeatCounts[j] >= 0 && read->repeatCounts[j] < poa->maxRepeatCount);
-		node->repeatCountWeights[read->repeatCounts[j]] += weight;
+		uint64_t repeatCount = read->repeatCounts[j];
+		if (repeatCount >= poa->maxRepeatCount) {
+			repeatCount = poa->maxRepeatCount - 1;
+		}
+		node->repeatCountWeights[repeatCount] += weight;
 
 		// PoaObservation
 		stList_append(node->observations, poaBaseObservation_construct(readNo, stIntTuple_get(match, 2), stIntTuple_get(match, 0)));
@@ -628,8 +631,8 @@ void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
 	adjustAnchors(anchorPairs, 0, -firstRefPosition);
 
 	// Get symbol strings
-	SymbolString sX = rleString_constructSymbolString(reference, firstRefPosition, endRefPosition-firstRefPosition, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
-	SymbolString sY = rleString_constructSymbolString(read, 0, read->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
+	SymbolString sX = rleString_constructSymbolString(reference, firstRefPosition, endRefPosition-firstRefPosition, polishParams->alphabet, polishParams->useRepeatCountsInAlignment, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+	SymbolString sY = rleString_constructSymbolString(read, 0, read->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
 
 	// Get alignment
 	getAlignedPairsWithIndelsUsingAnchors(readStrand ? polishParams->stateMachineForForwardStrandRead :
@@ -666,19 +669,14 @@ Poa *poa_realign(stList *bamChunkReads, stList *anchorAlignments, RleString *ref
 	for(int64_t i=0; i<stList_length(bamChunkReads); i++) {
         BamChunkRead *chunkRead = stList_get(bamChunkReads, i);
 
-        //TODO there must be a better way to ensure maximumRepeatLength is not exceeded in reads
-        for (int64_t j=0; j < chunkRead->rleRead->length; j++) {
-            if (chunkRead->rleRead->repeatCounts[j] >= maximumRepeatLength) {
-                chunkRead->rleRead->repeatCounts[j] = maximumRepeatLength - 1;
-            }
-        }
-
 		// Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
 		stList *matches = NULL, *inserts = NULL, *deletes = NULL;
 
 		if(anchorAlignments == NULL) {
-			SymbolString sX = rleString_constructSymbolString(reference, 0, reference->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
-			SymbolString sY = rleString_constructSymbolString(chunkRead->rleRead, 0, chunkRead->rleRead->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
+			SymbolString sX = rleString_constructSymbolString(reference, 0, reference->length, polishParams->alphabet,
+					polishParams->useRepeatCountsInAlignment, poa->maxRepeatCount - 1);
+			SymbolString sY = rleString_constructSymbolString(chunkRead->rleRead, 0, chunkRead->rleRead->length,
+					polishParams->alphabet, polishParams->useRepeatCountsInAlignment, poa->maxRepeatCount - 1);
 
 			getAlignedPairsWithIndels(chunkRead->forwardStrand ? polishParams->stateMachineForForwardStrandRead :
 					polishParams->stateMachineForReverseStrandRead,
@@ -1315,7 +1313,7 @@ stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, Polish
 	stList *alignments = stList_construct3(0, (void (*)(void *))stList_destruct);
 
 	// Make the MEA alignments
-	SymbolString refSymbolString = rleString_constructSymbolString(poa->refString, 0, poa->refString->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
+	SymbolString refSymbolString = rleString_constructSymbolString(poa->refString, 0, poa->refString->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment, poa->maxRepeatCount);
 	for(int64_t i=0; i<stList_length(bamChunkReads); i++) {
 		BamChunkRead* read = stList_get(bamChunkReads, i);
 
@@ -1330,7 +1328,7 @@ stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, Polish
 				poa->refString->length, read->rleRead->length, &alignmentScore, polishParams->p);
 
 		// Symbol strings
-		SymbolString readSymbolString = rleString_constructSymbolString(read->rleRead, 0, read->rleRead->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment);
+		SymbolString readSymbolString = rleString_constructSymbolString(read->rleRead, 0, read->rleRead->length, polishParams->alphabet, polishParams->useRepeatCountsInAlignment, poa->maxRepeatCount);
 
 		// Left shift the alignment
 		stList *leftShiftedAlignment = leftShiftAlignment(alignment, refSymbolString, readSymbolString);
@@ -1832,7 +1830,7 @@ void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeat
 		}
 	}
 	if(*maxRepeatLength >= repeatSubMatrix->maximumRepeatLength) {
-		st_logInfo("Got overlong repeat observation: %" PRIi64 ", ignoring this and cutting off overlong repeat counts to max\n", maxRepeatLength);
+		st_logInfo("   Got overlong repeat observation: %" PRIi64 ", ignoring this and cutting off overlong repeat counts to max %"PRId64"\n", *maxRepeatLength, repeatSubMatrix->maximumRepeatLength - 1);
 		*maxRepeatLength = repeatSubMatrix->maximumRepeatLength-1;
 	}
 }
