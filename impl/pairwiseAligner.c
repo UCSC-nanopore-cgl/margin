@@ -1439,9 +1439,6 @@ stList *getShiftedMEAAlignment(SymbolString seqX, SymbolString seqY, stList *anc
 	return leftShiftedAlignment;
 }
 
-/*
- * This is a pairwise expected accuracy alignment function that uses the multiple alignment code, kind of odd.
- */
 stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolString seqX, SymbolString seqY,
 		PairwiseAlignmentParameters *p) {
 	stList *phonyGapPairs = stList_construct();
@@ -1451,4 +1448,5 @@ stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolSt
 	stList_destruct(phonyGapPairs);
 	return filteredAlignedPairs;
 }
+
 

@@ -30,7 +30,7 @@ def main():
     fh.write(">hello\n%s\n" % read)
     fh.close()
     
-    subprocess.call("cPecanLastz temp.fa %s --format=axt > temp.axt" % (assembly,), shell=True)
+    subprocess.call("lastz temp.fa %s --format=axt > temp.axt" % (assembly,), shell=True)
     
     axt = open("temp.axt", "r").readlines()
     axt = [ i for i in axt if i[0] != '#']

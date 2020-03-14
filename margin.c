@@ -2,6 +2,16 @@
  * Copyright (C) 2018 by Benedict Paten (benedictpaten@gmail.com)
  *
  * Released under the MIT license, see LICENSE.txt
+ *
+ * Plan:
+
+ * ***> Output file of partition as option
+ * ***> Output POA with haplotypes
+ * ***> Cleanup / delete crufty code
+ * ***> Sort out data and tests dir
+ * ***> Investigate indel bias
+ * ***> Match haplotypes between chunks
+ *
  */
 
 #include <getopt.h>
@@ -122,7 +132,6 @@ PolishedReferenceSequence *polishedReferenceSequence_construct(Params *params, c
 void polishedReferenceSequence_processChunkSequence(PolishedReferenceSequence *rSeq,
 		BamChunk *bamChunk, Poa *poa, stList *reads, Params *params) {
 	// Do run-length decoding
-	//poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
 	char *polishedReferenceString = rleString_expand(poa->refString);
 
 	// Log info about the POA
@@ -404,6 +413,7 @@ int main(int argc, char *argv[]) {
 			Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
 			Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
+			// This does not help, so commenting out - may remove
 			/*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
 			poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
 					readsBelongingToHap1, readsBelongingToHap2, params->polishParams);

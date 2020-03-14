@@ -855,9 +855,8 @@ struct _repeatSubMatrix {
 	int64_t maxEntry;
 };
 
-/*
- * Reads the repeat count matrix from a given input file.
- */
+int64_t getMax(double *values, int64_t length,
+               double *maxValue);
 
 RepeatSubMatrix *repeatSubMatrix_constructEmpty(Alphabet *alphabet);
 
