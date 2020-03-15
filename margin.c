@@ -5,13 +5,14 @@
  *
  * Plan:
 
- * ***> Output file of partition as option
  * ***> Output POA with haplotypes
+ *
+ * ***> Output file of partition as option
+ * ***> Match haplotypes between chunks
+ *
  * ***> Cleanup / delete crufty code
  * ***> Sort out data and tests dir
  * ***> Investigate indel bias
- * ***> Match haplotypes between chunks
- *
  */
 
 #include <getopt.h>
@@ -113,7 +114,7 @@ typedef struct _polishedReferenceSequence {
 	char *referenceSequenceNameForPrinting;
 	stList *polishedReferenceStrings;
 	FILE *polishedReferenceFileHandle;
-	FILE *outputPoaTsvFileHandle;
+	FILE *outputPoaCsvFileHandle;
 	FILE *outputRepeatCountFileHandle;
 } PolishedReferenceSequence;
 
@@ -123,14 +124,14 @@ PolishedReferenceSequence *polishedReferenceSequence_construct(Params *params, c
 
 	rSeq->referenceSequenceNameSuffix = stString_copy(referenceSequenceNameSuffix);
 	rSeq->polishedReferenceFileHandle = polishedReferenceFileHandle;
-	rSeq->outputPoaTsvFileHandle = outputPoaTsvFileHandle;
+	rSeq->outputPoaCsvFileHandle = outputPoaTsvFileHandle;
 	rSeq->outputRepeatCountFileHandle = outputRepeatCountFileHandle;
 
 	return rSeq;
 }
 
 void polishedReferenceSequence_processChunkSequence(PolishedReferenceSequence *rSeq,
-		BamChunk *bamChunk, Poa *poa, stList *reads, Params *params) {
+		BamChunk *bamChunk, Poa *poa, stList *reads, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, Params *params) {
 	// Do run-length decoding
 	char *polishedReferenceString = rleString_expand(poa->refString);
 
@@ -141,8 +142,13 @@ void polishedReferenceSequence_processChunkSequence(PolishedReferenceSequence *r
 	}
 
 	// Write any optional outputs about repeat count and POA, etc.
-	if(rSeq->outputPoaTsvFileHandle != NULL) {
-		poa_printTSV(poa, rSeq->outputPoaTsvFileHandle, reads, 5, 0);
+	if(rSeq->outputPoaCsvFileHandle != NULL) {
+	    if(readsBelongingToHap1 != NULL) {
+            poa_printPhasedCSV(poa, rSeq->outputPoaCsvFileHandle, reads, readsBelongingToHap1, readsBelongingToHap2, 5, 0);
+	    }
+	    else {
+            poa_printCSV(poa, rSeq->outputPoaCsvFileHandle, reads, 5, 0);
+        }
 	}
 	if(rSeq->outputRepeatCountFileHandle != NULL) {
 		poa_printRepeatCounts(poa, rSeq->outputRepeatCountFileHandle, reads);
@@ -431,8 +437,8 @@ int main(int argc, char *argv[]) {
 			}
 
 			// Output
-			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa_hap1, reads, params);
-			polishedReferenceSequence_processChunkSequence(rSeq2, bamChunk, poa_hap2, reads, params);
+			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa_hap1, reads, readsBelongingToHap1, readsBelongingToHap2, params);
+			polishedReferenceSequence_processChunkSequence(rSeq2, bamChunk, poa_hap2, reads, readsBelongingToHap1, readsBelongingToHap2, params);
 
 			// Cleanup
 			free(hap1);
@@ -446,7 +452,7 @@ int main(int argc, char *argv[]) {
 			stHash_destruct(readsToPSeqs);
 		}
 		else {
-			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa, reads, params);
+			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa, reads, NULL, NULL, params);
 		}
 
 		// Cleanup

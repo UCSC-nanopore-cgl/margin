@@ -684,12 +684,72 @@ void poa_print(Poa *poa, FILE *fH,
 void poa_printDOT(Poa *poa, FILE *fH, stList *bamChunkReads);
 
 /*
- * Prints a tab separated version of the POA graph.
+ * Prints a comma separated version of the POA graph.
+ *
+ * Format is csv with one line per reference position.
+ * The CSV has the following fields (in order):
+ * REF_INDEX: Index of base in POA backbone, 0 is the position before the first actual base, used to represent prefix indels
+ * REF_BASE: Base at REF_INDEX in the POA backbone
+ * TOTAL_WEIGHT: (float) The expected read coverage of the base at REF_INDEX (float >= 0)
+ * POS_STRAND_WEIGHT: (float) Total weight from positive strand reads.
+ * NEG_STRAND_WEIGHT: (float) Total weight from negative strand reads.
+ * for each base, c, in alphabet (bases A, C, G, T for DNA, in order):
+ * NORM_BASE_c_WEIGHT: (float between 0 and 1) The read weight of reads that have a c aligned to the reference base, as a fraction of total weight.
+ * NORM_POS_STRAND_BASE_c_WEIGHT: (float between 0 and 1) The read weight of positive strand reads that have a c aligned to the reference base, as a fraction of total weight of positive strand reads.
+ * NORM_NEG_BASE_c_WEIGHT: (float between 0 and 1) The read weight of negative strand reads that have a c aligned to the reference base, as a fraction of total weight of negative strand reads.
+ * for each insert:
+ * INSERT_SEQ: The full insertion sequence, not in RLE space
+ * TOTAL_WEIGHT: (float) The expected read coverage of the insert
+ * TOTAL_POS_STRAND_WEIGHT: (float) The total read weight of positive strand reads.
+ * TOTAL_NEG_STRAND_WEIGHT: (float) The total read weight of negative strand reads.
+ * for each delete:
+ * DELETE_LENGTH: Length of the delete
+ * TOTAL_WEIGHT: (float) The expected read coverage of the delete
+ * TOTAL_POS_STRAND_WEIGHT: (float) The read weight of positive strand reads.
+ * TOTAL_NEG_STRAND_WEIGHT: (float) The read weight of negative strand reads.
  */
-void poa_printTSV(Poa *poa, FILE *fH,
+void poa_printCSV(Poa *poa, FILE *fH,
                   stList *bamChunkReads,
                   float indelSignificanceThreshold, float strandBalanceRatio);
 
+/*
+ * Similar to poa_printCSV, but for a phased poa, giving weights for the two haplotypes separately.
+ *
+ * Format is csv with one line per reference position.
+ * The CSV has the following fields (in order):
+ * REF_INDEX: Index of base in POA backbone, 0 is the position before the first actual base, used to represent prefix indels
+ * REF_BASE: Base at REF_INDEX in the POA backbone
+ * TOTAL_WEIGHT: (float) The expected read coverage of the base at REF_INDEX (float >= 0)
+ * FRACTION_HAP1_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the first haplotype partition.
+ * FRACTION_HAP2_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the second haplotype partition.
+ * FRACTION_POS_STRAND_HAP1: (float between 0 and 1) The read weight of first haplotype, positive strand reads as a fraction of all first haplotype read weight.
+ * FRACTION_POS_STRAND_HAP2: (float between 0 and 1) The read weight of second haplotype, positive strand reads as a fraction of all second haplotype read weight.
+ * for each base, c, in alphabet (bases A, C, G, T for DNA, in order):
+ * NORM_BASE_c_WEIGHT: (float between 0 and 1) The read weight of reads that have a c aligned to the reference base, as a fraction of total weight.
+ * FRACTION_BASE_c_HAP1: (float between 0 and 1) The read weight of first haplotype reads that have a c aligned to the reference base, as a fraction of total weight for first haplotype reads.
+ * FRACTION_BASE_c_HAP2 (float between 0 and 1) The read weight of second haplotype reads that have a c aligned to the reference base, as a fraction of total weight for second haplotype reads.
+ * FRACTION_BASE_c_POS_STRAND_HAP1: (float between 0 and 1) The read weight of positive-strand first haplotype reads that have a c aligned to the reference base,
+ * as a fraction of total weight for first haplotype reads with a c aligned to the reference base.
+ * FRACTION_BASE_c_POS_STRAND_HAP2: (float between 0 and 1) The read weight of positive-strand second haplotype reads that have a c aligned to the reference base,
+ * as a fraction of total weight for second haplotype reads with a c aligned to the reference base.
+ * for each insert:
+ * INSERT_SEQ: The full insertion sequence, not in RLE space
+ * TOTAL_WEIGHT: (float) The expected read coverage of the insert
+ * FRACTION_HAP1_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the first haplotype partition.
+ * FRACTION_HAP2_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the second haplotype partition.
+ * FRACTION_POS_STRAND_HAP1: (float between 0 and 1) The read weight of first haplotype, positive strand reads as a fraction of all first haplotype read weight.
+ * FRACTION_POS_STRAND_HAP2: (float between 0 and 1) The read weight of second haplotype, positive strand reads as a fraction of all second haplotype read weight.
+ * for each delete:
+ * DELETE_LENGTH: Length of the insert:
+ * TOTAL_WEIGHT: (float) The expected read coverage of the insert
+ * FRACTION_HAP1_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the first haplotype partition.
+ * FRACTION_HAP2_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the second haplotype partition.
+ * FRACTION_POS_STRAND_HAP1: (float between 0 and 1) The read weight of first haplotype, positive strand reads as a fraction of all first haplotype read weight.
+ * FRACTION_POS_STRAND_HAP2: (float between 0 and 1) The read weight of second haplotype, positive strand reads as a fraction of all second haplotype read weight.
+ */
+void poa_printPhasedCSV(Poa *poa, FILE *fH,
+                        stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
+                        float indelSignificanceThreshold, float strandBalanceRatio);
 /*
  * Print repeat count observations.
  */
@@ -737,7 +797,7 @@ Poa *poa_checkMajorIndelEditsGreedily(Poa *poa, stList *bamChunkReads, PolishPar
 void poa_destruct(Poa *poa);
 
 double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkReads,
-		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a);
+		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a, stSet *readsToInclude);
 
 /*
  * Finds shift, expressed as a reference coordinate, that the given substring str can

@@ -584,7 +584,7 @@ int main(int argc, char *argv[]) {
                                                         outputPoaTsvBase, chunkIdx, bamChunk->refSeqName,
                                                         bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
             FILE *outputPoaTsvFileHandle = fopen(outputPoaTsvFilename, "w");
-            poa_printTSV(poa, outputPoaTsvFileHandle, reads, 5, 0);
+            poa_printCSV(poa, outputPoaTsvFileHandle, reads, 5, 0);
             fclose(outputPoaTsvFileHandle);
             free(outputPoaTsvFilename);
         }

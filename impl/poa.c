@@ -760,7 +760,7 @@ double poa_getTotalErrorWeight(Poa *poa)  {
 }
 
 double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkReads,
-		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a) {
+		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a, stSet *readsToInclude) {
 	/*
 	 * Calculate strand specific base weights.
 	 */
@@ -770,16 +770,18 @@ double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkRead
 	double *baseWeights = st_calloc(a->alphabetSize*2, sizeof(double));
 	for(int64_t i=0; i<stList_length(node->observations); i++) {
 		PoaBaseObservation *baseObs = stList_get(node->observations, i);
-		*totalWeight += baseObs->weight;
 		BamChunkRead *read = stList_get(bamChunkReads, baseObs->readNo);
-		char base = read->rleRead->rleString[baseObs->offset];
-		baseWeights[a->convertCharToSymbol(base) * 2 + (read->forwardStrand ? POS_STRAND_IDX : NEG_STRAND_IDX)] += baseObs->weight;
-		if(read->forwardStrand) {
-			*totalPositiveWeight += baseObs->weight;
-		}
-		else {
-			*totalNegativeWeight += baseObs->weight;
-		}
+        if(readsToInclude == NULL || stSet_search(readsToInclude, read) != NULL) {
+            *totalWeight += baseObs->weight;
+            char base = read->rleRead->rleString[baseObs->offset];
+            baseWeights[a->convertCharToSymbol(base) * 2 +
+                        (read->forwardStrand ? POS_STRAND_IDX : NEG_STRAND_IDX)] += baseObs->weight;
+            if (read->forwardStrand) {
+                *totalPositiveWeight += baseObs->weight;
+            } else {
+                *totalNegativeWeight += baseObs->weight;
+            }
+        }
 	}
 
 	return baseWeights;
@@ -888,17 +890,17 @@ void poa_printDOT(Poa *poa, FILE *fH, stList *bamChunkReads) {
 
 }
 
-void poa_printTSV(Poa *poa, FILE *fH,
+void poa_printCSV(Poa *poa, FILE *fH,
 		stList *bamChunkReads,
 		float indelSignificanceThreshold, float strandBalanceRatio) {
 
-	fprintf(fH, "REF_INDEX\tREF_BASE\tTOTAL_WEIGHT\tPOS_STRAND_WEIGHT\tNEG_STRAND_WEIGHT");
+	fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,POS_STRAND_WEIGHT,NEG_STRAND_WEIGHT");
 	for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
 		char c = poa->alphabet->convertSymbolToChar(j);
-		fprintf(fH, "\tNORM_BASE_%c_WEIGHT\tNORM_POS_STRAND_BASE_%c_WEIGHT\tNORM_NEG_BASE_%c_WEIGHT", c, c, c);
+		fprintf(fH, ",NORM_BASE_%c_WEIGHT,NORM_POS_STRAND_BASE_%c_WEIGHT,NORM_NEG_BASE_%c_WEIGHT", c, c, c);
 	}
 
-	fprintf(fH, "\tINSERTSxN(INSERT_SEQ, TOTAL_WEIGHT, TOTAL_POS_STRAND_WEIGHT, TOTAL_NEG_STRAND_WEIGHT)\tDELETESxN(DELETE_LENGTH, TOTAL_WEIGHT, TOTAL_POS_STRAND_WEIGHT, TOTAL_NEG_STRAND_WEIGHT)\n");
+	fprintf(fH, ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,TOTAL_POS_STRAND_WEIGHT,TOTAL_NEG_STRAND_WEIGHT),DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,TOTAL_POS_STRAND_WEIGHT,TOTAL_NEG_STRAND_WEIGHT)\n");
 
 	// Print info for each base in reference in turn
 	for(int64_t i=0; i<stList_length(poa->nodes); i++) {
@@ -909,9 +911,9 @@ void poa_printTSV(Poa *poa, FILE *fH,
 		// Calculate strand specific base weights
 		double totalWeight, totalPositiveWeight, totalNegativeWeight;
 		double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-				&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet);
+				&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
 		
-		fprintf(fH, "%" PRIi64 "\t%c\t%f\t%f\t%f", i, node->base,
+		fprintf(fH, "%" PRIi64 ",%c,%f,%f,%f", i, node->base,
 				totalWeight/PAIR_ALIGNMENT_PROB_1, totalPositiveWeight/PAIR_ALIGNMENT_PROB_1,
 				totalNegativeWeight/PAIR_ALIGNMENT_PROB_1);
 
@@ -920,7 +922,7 @@ void poa_printTSV(Poa *poa, FILE *fH,
 			double negativeStrandBaseWeight = baseWeights[j*2 + 0];
 			double totalBaseWeight = positiveStrandBaseWeight + negativeStrandBaseWeight;
 
-			fprintf(fH, "\t%f\t%f\t%f,", node->baseWeights[j]/totalWeight,
+			fprintf(fH, ",%f,%f,%f", node->baseWeights[j]/totalWeight,
 					positiveStrandBaseWeight/totalPositiveWeight, negativeStrandBaseWeight/totalNegativeWeight);
 		}
 
@@ -931,11 +933,12 @@ void poa_printTSV(Poa *poa, FILE *fH,
 			PoaInsert *insert = stList_get(node->inserts, j);
 			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
 					isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "\tINSERT\t%s\t%f\t%f\t%f",
-						insert->insert->rleString,
-						(float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
+                char *s = rleString_expand(insert->insert);
+			    fprintf(fH, ",%s,%f,%f,%f",
+						s, (float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightReverseStrand/PAIR_ALIGNMENT_PROB_1);
+			    free(s);
 			}
 		}
 
@@ -944,7 +947,7 @@ void poa_printTSV(Poa *poa, FILE *fH,
 			PoaDelete *delete = stList_get(node->deletes, j);
 			if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
 					isBalanced(delete->weightForwardStrand, delete->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "\tDELETE\t%" PRIi64 "\t%f\t%f\t%f",
+				fprintf(fH, ",%" PRIi64 ",%f,%f,%f",
 						delete->length,
 						(float)poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1,
 						(float)delete->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
@@ -954,6 +957,134 @@ void poa_printTSV(Poa *poa, FILE *fH,
 
 		fprintf(fH, "\n");
 	}
+}
+
+
+void poa_printPhasedCSV_indelPrint(stList *observations, FILE *fH,
+                                   stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2) {
+    double totalPositiveWeightHap1=0.0, totalNegativeWeightHap1=0.0;
+    double totalPositiveWeightHap2=0.0, totalNegativeWeightHap2=0.0;
+
+    for(int64_t k=0; k<stList_length(observations); k++) {
+        PoaBaseObservation *obs = stList_get(observations, k);
+        BamChunkRead *read = stList_get(bamChunkReads, obs->readNo);
+        if(stSet_search(readsInHap1, read) != NULL) {
+            if(read->forwardStrand) {
+                totalPositiveWeightHap1 += obs->weight;
+            }
+            else {
+                totalNegativeWeightHap1 += obs->weight;
+            }
+        } else if (stSet_search(readsInHap2, read) != NULL) {
+            if(read->forwardStrand) {
+                totalPositiveWeightHap2 += obs->weight;
+            }
+            else {
+                totalNegativeWeightHap2 += obs->weight;
+            }
+        }
+    }
+
+    double totalWeight = totalPositiveWeightHap1 + totalNegativeWeightHap1 + totalPositiveWeightHap2 + totalNegativeWeightHap2;
+
+    fprintf(fH, ",%f,%f,%f,%f,%f",
+            (float)totalWeight/PAIR_ALIGNMENT_PROB_1,
+            (float)(totalPositiveWeightHap1 + totalNegativeWeightHap1)/totalWeight,
+            (float)(totalPositiveWeightHap2 + totalNegativeWeightHap2)/totalWeight,
+            (float)totalPositiveWeightHap1 / (totalPositiveWeightHap1 + totalNegativeWeightHap1),
+            (float)totalPositiveWeightHap2 / (totalPositiveWeightHap2 + totalNegativeWeightHap2));
+}
+
+void poa_printPhasedCSV(Poa *poa, FILE *fH,
+                        stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
+                        float indelSignificanceThreshold, float strandBalanceRatio) {
+
+    fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
+    for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
+        char c = poa->alphabet->convertSymbolToChar(j);
+        fprintf(fH, ",NORM_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c, c);
+    }
+    fprintf(fH, ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)"
+                ",DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)\n");
+
+    // Print info for each base in reference in turn
+    for(int64_t i=0; i<stList_length(poa->nodes); i++) {
+        PoaNode *node = stList_get(poa->nodes, i);
+
+        // Print base weights
+
+        // Calculate strand specific base weights
+        double totalWeight, totalPositiveWeight, totalNegativeWeight;
+        double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                   &totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
+
+        // Calculate hap1, strand specific base weights
+        double totalWeightHap1, totalPositiveWeightHap1, totalNegativeWeightHap1;
+        double *baseWeightsHap1 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                       &totalWeightHap1, &totalPositiveWeightHap1, &totalNegativeWeightHap1, poa->alphabet, readsInHap1);
+
+        // Calculate hap1, strand specific base weights
+        double totalWeightHap2, totalPositiveWeightHap2, totalNegativeWeightHap2;
+        double *baseWeightsHap2 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                       &totalWeightHap2, &totalPositiveWeightHap2, &totalNegativeWeightHap2, poa->alphabet, readsInHap2);
+
+        //fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
+        fprintf(fH, "%" PRIi64 ",%c,%f,%f,%f,%f,%f", i, node->base,
+                (float)totalWeight/PAIR_ALIGNMENT_PROB_1,
+                (float)totalWeightHap1/totalWeight, (float)totalWeightHap2/totalWeight,
+                (float)totalPositiveWeightHap1/totalWeightHap1, (float)totalPositiveWeightHap2/totalWeightHap2);
+
+        for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
+            double positiveStrandBaseWeight = baseWeights[j*2 + 1];
+            double negativeStrandBaseWeight = baseWeights[j*2 + 0];
+            double totalBaseWeight = positiveStrandBaseWeight + negativeStrandBaseWeight;
+
+            double positiveStrandBaseWeightHap1 = baseWeightsHap1[j*2 + 1];
+            double negativeStrandBaseWeightHap1 = baseWeightsHap1[j*2 + 0];
+
+            double positiveStrandBaseWeightHap2 = baseWeightsHap2[j*2 + 1];
+            double negativeStrandBaseWeightHap2 = baseWeightsHap2[j*2 + 0];
+
+            //fprintf(fH, ",NORM_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c);
+            fprintf(fH, ",%f,%f,%f,%f,%f", totalBaseWeight/totalWeight,
+                    (positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1)/totalBaseWeight,
+                    (positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2)/totalBaseWeight,
+                    positiveStrandBaseWeightHap1/(positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1),
+                    positiveStrandBaseWeightHap2/(positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2));
+        }
+
+        free(baseWeights);
+
+        // Inserts
+        for(int64_t j=0; j<stList_length(node->inserts); j++) {
+            PoaInsert *insert = stList_get(node->inserts, j);
+            if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
+               isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, strandBalanceRatio)) {
+
+                //fprintf(fH, "\tINSERTSxN(INSERT_SEQ, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
+                char *s = rleString_expand(insert->insert);
+                fprintf(fH, ",%s", s);
+                poa_printPhasedCSV_indelPrint(insert->observations, fH,
+                                              bamChunkReads, readsInHap1, readsInHap2);
+                free(s);
+            }
+        }
+
+        // Deletes
+        for(int64_t j=0; j<stList_length(node->deletes); j++) {
+            PoaDelete *delete = stList_get(node->deletes, j);
+            if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
+               isBalanced(delete->weightForwardStrand, delete->weightReverseStrand, strandBalanceRatio)) {
+
+                //fprintf(fH, "\tDELETESxN(DELETE_LENGTH, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
+                fprintf(fH, ",%" PRIi64 "", delete->length);
+                poa_printPhasedCSV_indelPrint(delete->observations, fH,
+                                              bamChunkReads, readsInHap1, readsInHap2);
+            }
+        }
+
+        fprintf(fH, "\n");
+    }
 }
 
 void poa_print(Poa *poa, FILE *fH,
@@ -966,7 +1097,7 @@ void poa_print(Poa *poa, FILE *fH,
 		// Calculate strand specific base weights
 		double totalWeight, totalPositiveWeight, totalNegativeWeight;
 		double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-											&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet);
+											&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
 
 		fprintf(fH, "%" PRIi64 "\t%c total-weight:%f\ttotal-pos-weight:%f\ttotal-neg-weight:%f", i, node->base,
 				totalWeight/PAIR_ALIGNMENT_PROB_1, totalPositiveWeight/PAIR_ALIGNMENT_PROB_1, totalNegativeWeight/PAIR_ALIGNMENT_PROB_1);
@@ -991,10 +1122,12 @@ void poa_print(Poa *poa, FILE *fH,
 			PoaInsert *insert = stList_get(node->inserts, j);
 			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
 					isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "Insert\tSeq:%s\tTotal weight:%f\tForward Strand Weight:%f\tReverse Strand Weight:%f\n", insert->insert->rleString,
+                char *s = rleString_expand(insert->insert);
+			    fprintf(fH, "Insert\tSeq:%s\tTotal weight:%f\tForward Strand Weight:%f\tReverse Strand Weight:%f\n", s,
 						(float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightReverseStrand/PAIR_ALIGNMENT_PROB_1);
+			    free(s);
 			}
 		}
 
