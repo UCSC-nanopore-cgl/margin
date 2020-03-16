@@ -51,7 +51,7 @@ void usage() {
     fprintf(stderr, "    -r --region            : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                               Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -i --outputRepeatCounts        : File to write out the repeat counts [default = NULL]\n");
-    fprintf(stderr, "    -j --outputPoaTsv        : File to write out the poa as TSV file [default = NULL]\n");
+    fprintf(stderr, "    -j --outputPoaCsv        : File to write out the poa as CSV file [default = NULL]\n");
 }
 
 stHash *parseReferenceSequences(char *referenceFastaFile) {
