@@ -414,8 +414,10 @@ static void test_poa_realign(CuTest *testCase) {
 			RleString *read = bamChunkRead->rleRead;
 
 			// Make symbol strings
-			SymbolString sX = rleString_constructSymbolString(reference_rle, 0, reference_rle->length, poa->alphabet, polishParams->useRepeatCountsInAlignment);
-			SymbolString sY = rleString_constructSymbolString(read, 0, read->length, poa->alphabet, polishParams->useRepeatCountsInAlignment);
+			SymbolString sX = rleString_constructSymbolString(reference_rle, 0, reference_rle->length, poa->alphabet,
+					polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
+			SymbolString sY = rleString_constructSymbolString(read, 0, read->length, poa->alphabet,
+					polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
 
 			// Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
 			stList *matches = NULL, *inserts = NULL, *deletes = NULL;

@@ -72,6 +72,20 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
 }
 
 
+uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
+    /*
+     * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
+     */
+    uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
+
+    for(uint64_t i=0; i<gf->length; i++) {
+        paddedHap[i+gf->refStart] = hap[i];
+    }
+
+    return paddedHap;
+}
+
+
 /*
  * Main functions
  */
@@ -96,6 +110,7 @@ void usage() {
     fprintf(stderr, "    -r --region              : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
+    fprintf(stderr, "    -2 --diploid             : Will perform diploid phasing.\n");
 
     # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
@@ -104,12 +119,14 @@ void usage() {
     fprintf(stderr, "                                 splitRleWeight:   [default] run lengths split into chunks\n");
     fprintf(stderr, "                                 channelRleWeight: run lengths split into per-nucleotide channels\n");
     fprintf(stderr, "                                 simpleWeight:     weighted likelihood from POA nodes (non-RLE)\n");
+    fprintf(stderr, "                                 diploidRleWeight: [default] produces diploid features \n");
     fprintf(stderr, "    -L --splitRleWeightMaxRL : max run length (for 'splitRleWeight' and 'channelRleWeight' types) \n");
-    fprintf(stderr, "                                 [splitRleWeight default = %d, channelRleWeight default = %d]\n",
-            POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT, POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT);
+    fprintf(stderr, "                                 [split default = %d, channel default = %d, diploid default = %d]\n",
+            POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT, POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT, POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT);
     fprintf(stderr, "    -u --trueReferenceBam    : true reference aligned to ASSEMBLY_FASTA, for HELEN\n");
     fprintf(stderr, "                               features.  Setting this parameter will include labels\n");
-    fprintf(stderr, "                               in output.\n");
+    fprintf(stderr, "                               in output.  If -2/--diploid is set, this parameter must\n");
+    fprintf(stderr, "                               contain two comma-separated values\n");
     # endif
 
     fprintf(stderr, "\nMiscellaneous supplementary output options:\n");
@@ -161,10 +178,13 @@ int main(int argc, char *argv[]) {
     char *outputPoaTsvBase = NULL;
     char *outputPoaDotBase = NULL;
     int64_t maxDepth = -1;
+    bool diploid = FALSE;
 
     // for feature generation
     HelenFeatureType helenFeatureType = HFEAT_NONE;
+    bool setDefaultHelenFeature = false;
     char *trueReferenceBam = NULL;
+    char *trueReferenceBamHap2 = NULL;
     BamChunker *trueReferenceChunker = NULL;
     bool fullFeatureOutput = FALSE;
     int64_t splitWeightMaxRunLength = 0;
@@ -192,6 +212,7 @@ int main(int argc, char *argv[]) {
                 { "outputBase", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
                 { "depth", required_argument, 0, 'p'},
+                { "diploid", required_argument, 0, '2'},
                 { "produceFeatures", no_argument, 0, 'f'},
                 { "featureType", required_argument, 0, 'F'},
                 { "trueReferenceBam", required_argument, 0, 'u'},
@@ -238,13 +259,13 @@ int main(int argc, char *argv[]) {
             outputPoaDotBase = getFileBase(optarg, "poa");
             break;
         case 'F':
-            if (stString_eqcase(optarg, "simpleWeight")) {
+            if (stString_eqcase(optarg, "simpleWeight") || stString_eqcase(optarg, "simple")) {
                 helenFeatureType = HFEAT_SIMPLE_WEIGHT;
-            } else if (stString_eqcase(optarg, "rleWeight")) {
+            } else if (stString_eqcase(optarg, "rleWeight") || stString_eqcase(optarg, "splitRleWeight") || stString_eqcase(optarg, "split")) {
                 helenFeatureType = HFEAT_SPLIT_RLE_WEIGHT;
-            } else if (stString_eqcase(optarg, "splitRleWeight")) {
-                helenFeatureType = HFEAT_SPLIT_RLE_WEIGHT;
-            } else if (stString_eqcase(optarg, "channelRleWeight")) {
+            } else if (stString_eqcase(optarg, "channelRleWeight") || stString_eqcase(optarg, "channel")) {
+                helenFeatureType = HFEAT_CHANNEL_RLE_WEIGHT;
+            } else if (stString_eqcase(optarg, "diploidRleWeight") || stString_eqcase(optarg, "diploid")) {
                 helenFeatureType = HFEAT_CHANNEL_RLE_WEIGHT;
             } else {
                 fprintf(stderr, "Unrecognized featureType for HELEN: %s\n\n", optarg);
@@ -256,7 +277,9 @@ int main(int argc, char *argv[]) {
             trueReferenceBam = stString_copy(optarg);
             break;
         case 'f':
-            if (helenFeatureType == HFEAT_NONE) helenFeatureType = HFEAT_SPLIT_RLE_WEIGHT;
+            if (helenFeatureType == HFEAT_NONE) {
+                setDefaultHelenFeature = true;
+            }
             break;
         case 'L':
             splitWeightMaxRunLength = atoi(optarg);
@@ -270,6 +293,9 @@ int main(int argc, char *argv[]) {
                 st_errAbort("Invalid thread count: %d", numThreads);
             }
             break;
+        case '2':
+            diploid = TRUE;
+            break;
         default:
             usage();
             free(outputBase);
@@ -279,6 +305,20 @@ int main(int argc, char *argv[]) {
             free(paramsFile);
             if (trueReferenceBam != NULL) free(trueReferenceBam);
             return 0;
+        }
+    }
+
+    // handle diploid sanity checks
+    if (diploid) {
+        // true ref
+        if (trueReferenceBam != NULL) {
+            stList *trueRefParts = stString_splitByString(trueReferenceBam, ",");
+            if (stList_length(trueRefParts) != 2) {
+                st_errAbort("If --diploid is set, --trueReferenceBam must have two comma-separated values.");
+            }
+            trueReferenceBam = stList_get(trueRefParts, 0);
+            trueReferenceBamHap2 = stList_get(trueRefParts, 1);
+            stList_destruct(trueRefParts);
         }
     }
 
@@ -301,6 +341,13 @@ int main(int argc, char *argv[]) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBam);
         }
         free(idx);
+    } else if (trueReferenceBamHap2 != NULL && access(trueReferenceBamHap2, R_OK ) != 0 ) {
+        st_errAbort("Could not read from file: %s\n", trueReferenceBamHap2);
+        char *idx = stString_print("%s.bai", trueReferenceBamHap2);
+        if (access(idx, R_OK ) != 0 ) {
+            st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBamHap2);
+        }
+        free(idx);
     }
 
     // sanitiy check for poa plotting
@@ -319,6 +366,11 @@ int main(int argc, char *argv[]) {
     omp_set_num_threads(numThreads);
     st_logCritical("Running OpenMP with %d threads.\n", omp_get_max_threads());
     # endif
+
+    // feature init
+    if (helenFeatureType == HFEAT_NONE && setDefaultHelenFeature) {
+        helenFeatureType = diploid ? HFEAT_DIPLOID_RLE_WEIGHT : HFEAT_SPLIT_RLE_WEIGHT;
+    }
     if (helenFeatureType != HFEAT_NONE && splitWeightMaxRunLength == 0) {
         switch (helenFeatureType) {
             case HFEAT_SPLIT_RLE_WEIGHT:
@@ -326,6 +378,9 @@ int main(int argc, char *argv[]) {
                 break;
             case HFEAT_CHANNEL_RLE_WEIGHT:
                 splitWeightMaxRunLength = POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT;
+                break;
+            case HFEAT_DIPLOID_RLE_WEIGHT:
+                splitWeightMaxRunLength = POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT;
                 break;
             default:
                 break;
@@ -385,11 +440,22 @@ int main(int argc, char *argv[]) {
     stList_destruct(refSeqNames);
 
     // Open output files
-    char *polishedReferenceOutFile = stString_print("%s.fa", outputBase);
+    char *polishedReferenceOutFile = stString_print((diploid ? "%s.h1.fa" : "%s.fa"), outputBase);
     st_logCritical("> Going to write polished reference in : %s\n", polishedReferenceOutFile);
     FILE *polishedReferenceOutFh = fopen(polishedReferenceOutFile, "w");
     if (polishedReferenceOutFh == NULL) {
         st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFile);
+    }
+    char *polishedReferenceOutFileHap2 = NULL;
+    FILE *polishedReferenceOutFhHap2 = NULL;
+    if (diploid) {
+        polishedReferenceOutFile = stString_print("%s.h2.fa", outputBase);
+        st_logCritical("> Going to write polished reference second haplotype in : %s\n", polishedReferenceOutFileHap2);
+        polishedReferenceOutFhHap2 = fopen(polishedReferenceOutFileHap2, "w");
+        if (polishedReferenceOutFh == NULL) {
+            st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFileHap2);
+        }
+        free(polishedReferenceOutFileHap2);
     }
     free(polishedReferenceOutFile);
 
@@ -401,7 +467,6 @@ int main(int argc, char *argv[]) {
     if (bamChunker->chunkCount == 0) {
         st_errAbort("> Found no valid reads!\n");
     }
-
 
     // for feature generation
     BamChunker *trueReferenceBamChunker = NULL;
@@ -464,6 +529,7 @@ int main(int argc, char *argv[]) {
         }
         # endif
 
+        // prints percentage complete and estimated time remaining
         if (logProgress) {
             // log progress
             int64_t timeTaken = (int64_t) (time(NULL) - polishStartTime);
@@ -487,9 +553,7 @@ int main(int argc, char *argv[]) {
             PRId64". Perhaps the BAM and REF are mismatched?",
                     bamChunk->refSeqName, fullRefLen, chunkIdx, bamChunk->chunkBoundaryStart);
         }
-
         RleString *rleReference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
-
         st_logInfo(">%s Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
                    logIdentifier, bamChunk->refSeqName, (int) bamChunk->chunkBoundaryStart,
                    (int) (fullRefLen < bamChunk->chunkBoundaryEnd ? fullRefLen : bamChunk->chunkBoundaryEnd));
@@ -537,6 +601,7 @@ int main(int argc, char *argv[]) {
 
         }
 
+        // prep for ploishing
         Poa *poa = NULL; // The poa alignment
         char *polishedConsensusString = NULL; // The polished reference string
 
@@ -552,13 +617,6 @@ int main(int argc, char *argv[]) {
 
         // Generate partial order alignment (POA) (destroys rleAlignments in the process)
         poa = poa_realignAll(reads, alignments, rleReference, params->polishParams);
-
-
-        // get polished reference string and expand RLE (regardless of whether RLE was applied)
-        poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
-        RleString *polishedRleConsensus = poa->refString;
-        polishedConsensusString = rleString_expand(polishedRleConsensus);
-
 
         // Log info about the POA
         if (st_getLogLevel() >= info) {
@@ -599,19 +657,96 @@ int main(int argc, char *argv[]) {
         }
 
 
-        // save polished reference string to chunk output array
-        chunkResults[chunkIdx] = polishedConsensusString;
+        // handle diploid case
+        if(diploid) {
+            // Get the bubble graph representation
+            //todo this hack needs to be fixed
+            bool useReadAlleles = params->polishParams->useReadAlleles;
+            params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
+            BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
+            params->polishParams->useReadAlleles = useReadAlleles;
 
-        // HELEN feature outputs
+            // Now make a POA for each of the haplotypes
+            stHash *readsToPSeqs;
+            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
 
-        #ifdef _HDF5
-        if (helenFeatureType != HFEAT_NONE) {
-            handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
-                    helenHDF5Files, fullFeatureOutput, trueReferenceBam, params, logIdentifier, chunkIdx,
-                    bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
+            stSet *readsBelongingToHap1, *readsBelongingToHap2;
+            stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
+            st_logInfo(" %s After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned "
+                       "into hap2 (%i unphased)\n", logIdentifier, (int)stList_length(reads),
+                       (int)stSet_size(readsBelongingToHap1), (int)stSet_size(readsBelongingToHap2),
+                       (int)(stList_length(reads) - stSet_size(readsBelongingToHap1)- stSet_size(readsBelongingToHap2)));
 
+            // Debug report of hets
+            if (st_getLogLevel() <= info) {
+                uint64_t totalHets = 0;
+                for (uint64_t h = 0; h < gf->length; h++) {
+                    Bubble *b = &bg->bubbles[h + gf->refStart];
+                    if (gf->haplotypeString1[h] != gf->haplotypeString2[h]) {
+                        st_logDebug(" %s Got predicted het at bubble %i %s %s\n", logIdentifier, (int) h + gf->refStart,
+                                    b->alleles[gf->haplotypeString1[h]]->rleString,
+                                    b->alleles[gf->haplotypeString2[h]]->rleString);
+                        totalHets++;
+                    } else if (!rleString_eq(b->alleles[gf->haplotypeString1[h]], b->refAllele)) {
+                        st_logDebug(" %s Got predicted hom alt at bubble %i %i\n", logIdentifier, (int) h + gf->refStart,
+                                    (int) gf->haplotypeString1[h]);
+                    }
+                }
+                st_logInfo(" %s In phasing chunk, got: %i hets from: %i total sites (fraction: %f)\n", logIdentifier,
+                        (int) totalHets, (int) gf->length, (float) totalHets / gf->length);
+            }
+
+            st_logInfo(" %s Building POA for each haplotype\n", logIdentifier);
+            uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
+            uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
+
+            Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
+            Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
+
+            if(params->polishParams->useRunLengthEncoding) {
+                st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
+                poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap1, reads, params->polishParams->repeatSubMatrix,
+                                                                 readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
+                poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap2, reads, params->polishParams->repeatSubMatrix,
+                                                                 readsBelongingToHap2, readsBelongingToHap1, params->polishParams);
+            }
+
+            // Output
+            // TODO
+            //polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa_hap1, reads, params);
+            //polishedReferenceSequence_processChunkSequence(rSeq2, bamChunk, poa_hap2, reads, params);
+
+            // Cleanup
+            free(hap1);
+            free(hap2);
+            bubbleGraph_destruct(bg);
+            stGenomeFragment_destruct(gf);
+            poa_destruct(poa_hap1);
+            poa_destruct(poa_hap2);
+            stSet_destruct(readsBelongingToHap1);
+            stSet_destruct(readsBelongingToHap2);
+            stHash_destruct(readsToPSeqs);
+
+        } else {
+
+            // get polished reference string and expand RLE (regardless of whether RLE was applied)
+            poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
+            RleString *polishedRleConsensus = poa->refString;
+            polishedConsensusString = rleString_expand(polishedRleConsensus);
+
+            // save polished reference string to chunk output array
+            chunkResults[chunkIdx] = polishedConsensusString;
+
+            // HELEN feature outputs
+            #ifdef _HDF5
+            if (helenFeatureType != HFEAT_NONE) {
+                handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
+                                    helenHDF5Files, fullFeatureOutput, trueReferenceBam, params, logIdentifier, chunkIdx,
+                                    bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
+
+            }
+            #endif
         }
-        #endif
 
         // report timing
         if (st_getLogLevel() >= info) {
@@ -686,6 +821,7 @@ int main(int argc, char *argv[]) {
 
     // everything has been written, cleanup merging infrastructure
     fclose(polishedReferenceOutFh);
+    if (polishedReferenceOutFhHap2 != NULL) fclose(polishedReferenceOutFhHap2);
     free(missingChunkSpacer);
     for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
         free(chunkResults[chunkIdx]);

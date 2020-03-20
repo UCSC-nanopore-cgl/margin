@@ -79,6 +79,34 @@ void PoaFeature_ChannelRleWeight_destruct(PoaFeatureChannelRleWeight *feature) {
     free(feature);
 }
 
+PoaFeatureDiploidRleWeight *PoaFeature_DiploidRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
+        int64_t maxRunLength) {
+    PoaFeatureDiploidRleWeight *feature = st_calloc(1, sizeof(PoaFeatureDiploidRleWeight));
+    feature->refPosition = refPos;
+    feature->insertPosition = insPos;
+    feature->runLengthPosition = rlPos;
+    feature->labelChar = '\0';
+    feature->labelRunLength = 0;
+    feature->nextRunLength = NULL;
+    feature->nextInsert = NULL;
+    feature->maxRunLength = maxRunLength;
+    feature->weightsHOn = st_calloc(((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2, sizeof(double));
+    feature->weightsHOff = st_calloc(((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2, sizeof(double));
+    return feature;
+}
+void PoaFeature_DiploidRleWeight_destruct(PoaFeatureDiploidRleWeight *feature) {
+    if (feature->nextRunLength != NULL) {
+        PoaFeature_DiploidRleWeight_destruct(feature->nextRunLength);
+    }
+    if (feature->nextInsert != NULL) {
+        PoaFeature_DiploidRleWeight_destruct(feature->nextInsert);
+    }
+    free(feature->weightsHOn);
+    free(feature->weightsHOff);
+    free(feature);
+}
+
+
 int PoaFeature_SimpleWeight_charIndex(Symbol character, bool forward) {
     int pos = character * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
     assert(pos < POAFEATURE_SIMPLE_WEIGHT_TOTAL_SIZE);
@@ -96,7 +124,7 @@ int PoaFeature_SplitRleWeight_charIndex(int64_t maxRunLength, Symbol character, 
     return pos;
 }
 int PoaFeature_SplitRleWeight_gapIndex(int64_t maxRunLength, bool forward) {
-    int pos = ((SYMBOL_NUMBER - 1) * ((int)maxRunLength + 1)) * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
+    int pos = ((SYMBOL_NUMBER_NO_N) * ((int)maxRunLength + 1)) * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
     return pos;
 }
 
@@ -105,7 +133,7 @@ int PoaFeature_ChannelRleWeight_charNuclIndex(Symbol character, bool forward) {
     return pos;
 }
 int PoaFeature_ChannelRleWeight_gapNuclIndex(bool forward) {
-    int pos = (SYMBOL_NUMBER - 1) * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
+    int pos = (SYMBOL_NUMBER_NO_N) * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
     return pos;
 }
 int PoaFeature_ChannelRleWeight_charRLIndex(int64_t maxRunLength, Symbol character, int64_t runLength, bool forward) {
@@ -114,6 +142,14 @@ int PoaFeature_ChannelRleWeight_charRLIndex(int64_t maxRunLength, Symbol charact
     int pos = (character * ((int)maxRunLength + 1) + runLength) * 2 + (forward ? POS_STRAND_IDX : NEG_STRAND_IDX);
     return pos;
 }
+
+int PoaFeature_DiploidRleWeight_charIndex(int64_t maxRunLength, Symbol character, int64_t runLength, bool forward) {
+    return PoaFeature_SplitRleWeight_charIndex(maxRunLength, character, runLength, forward);
+}
+int PoaFeature_DiploidRleWeight_gapIndex(int64_t maxRunLength, bool forward) {
+    return PoaFeature_SplitRleWeight_gapIndex(maxRunLength, forward);
+}
+
 
 void handleHelenFeatures(
         // global params
@@ -172,7 +208,8 @@ void handleHelenFeatures(
             BamChunkRead *trueRefRead = stList_get(trueRefReads, 0);
             char *trueRefExpanded = rleString_expand(trueRefRead->rleRead);
 
-            stList *trueRefAlignmentRawSpace = alignConsensusAndTruth(polishedConsensusString, trueRefExpanded);
+            uint16_t score;
+            stList *trueRefAlignmentRawSpace = alignConsensusAndTruth(polishedConsensusString, trueRefExpanded, &score);
             if (st_getLogLevel() == debug) {
                 printMEAAlignment(polishedConsensusString, trueRefExpanded,
                                   strlen(polishedConsensusString), strlen(trueRefExpanded),
@@ -187,7 +224,7 @@ void handleHelenFeatures(
                 uint64_t *polishedRleConsensus_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensus);
                 uint64_t *trueRefRleString_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleString);
                 trueRefAlignment = runLengthEncodeAlignment(trueRefAlignmentRawSpace, polishedRleConsensus_nonRleToRleCoordinateMap,
-                                                             trueRefRleString_nonRleToRleCoordinateMap);
+                                                            trueRefRleString_nonRleToRleCoordinateMap);
                 free(polishedRleConsensus_nonRleToRleCoordinateMap);
                 free(trueRefRleString_nonRleToRleCoordinateMap);
 
@@ -206,7 +243,7 @@ void handleHelenFeatures(
 
 
             // we found a single alignment of reference
-            double refLengthRatio = 1.0 * trueRefRleString->length / polishedRleConsensus->length;
+            double refLengthRatio = 1.0 * strlen(trueRefExpanded) / strlen(polishedConsensusString);
             double alnLengthRatio = 1.0 * stList_length(trueRefAlignment) / polishedRleConsensus->length;
             int refLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - refLengthRatio)));
             int alnLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - alnLengthRatio)));
@@ -262,6 +299,180 @@ void handleHelenFeatures(
 }
 
 
+void handleDiploidHelenFeatures(
+        // global params
+        HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
+        int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
+        char *trueReferenceBamA, char *trueReferenceBamB, Params *params,
+
+        // chunk params
+        char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
+        stSet *readsInH1, stSet *readsInH2, char *polishedConsensusStringH1, char *polishedConsensusStringH2,
+        RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2) {
+
+    st_logInfo(">%s Performing diploid feature generation for chunk.\n", logIdentifier);
+
+    // get filename
+    char *helenFeatureOutfileBase = NULL;
+    switch (helenFeatureType) {
+        case HFEAT_DIPLOID_RLE_WEIGHT:
+            helenFeatureOutfileBase = stString_print("diploidRleWeight.C%05"PRId64".%s-%"PRId64"-%"PRId64,
+                                                     chunkIdx, bamChunk->refSeqName,
+                                                     bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+            break;
+        default:
+            st_errAbort("Unhandled HELEN feature type!\n");
+    }
+
+    // necessary to annotate poa with truth (if true reference BAM has been specified)
+    stList *trueRefAlignmentToHap1 = NULL;
+    stList *trueRefAlignmentToHap2 = NULL;
+    RleString *trueRefRleStringToHap1 = NULL;
+    RleString *trueRefRleStringToHap2 = NULL;
+    bool validReferenceAlignment = FALSE;
+
+    // get reference chunk
+    if (trueReferenceBamA != NULL && trueReferenceBamB != NULL) {
+        // get alignment of true ref to assembly
+        stList *trueRefReadsA = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *trueRefReadsB = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *unusedA = stList_construct3(0, (void (*)(void *)) stList_destruct);
+        stList *unusedB = stList_construct3(0, (void (*)(void *)) stList_destruct);
+        // construct new chunk
+        BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
+        trueRefBamChunk->parent = trueReferenceBamChunker;
+        // get true ref as "read"
+        uint32_t trueAlignmentCountA = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReadsA, unusedA);
+        uint32_t trueAlignmentCountB = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReadsB, unusedB);
+
+        // poor man's "do we have a unique alignment"
+        if (trueAlignmentCountA == 1 && trueAlignmentCountB == 1) {
+            // get reads
+            BamChunkRead *trueRefReadA = stList_get(trueRefReadsA, 0);
+            BamChunkRead *trueRefReadB = stList_get(trueRefReadsB, 0);
+            char *trueRefExpandedA = rleString_expand(trueRefReadA->rleRead);
+            char *trueRefExpandedB = rleString_expand(trueRefReadB->rleRead);
+
+            // align all to all
+            uint16_t score_trueA_polished1, score_trueA_polished2, score_trueB_polished1, score_trueB_polished2;
+            stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruth(
+                    polishedConsensusStringH1, trueRefExpandedA, &score_trueA_polished1);
+            stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruth(
+                    polishedConsensusStringH2, trueRefExpandedA, &score_trueA_polished2);
+            stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruth(
+                    polishedConsensusStringH1, trueRefExpandedB, &score_trueB_polished1);
+            stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruth(
+                    polishedConsensusStringH2, trueRefExpandedB, &score_trueB_polished2);
+
+            // determine best alignment
+            bool use_trueA_polished1 = score_trueA_polished1 + score_trueB_polished2 > score_trueA_polished2 + score_trueB_polished1;
+
+            // convert to rleSpace if appropriate
+            if (params->polishParams->useRunLengthEncoding) {
+
+                // hap1
+                trueRefRleStringToHap1 = rleString_construct(use_trueA_polished1 ? trueRefExpandedA : trueRefExpandedB);
+
+                uint64_t *polishedRleConsensus1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH1);
+                uint64_t *trueRefRleStringToHap1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleStringToHap1);
+
+                trueRefAlignmentToHap1 = runLengthEncodeAlignment(
+                        use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished2TrueB,
+                        polishedRleConsensus1_nonRleToRleCoordinateMap, trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+                free(polishedRleConsensus1_nonRleToRleCoordinateMap);
+                free(trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+                // hap2
+                trueRefRleStringToHap2 = rleString_construct(use_trueA_polished1 ? trueRefExpandedB : trueRefExpandedA);
+
+                uint64_t *polishedRleConsensus2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH2);
+                uint64_t *trueRefRleStringToHap2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleStringToHap2);
+
+                trueRefAlignmentToHap2 = runLengthEncodeAlignment(
+                        use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueB : trueRefAlignmentRawSpace_Polished2TrueA,
+                        polishedRleConsensus2_nonRleToRleCoordinateMap, trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+                free(polishedRleConsensus2_nonRleToRleCoordinateMap);
+                free(trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+                //cleanup
+                stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
+                stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
+                stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
+                stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
+
+            } else {
+
+                //hap1
+                trueRefRleStringToHap1 = rleString_construct_no_rle(use_trueA_polished1 ? trueRefExpandedA : trueRefExpandedB);
+                trueRefAlignmentToHap1 = use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished1TrueB;
+
+                // hap2
+                trueRefRleStringToHap2 = rleString_construct_no_rle(use_trueA_polished1 ? trueRefExpandedB : trueRefExpandedA);
+                trueRefAlignmentToHap2 = use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished2TrueB : trueRefAlignmentRawSpace_Polished2TrueA;
+
+                // cleanup
+                if (use_trueA_polished1) {
+                    stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
+                    stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
+                } else {
+                    stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
+                    stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
+                }
+            }
+
+
+            // we found a single alignment of reference
+            double refLengthRatio = 1.0 * (strlen(trueRefExpandedA) + strlen(trueRefExpandedB)) /
+                    (strlen(polishedConsensusStringH1) + strlen(polishedConsensusStringH2));
+            double alnLengthRatio = 1.0 * (stList_length(trueRefAlignmentToHap1) + stList_length(trueRefAlignmentToHap2)) /
+                    (polishedRleConsensusH1->length + polishedRleConsensusH2->length);
+            int refLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - refLengthRatio)));
+            int alnLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - alnLengthRatio)));
+            if (stList_length(trueRefAlignmentToHap1) > 0 && stList_length(trueRefAlignmentToHap2) > 0 &&
+                    refLengthRatioHundredthsOffOne < 10 && alnLengthRatioHundredthsOffOne < 10) {
+                validReferenceAlignment = TRUE;
+            } else {
+                st_logInfo(" %s True reference alignment QC failed:  avg polished length %"PRId64", true ref length"
+                           " ratio (true/polished) %f, aligned pairs length ratio (true/polished): %f\n",
+                           logIdentifier, (polishedRleConsensusH1->length + polishedRleConsensusH2->length) / 2,
+                           refLengthRatio, alnLengthRatio);
+            }
+
+            //cleanup
+            free(trueRefExpandedA);
+            free(trueRefExpandedB);
+        }
+
+        stList_destruct(trueRefReadsA);
+        stList_destruct(unusedA);
+        stList_destruct(trueRefReadsB);
+        stList_destruct(unusedB);
+        bamChunk_destruct(trueRefBamChunk);
+    }
+
+    // either write it, or note that we failed to find a valid reference alignment
+    if (trueReferenceBamA != NULL && trueReferenceBamB != NULL && !validReferenceAlignment) {
+        st_logInfo(" %s No valid reference alignment was found, skipping HELEN feature output.\n", logIdentifier);
+    } else {
+        st_logInfo(" %s Writing HELEN features with filename base: %s\n", logIdentifier, helenFeatureOutfileBase);
+
+
+        // write the actual features (type dependent)
+        poa_writeDiploidHelenFeatures(helenFeatureType, bamChunkReads, helenFeatureOutfileBase,
+                bamChunk, poaH1,
+                trueRefAlignmentToHap1, trueRefAlignmentToHap2, trueRefRleStringToHap1, trueRefRleStringToHap2,
+                splitWeightMaxRunLength, (HelenFeatureHDF5FileInfo**) helenHDF5Files);
+    }
+
+    // cleanup
+    free(helenFeatureOutfileBase);
+    if (trueRefAlignmentToHap1 != NULL) stList_destruct(trueRefAlignmentToHap1);
+    if (trueRefAlignmentToHap1 != NULL) stList_destruct(trueRefAlignmentToHap2);
+    if (trueRefRleStringToHap1 != NULL) rleString_destruct(trueRefRleStringToHap1);
+    if (trueRefRleStringToHap2 != NULL) rleString_destruct(trueRefRleStringToHap2);
+}
 
 stList *poa_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
 
@@ -480,8 +691,6 @@ stList *poa_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, const int
     return featureList;
 }
 
-
-
 void poa_addChannelRunLengthFeaturesForObservations(Poa *poa, PoaFeatureChannelRleWeight *baseFeature, stList *observations,
                                                     stList *bamChunkReads, const int64_t maxRunLength,
                                                     int64_t observationOffset) {
@@ -613,6 +822,166 @@ stList *poa_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, int64_t
     free(logIdentifier);
     return featureList;
 }
+
+
+void poa_addDiploidRunLengthFeaturesForObservations(Poa *poa, PoaFeatureDiploidRleWeight *baseFeature, stList *observations,
+                                                  stList *bamChunkReads, stSet *onHapReads, const int64_t maxRunLength,
+                                                  int64_t observationOffset) {
+
+
+    PoaFeatureDiploidRleWeight *currFeature = baseFeature;
+    int64_t currentRunLengthIndex = 0;
+    bool beforeMaxObservedRunLength = TRUE;
+
+    while (beforeMaxObservedRunLength) {
+        beforeMaxObservedRunLength = FALSE;
+
+        // examine each observation
+        for (int64_t i = 0; i < stList_length(observations); i++) {
+
+            // get data
+            PoaBaseObservation *observation = stList_get(observations, i);
+            BamChunkRead *bamChunkRead = stList_get(bamChunkReads, observation->readNo);
+            RleString *rleString = bamChunkRead->rleRead;
+            Symbol symbol = poa->alphabet->convertCharToSymbol(rleString->rleString[observation->offset + observationOffset]);
+            int64_t runLength = rleString->repeatCounts[observation->offset + observationOffset];
+            bool forward = bamChunkRead->forwardStrand;
+
+            // get correct run length
+            runLength -= currentRunLengthIndex * maxRunLength;
+            if (runLength < 0) {
+                runLength = 0;
+            } else if (runLength > maxRunLength) {
+                runLength = maxRunLength;
+                beforeMaxObservedRunLength = TRUE;
+            }
+
+            int64_t pos = PoaFeature_DiploidRleWeight_charIndex(maxRunLength, symbol, runLength, forward);
+            if (stSet_search(onHapReads, bamChunkRead->readName) != NULL) {
+                currFeature->weightsHOn[pos] += observation->weight;
+            } else {
+                currFeature->weightsHOff[pos] += observation->weight;
+            }
+        }
+
+        // update currFeature if we're going ot run again
+        if (beforeMaxObservedRunLength) {
+            currentRunLengthIndex++;
+            if (currFeature->nextRunLength != NULL) {
+                currFeature = currFeature->nextRunLength;
+            } else {
+                PoaFeatureDiploidRleWeight *prevFeature = currFeature;
+                currFeature = PoaFeature_DiploidRleWeight_construct(baseFeature->refPosition, baseFeature->insertPosition,
+                                                                  currentRunLengthIndex, maxRunLength);
+                prevFeature->nextRunLength = currFeature;
+
+                currFeature->weightsHOn[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE)] =
+                        baseFeature->weightsHOn[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE)];
+                currFeature->weightsHOn[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE)] =
+                        baseFeature->weightsHOn[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE)];
+
+                currFeature->weightsHOff[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE)] =
+                        baseFeature->weightsHOff[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE)];
+                currFeature->weightsHOff[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE)] =
+                        baseFeature->weightsHOff[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE)];
+            }
+        }
+    }
+}
+
+
+
+stList *poa_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, stSet *onHapReads, const int64_t maxRunLength) {
+    // initialize feature list
+    stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_DiploidRleWeight_destruct);
+    for(int64_t i=1; i<stList_length(poa->nodes); i++) {
+        stList_append(featureList, PoaFeature_DiploidRleWeight_construct(i - 1, 0, 0, maxRunLength));
+    }
+
+    // for logging (of errors)
+    char *logIdentifier = getLogIdentifier();
+
+    // iterate over all positions
+    for(int64_t i=0; i<stList_length(featureList); i++) {
+
+        // get feature and node
+        PoaFeatureDiploidRleWeight* feature = stList_get(featureList, i);
+        PoaNode *node = stList_get(poa->nodes, i + 1); //skip the first poa node, as it's always an 'N', so featureIdx and poaIdx are off by one
+
+        // save run length nodes
+        poa_addDiploidRunLengthFeaturesForObservations(poa, feature, node->observations, bamChunkReads, onHapReads,
+                                                       maxRunLength, 0);
+
+        // Deletes
+        if (stList_length(node->deletes) > 0) {
+
+            // iterate over all deletes
+            for (int64_t d = 0; d < stList_length(node->deletes); d++) {
+                PoaDelete *delete = stList_get(node->deletes, d);
+
+                // Deletes start AFTER the current position, need to add counts/weights to nodes after the current node
+                for (int64_t k = 1; k < delete->length; k++) {
+                    if (i + k >= stList_length(poa->nodes)) {
+                        st_logInfo(" %s Encountered DELETE that occurs after end of POA!\n", logIdentifier);
+                        break;
+                    }
+                    PoaFeatureDiploidRleWeight *delFeature = stList_get(featureList, i + k);
+                    stList *observations = delete->observations;
+
+                    // examine each observation for hap and direction
+                    for (int64_t o = 0; o < stList_length(observations); o++) {
+
+                        // get observation data
+                        PoaBaseObservation *observation = stList_get(observations, o);
+                        BamChunkRead *bamChunkRead = stList_get(bamChunkReads, observation->readNo);
+                        bool forward = bamChunkRead->forwardStrand;
+
+                        int64_t pos = PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, forward);
+                        if (stSet_search(onHapReads, bamChunkRead->readName) != NULL) {
+                            delFeature->weightsHOn[pos] += observation->weight;
+                        } else {
+                            delFeature->weightsHOff[pos] += observation->weight;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Inserts
+        if (stList_length(node->inserts) > 0) {
+
+            // iterate over all inserts
+            for (int64_t n = 0; n < stList_length(node->inserts); n++) {
+                PoaInsert *insert = stList_get(node->inserts, n);
+
+                // handle each insert base
+                PoaFeatureDiploidRleWeight *prevFeature = feature;
+                for (int64_t o = 0; o < strlen(insert->insert->rleString); o++) {
+
+                    // get feature iterator
+                    PoaFeatureDiploidRleWeight *currFeature = prevFeature->nextInsert;
+                    if (currFeature == NULL) {
+                        currFeature = PoaFeature_DiploidRleWeight_construct(i, o + 1, 0, maxRunLength);
+                        prevFeature->nextInsert = currFeature;
+                    }
+
+                    // save insert run lengths
+                    poa_addDiploidRunLengthFeaturesForObservations(poa, currFeature, insert->observations,
+                            bamChunkReads, onHapReads, maxRunLength, o);
+                }
+            }
+        }
+    }
+
+    free(logIdentifier);
+    return featureList;
+}
+
+
+
+
+
+
 
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl) {
@@ -770,6 +1139,7 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
         int64_t trueRunLength = -1;
         PoaFeatureSplitRleWeight* srlFeature = NULL;
         PoaFeatureChannelRleWeight* crlFeature = NULL;
+        PoaFeatureDiploidRleWeight* drlFeature = NULL;
 
         int64_t featureInsPos = 0;
         while (feature != NULL) {
@@ -798,6 +1168,15 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
                             crlFeature = crlFeature->nextRunLength;
                         }
                         feature = ((PoaFeatureChannelRleWeight*)feature)->nextInsert;
+                        break;
+                    case HFEAT_DIPLOID_RLE_WEIGHT:
+                        drlFeature = ((PoaFeatureDiploidRleWeight*)feature);
+                        while (drlFeature != NULL) {
+                            drlFeature->labelChar = '_';
+                            drlFeature->labelRunLength = 0;
+                            drlFeature = drlFeature->nextRunLength;
+                        }
+                        feature = ((PoaFeatureDiploidRleWeight*)feature)->nextInsert;
                         break;
                     default:
                         st_errAbort("Unhandled FeatureType!\n");
@@ -847,6 +1226,22 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
                             }
                             trueRunLength -= crlFeature->maxRunLength;
                             crlFeature = crlFeature->nextRunLength;
+                        }
+                        break;
+                    case HFEAT_DIPLOID_RLE_WEIGHT:
+                        drlFeature = ((PoaFeatureDiploidRleWeight*)feature);
+                        trueRunLength = trueRefRleString->repeatCounts[trueRefPos];
+                        while (drlFeature != NULL) {
+                            drlFeature->labelChar = trueRefRleString->rleString[trueRefPos];
+                            if (trueRunLength <= 0) {
+                                drlFeature->labelRunLength = 0;
+                            } else if (trueRunLength > drlFeature->maxRunLength) {
+                                drlFeature->labelRunLength = drlFeature->maxRunLength;
+                            } else {
+                                drlFeature->labelRunLength = trueRunLength;
+                            }
+                            trueRunLength -= drlFeature->maxRunLength;
+                            drlFeature = drlFeature->nextRunLength;
                         }
                         break;
                     default:
@@ -906,6 +1301,22 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
                             crlFeature = crlFeature->nextRunLength;
                         }
                         break;
+                    case HFEAT_DIPLOID_RLE_WEIGHT:
+                        drlFeature = ((PoaFeatureDiploidRleWeight*)feature);
+                        trueRunLength = trueRefRleString->repeatCounts[trueRefPos];
+                        while (drlFeature != NULL) {
+                            drlFeature->labelChar = trueRefRleString->rleString[trueRefPos];
+                            if (trueRunLength <= 0) {
+                                drlFeature->labelRunLength = 0;
+                            } else if (trueRunLength > drlFeature->maxRunLength) {
+                                drlFeature->labelRunLength = drlFeature->maxRunLength;
+                            } else {
+                                drlFeature->labelRunLength = trueRunLength;
+                            }
+                            trueRunLength -= drlFeature->maxRunLength;
+                            drlFeature = drlFeature->nextRunLength;
+                        }
+                        break;
                     default:
                         st_errAbort("Unhandled FeatureType!\n");
                 }
@@ -937,6 +1348,14 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
                             crlFeature = crlFeature->nextRunLength;
                         }
                         break;
+                    case HFEAT_DIPLOID_RLE_WEIGHT:
+                        drlFeature = ((PoaFeatureDiploidRleWeight*)feature);
+                        while (drlFeature != NULL) {
+                            drlFeature->labelChar = '_';
+                            drlFeature->labelRunLength = 0;
+                            drlFeature = drlFeature->nextRunLength;
+                        }
+                        break;
                     default:
                         st_errAbort("Unhandled FeatureType!\n");
                 }
@@ -958,6 +1377,9 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
                 case HFEAT_CHANNEL_RLE_WEIGHT:
                     feature = ((PoaFeatureChannelRleWeight*)feature)->nextInsert;
                     break;
+                case HFEAT_DIPLOID_RLE_WEIGHT:
+                    feature = ((PoaFeatureDiploidRleWeight*)feature)->nextInsert;
+                    break;
                 default:
                     st_errAbort("Unhandled FeatureType!\n");
             }
@@ -977,20 +1399,20 @@ void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featu
 }
 
 void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkReads,
-        char *outputFileBase, BamChunk *bamChunk, stList *trueRefAlignment, RleString *consensusRleString,
-        RleString *trueRefRleString, bool fullFeatureOutput, int64_t maxRunLength,
-        HelenFeatureHDF5FileInfo** helenHDF5Files) {
+                            char *outputFileBase, BamChunk *bamChunk, stList *trueRefAlignment, RleString *consensusRleString,
+                            RleString *trueRefRleString, bool fullFeatureOutput, int64_t maxRunLength,
+                            HelenFeatureHDF5FileInfo** helenHDF5Files) {
     // prep
     int64_t firstMatchedFeature = -1;
     int64_t lastMatchedFeature = -1;
     stList *features = NULL;
     bool outputLabels = trueRefAlignment != NULL && trueRefRleString != NULL;
 
-    # ifdef _OPENMP
+# ifdef _OPENMP
     int64_t threadIdx = omp_get_thread_num();
-    # else
+# else
     int64_t threadIdx = 0;
-    # endif
+# endif
 
     // handle differently based on type
     switch (type) {
@@ -1007,7 +1429,7 @@ void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkRea
             }
 
             writeSimpleWeightHelenFeaturesHDF5(poa->alphabet, helenHDF5Files[threadIdx], outputFileBase, bamChunk,
-                    outputLabels, features, firstMatchedFeature, lastMatchedFeature);
+                                               outputLabels, features, firstMatchedFeature, lastMatchedFeature);
 
             break;
 
@@ -1024,8 +1446,8 @@ void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkRea
             }
 
             writeSplitRleWeightHelenFeaturesHDF5(poa->alphabet, helenHDF5Files[threadIdx],
-                    outputFileBase, bamChunk, outputLabels, features, firstMatchedFeature, lastMatchedFeature,
-                    maxRunLength);
+                                                 outputFileBase, bamChunk, outputLabels, features, firstMatchedFeature, lastMatchedFeature,
+                                                 maxRunLength);
             break;
 
         case HFEAT_CHANNEL_RLE_WEIGHT:
@@ -1041,8 +1463,8 @@ void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkRea
             }
 
             writeChannelRleWeightHelenFeaturesHDF5(poa->alphabet, helenHDF5Files[threadIdx],
-                                                 outputFileBase, bamChunk, outputLabels, features, firstMatchedFeature,
-                                                 lastMatchedFeature, maxRunLength);
+                                                   outputFileBase, bamChunk, outputLabels, features, firstMatchedFeature,
+                                                   lastMatchedFeature, maxRunLength);
             break;
 
         default:
@@ -1053,8 +1475,71 @@ void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkRea
     stList_destruct(features);
 }
 
+
+
+
+void poa_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads, char *outputFileBase,
+        BamChunk *bamChunk, Poa *poaH1, Poa *poaH2,  stSet *readsInH1, stSet *readsInH2,
+        stList *trueRefAlignmentToH1, stList *trueRefAlignmentToH2,
+        RleString *trueRefRleStringToH1, RleString *trueRefRleStringToH2,
+        int64_t maxRunLength, HelenFeatureHDF5FileInfo** helenHDF5Files) {
+
+    // prep
+    int64_t firstMatchedFeatureH1 = -1;
+    int64_t firstMatchedFeatureH2 = -1;
+    int64_t lastMatchedFeatureH1 = -1;
+    int64_t lastMatchedFeatureH2 = -1;
+    stList *featuresH1 = NULL;
+    stList *featuresH2 = NULL;
+    bool outputLabels = trueRefAlignmentToH1 != NULL && trueRefAlignmentToH2 != NULL &&
+            trueRefRleStringToH1 != NULL && trueRefRleStringToH1 != NULL;
+
+# ifdef _OPENMP
+    int64_t threadIdx = omp_get_thread_num();
+# else
+    int64_t threadIdx = 0;
+# endif
+
+    // handle differently based on type
+    switch (type) {
+        case HFEAT_DIPLOID_RLE_WEIGHT :
+            // get features
+            featuresH1 = poa_getDiploidRleWeightFeatures(poaH1, bamChunkReads, readsInH1, maxRunLength);
+            featuresH2 = poa_getDiploidRleWeightFeatures(poaH2, bamChunkReads, readsInH2, maxRunLength);
+
+            firstMatchedFeatureH1 = 0;
+            firstMatchedFeatureH2 = 0;
+            lastMatchedFeatureH1 = stList_length(featuresH1) - 1;
+            lastMatchedFeatureH2 = stList_length(featuresH2) - 1;
+
+            // get truth (if we have it)
+            if (outputLabels) {
+                poa_annotateHelenFeaturesWithTruth(featuresH1, type, trueRefAlignmentToH1, trueRefRleStringToH1,
+                                                   &firstMatchedFeatureH1, &lastMatchedFeatureH1);
+                poa_annotateHelenFeaturesWithTruth(featuresH2, type, trueRefAlignmentToH2, trueRefRleStringToH2,
+                                                   &firstMatchedFeatureH2, &lastMatchedFeatureH2);
+            }
+
+            writeDiploidRleWeightHelenFeaturesHDF5(poaH1->alphabet, helenHDF5Files[threadIdx], outputFileBase, bamChunk,
+                                                   outputLabels, featuresH1, firstMatchedFeatureH1, lastMatchedFeatureH1,
+                                                   featuresH2, firstMatchedFeatureH2, lastMatchedFeatureH2, maxRunLength);
+
+            break;
+
+        default:
+            st_errAbort("Unhandled HELEN feature type for diploid!\n");
+    }
+
+    //cleanup
+    stList_destruct(featuresH1);
+    stList_destruct(featuresH2);
+}
+
+
+
+
 // this function taken from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/example.c
-stList *alignConsensusAndTruth(char *consensusStr, char *truthStr) {
+stList *alignConsensusAndTruth(char *consensusStr, char *truthStr, uint16_t *score) {
 
     int64_t l, m, k;
     uint8_t match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;	// default parameters for genome sequence alignment
@@ -1100,6 +1585,7 @@ stList *alignConsensusAndTruth(char *consensusStr, char *truthStr) {
 
     // Only the 8 bit of the flag is setted. ssw_align will always return the best alignment beginning position and cigar.
     result = ssw_align (profile, ref_num, (int32_t) truthLen, gap_open, gap_extension, 1, 0, 0, 15);
+    *score = result->score1;
 
     // Convert from cigar to aligned pairs
     int32_t consensusPos = result->read_begin1;
@@ -1900,6 +2386,16 @@ void writeChannelRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
         st_logInfo(" %s Error writing HELEN features to HDF5 files: %s\n", logIdentifier, outputFileBase);
         free(logIdentifier);
     }
+}
+
+
+void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo* hdf5FileInfo,
+        char *outputFileBase, BamChunk *bamChunk, bool outputLabels,
+        stList *featuresH1, int64_t featureStartIdxH1, int64_t featureEndIdxInclusiveH1,
+        stList *featuresH2, int64_t featureStartIdxH2, int64_t featureEndIdxInclusiveH2,
+        const int64_t maxRunLength) {
+    //TODO
+
 }
 
 

@@ -234,12 +234,50 @@ void test_channelRleWeightIndex(CuTest *testCase) {
     PoaFeature_ChannelRleWeight_destruct(feature);
 }
 
+
+void test_diploidRleWeightIndex(CuTest *testCase) {
+
+    int idx;
+    int maxRunLength = POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT;
+    int maxIndex = ((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2;
+    PoaFeatureDiploidRleWeight *feature = PoaFeature_DiploidRleWeight_construct(0, 0, 0, maxRunLength);
+
+    for (int64_t c = 0; c < SYMBOL_NUMBER - 1; c++) {
+        for (int64_t l = 0; l <= maxRunLength; l++) {
+            idx = PoaFeature_DiploidRleWeight_charIndex(maxRunLength, (Symbol) c, l, TRUE);
+            CuAssertTrue(testCase, idx < maxIndex);
+            feature->weightsH0[idx] += 1;
+
+            idx = PoaFeature_DiploidRleWeight_charIndex(maxRunLength, (Symbol) c, l, FALSE);
+            CuAssertTrue(testCase, idx < maxIndex);
+            feature->weightsH0[idx] += 1;
+        }
+    }
+
+    idx = PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE);
+    CuAssertTrue(testCase, idx < maxIndex);
+    feature->weightsH0[idx] += 1;
+
+    idx = PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE);
+    CuAssertTrue(testCase, idx < maxIndex);
+    feature->weightsH0[idx] += 1;
+
+    for (int64_t i = 0; i < maxIndex; i++) {
+        if (feature->weightsH0[i] != 1) {
+            CuAssertTrue(testCase, feature->weightsH0[i] == 1);
+        }
+    }
+
+    PoaFeature_DiploidRleWeight_destruct(feature);
+}
+
 CuSuite* featureTestSuite(void) {
     CuSuite* suite = CuSuiteNew();
 
     SUITE_ADD_TEST(suite, test_simpleWeightIndex);
     SUITE_ADD_TEST(suite, test_splitRleWeightIndex);
     SUITE_ADD_TEST(suite, test_channelRleWeightIndex);
+    SUITE_ADD_TEST(suite, test_diploidRleWeightIndex);
     SUITE_ADD_TEST(suite, test_defaultFeatureGeneration);
     SUITE_ADD_TEST(suite, test_simpleWeightFeatureGeneration);
     SUITE_ADD_TEST(suite, test_splitRleWeightFeatureGeneration);
