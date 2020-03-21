@@ -19,73 +19,6 @@
 #include "helenFeatures.h"
 
 
-//TODO move these to a better spot
-stHash *parseReferenceSequences(char *referenceFastaFile) {
-    /*
-     * Get hash of reference sequence names in fasta to their sequences, doing some munging on the sequence names.
-     */
-    st_logInfo("> Parsing reference sequences from file: %s\n", referenceFastaFile);
-    FILE *fh = fopen(referenceFastaFile, "r");
-    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
-    fclose(fh);
-    // log names and transform (if necessary)
-    stList *refSeqNames = stHash_getKeys(referenceSequences);
-    int64_t origRefSeqLen = stList_length(refSeqNames);
-    st_logDebug("\tReference contigs: \n");
-    for (int64_t i = 0; i < origRefSeqLen; ++i) {
-        char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
-        st_logDebug("\t\t%s\n", fullRefSeqName);
-        char refSeqName[128] = "";
-        if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
-            // this transformation is necessary for cases where the reference has metadata after the contig name:
-            // >contig001 length=1000 date=1999-12-31
-            char *newKey = stString_copy(refSeqName);
-            char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
-            stHash_insert(referenceSequences, newKey, refSeq);
-            stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
-            st_logDebug("\t\t\t-> %s\n", newKey);
-        }
-    }
-    stList_destruct(refSeqNames);
-
-    return referenceSequences;
-}
-
-RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params) {
-    /*
-     * Get corresponding substring of the reference for a given bamChunk.
-     */
-    char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
-    if (fullReferenceString == NULL) {
-        st_logCritical("> ERROR: Reference sequence missing from reference map: %s \n", bamChunk->refSeqName);
-        return NULL;
-    }
-    int64_t refLen = strlen(fullReferenceString);
-    char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
-                                                  (refLen < bamChunk->chunkBoundaryEnd ? refLen : bamChunk->chunkBoundaryEnd) - bamChunk->chunkBoundaryStart);
-
-    RleString *rleRef = params->polishParams->useRunLengthEncoding ?
-            rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
-    free(referenceString);
-
-    return rleRef;
-}
-
-
-uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
-    /*
-     * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
-     */
-    uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
-
-    for(uint64_t i=0; i<gf->length; i++) {
-        paddedHap[i+gf->refStart] = hap[i];
-    }
-
-    return paddedHap;
-}
-
-
 /*
  * Main functions
  */
@@ -164,6 +97,183 @@ char *getFileBase(char *base, char *defawlt) {
     }
 }
 
+
+
+//TODO move these to a better spot
+stHash *parseReferenceSequences(char *referenceFastaFile) {
+    /*
+     * Get hash of reference sequence names in fasta to their sequences, doing some munging on the sequence names.
+     */
+    st_logCritical("> Parsing reference sequences from file: %s\n", referenceFastaFile);
+    FILE *fh = fopen(referenceFastaFile, "r");
+    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
+    fclose(fh);
+    // log names and transform (if necessary)
+    stList *refSeqNames = stHash_getKeys(referenceSequences);
+    int64_t origRefSeqLen = stList_length(refSeqNames);
+    st_logDebug("\tReference contigs: \n");
+    for (int64_t i = 0; i < origRefSeqLen; ++i) {
+        char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
+        st_logDebug("\t\t%s\n", fullRefSeqName);
+        char refSeqName[128] = "";
+        if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
+            // this transformation is necessary for cases where the reference has metadata after the contig name:
+            // >contig001 length=1000 date=1999-12-31
+            char *newKey = stString_copy(refSeqName);
+            char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
+            stHash_insert(referenceSequences, newKey, refSeq);
+            stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
+            st_logDebug("\t\t\t-> %s\n", newKey);
+        }
+    }
+    stList_destruct(refSeqNames);
+
+    return referenceSequences;
+}
+
+void handleMerge(BamChunker *bamChunker, char **chunkResults, int numThreads, Params *params, FILE *polishedReferenceOutFh) {
+
+    // prep for merge
+    assert(bamChunker->chunkCount > 0);
+    int64_t contigStartIdx = 0;
+    char *referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, 0)->refSeqName);
+    int64_t  lastReportedPercentage = 0;
+    time_t mergeStartTime = time(NULL);
+
+    // merge chunks
+    st_logCritical("> Merging polished reference strings from %"PRIu64" chunks.\n", bamChunker->chunkCount);
+
+    // find which chunks belong to each contig, merge each contig threaded, write out
+    for (int64_t chunkIdx = 1; chunkIdx <= bamChunker->chunkCount; chunkIdx++) {
+
+        // we encountered the last chunk in the contig (end of list or new refSeqName)
+        if (chunkIdx == bamChunker->chunkCount || !stString_eq(referenceSequenceName,
+                                                               bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName)) {
+
+            // generate and save sequence
+            char *contigSequence = mergeContigChunksThreaded(chunkResults, contigStartIdx, chunkIdx, numThreads,
+                                                             bamChunker->chunkBoundary * 2, params, referenceSequenceName);
+            fastaWrite(contigSequence, referenceSequenceName, polishedReferenceOutFh);
+
+            // log progress
+            int64_t currentPercentage = (int64_t) (100 * chunkIdx / bamChunker->chunkCount);
+            if (currentPercentage != lastReportedPercentage) {
+                lastReportedPercentage = currentPercentage;
+                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
+                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
+                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
+                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
+                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
+                               currentPercentage, chunkIdx, bamChunker->chunkCount, timeDescriptor);
+                free(timeDescriptor);
+            }
+
+            // Clean up
+            free(contigSequence);
+            free(referenceSequenceName);
+
+            // Reset for next reference sequence
+            if (chunkIdx != bamChunker->chunkCount) {
+                contigStartIdx = chunkIdx;
+                referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName);
+            }
+        }
+        // nothing to do otherwise, just wait until end or new contig
+    }
+
+}
+
+
+void handleDiploidMerge(BamChunker *bamChunker, char **chunkResultsH1, char **chunkResultsH2, stSet **readsInH1,
+        stSet **readsInH2, int numThreads, Params *params, FILE *polishedReferenceOutFhH1,
+        FILE *polishedReferenceOutFhH2) {
+
+    // prep for merge
+    assert(bamChunker->chunkCount > 0);
+    int64_t contigStartIdx = 0;
+    char *referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, 0)->refSeqName);
+    int64_t  lastReportedPercentage = 0;
+    time_t mergeStartTime = time(NULL);
+
+    // merge chunks
+    st_logCritical("> Merging diploid polished reference strings from %"PRIu64" chunks.\n", bamChunker->chunkCount);
+
+    // find which chunks belong to each contig, merge each contig threaded, write out
+    for (int64_t chunkIdx = 1; chunkIdx <= bamChunker->chunkCount; chunkIdx++) {
+
+        // we encountered the last chunk in the contig (end of list or new refSeqName)
+        if (chunkIdx == bamChunker->chunkCount || !stString_eq(referenceSequenceName,
+                                                               bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName)) {
+
+            // generate and save sequence
+            char **contigSequences = mergeContigChunksDiploidThreaded(chunkResultsH1, chunkResultsH2,
+                    readsInH1, readsInH2, contigStartIdx, chunkIdx, numThreads, params, referenceSequenceName);
+            fastaWrite(contigSequences[0], referenceSequenceName, polishedReferenceOutFhH1);
+            fastaWrite(contigSequences[1], referenceSequenceName, polishedReferenceOutFhH2);
+
+            // log progress
+            int64_t currentPercentage = (int64_t) (100 * chunkIdx / bamChunker->chunkCount);
+            if (currentPercentage != lastReportedPercentage) {
+                lastReportedPercentage = currentPercentage;
+                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
+                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
+                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
+                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
+                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
+                               currentPercentage, chunkIdx, bamChunker->chunkCount, timeDescriptor);
+                free(timeDescriptor);
+            }
+
+            // Clean up
+            free(contigSequences);
+            free(referenceSequenceName);
+
+            // Reset for next reference sequence
+            if (chunkIdx != bamChunker->chunkCount) {
+                contigStartIdx = chunkIdx;
+                referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName);
+            }
+        }
+        // nothing to do otherwise, just wait until end or new contig
+    }
+
+}
+
+RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params) {
+    /*
+     * Get corresponding substring of the reference for a given bamChunk.
+     */
+    char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
+    if (fullReferenceString == NULL) {
+        st_logCritical("> ERROR: Reference sequence missing from reference map: %s \n", bamChunk->refSeqName);
+        return NULL;
+    }
+    int64_t refLen = strlen(fullReferenceString);
+    char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
+                                                  (refLen < bamChunk->chunkBoundaryEnd ? refLen : bamChunk->chunkBoundaryEnd) - bamChunk->chunkBoundaryStart);
+
+    RleString *rleRef = params->polishParams->useRunLengthEncoding ?
+                        rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
+    free(referenceString);
+
+    return rleRef;
+}
+
+
+uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
+    /*
+     * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
+     */
+    uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
+
+    for(uint64_t i=0; i<gf->length; i++) {
+        paddedHap[i+gf->refStart] = hap[i];
+    }
+
+    return paddedHap;
+}
+
+
 int main(int argc, char *argv[]) {
 
     // Parameters / arguments
@@ -212,7 +322,7 @@ int main(int argc, char *argv[]) {
                 { "outputBase", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
                 { "depth", required_argument, 0, 'p'},
-                { "diploid", required_argument, 0, '2'},
+                { "diploid", no_argument, 0, '2'},
                 { "produceFeatures", no_argument, 0, 'f'},
                 { "featureType", required_argument, 0, 'F'},
                 { "trueReferenceBam", required_argument, 0, 'u'},
@@ -414,48 +524,26 @@ int main(int argc, char *argv[]) {
     	params_printParameters(params, stderr);
     }
 
-    // Parse reference as map of header string to nucleotide sequences
-    st_logCritical("> Parsing reference sequences from file: %s\n", referenceFastaFile);
-    FILE *fh = fopen(referenceFastaFile, "r");
-    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
-    fclose(fh);
-    // log names and transform (if necessary)
-    stList *refSeqNames = stHash_getKeys(referenceSequences);
-    int64_t origRefSeqLen = stList_length(refSeqNames);
-    st_logDebug("\tReference contigs: \n");
-    for (int64_t i = 0; i < origRefSeqLen; ++i) {
-        char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
-        st_logDebug("\t\t%s\n", fullRefSeqName);
-        char refSeqName[128] = "";
-        if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
-            // this transformation is necessary for cases where the reference has metadata after the contig name:
-            // >contig001 length=1000 date=1999-12-31
-            char *newKey = stString_copy(refSeqName);
-            char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
-            stHash_insert(referenceSequences, newKey, refSeq);
-            stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
-            st_logDebug("\t\t\t-> %s\n", newKey);
-        }
-    }
-    stList_destruct(refSeqNames);
+    // get reference sequences (and remove cruft after refName)
+    stHash *referenceSequences = parseReferenceSequences(referenceFastaFile);
 
     // Open output files
     char *polishedReferenceOutFile = stString_print((diploid ? "%s.h1.fa" : "%s.fa"), outputBase);
-    st_logCritical("> Going to write polished reference in : %s\n", polishedReferenceOutFile);
+    st_logCritical("> Going to write polished reference in :      %s\n", polishedReferenceOutFile);
     FILE *polishedReferenceOutFh = fopen(polishedReferenceOutFile, "w");
     if (polishedReferenceOutFh == NULL) {
         st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFile);
     }
-    char *polishedReferenceOutFileHap2 = NULL;
-    FILE *polishedReferenceOutFhHap2 = NULL;
+    char *polishedReferenceOutFileH2 = NULL;
+    FILE *polishedReferenceOutFhH2 = NULL;
     if (diploid) {
-        polishedReferenceOutFile = stString_print("%s.h2.fa", outputBase);
-        st_logCritical("> Going to write polished reference second haplotype in : %s\n", polishedReferenceOutFileHap2);
-        polishedReferenceOutFhHap2 = fopen(polishedReferenceOutFileHap2, "w");
-        if (polishedReferenceOutFh == NULL) {
-            st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFileHap2);
+        polishedReferenceOutFileH2 = stString_print("%s.h2.fa", outputBase);
+        st_logCritical("> Going to write polished reference (H2) in : %s\n", polishedReferenceOutFileH2);
+        polishedReferenceOutFhH2 = fopen(polishedReferenceOutFileH2, "w");
+        if (polishedReferenceOutFhH2 == NULL) {
+            st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFileH2);
         }
-        free(polishedReferenceOutFileHap2);
+        free(polishedReferenceOutFileH2);
     }
     free(polishedReferenceOutFile);
 
@@ -481,9 +569,19 @@ int main(int argc, char *argv[]) {
     }
     #endif
 
-    // Polish chunks
     // Each chunk produces a char* as output which is saved here
     char **chunkResults = st_calloc(bamChunker->chunkCount, sizeof(char*));
+
+    // diploid info
+    char **chunkResultsH1 = chunkResults; //just for naming consistency
+    char **chunkResultsH2 = NULL;
+    stSet **readSetsH1 = NULL;
+    stSet **readSetsH2 = NULL;
+    if (diploid) {
+        chunkResultsH2 = st_calloc(bamChunker->chunkCount, sizeof(char*));
+        readSetsH1 = st_calloc(bamChunker->chunkCount, sizeof(stSet*));
+        readSetsH2 = st_calloc(bamChunker->chunkCount, sizeof(stSet*));
+    }
 
     // (may) need to shuffle chunks
     stList *chunkOrder = stList_construct3(0, (void (*)(void*))stIntTuple_destruct);
@@ -598,7 +696,6 @@ int main(int argc, char *argv[]) {
                 stList_destruct(discardedReads);
                 stList_destruct(discardedAlignments);
             }
-
         }
 
         // prep for ploishing
@@ -704,33 +801,54 @@ int main(int argc, char *argv[]) {
             Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
             if(params->polishParams->useRunLengthEncoding) {
-                st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
+                st_logInfo(" %s Using read phasing to reestimate repeat counts in phased manner\n", logIdentifier);
                 poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap1, reads, params->polishParams->repeatSubMatrix,
                                                                  readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
                 poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap2, reads, params->polishParams->repeatSubMatrix,
                                                                  readsBelongingToHap2, readsBelongingToHap1, params->polishParams);
             }
 
-            // Output
-            // TODO
-            //polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa_hap1, reads, params);
-            //polishedReferenceSequence_processChunkSequence(rSeq2, bamChunk, poa_hap2, reads, params);
+            // output
+            RleString *polishedRleConsensusH1 = poa_hap1->refString;
+            RleString *polishedRleConsensusH2 = poa_hap2->refString;
+            char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
+            char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
+
+            chunkResultsH1[chunkIdx] = polishedConsensusStringH1;
+            chunkResultsH2[chunkIdx] = polishedConsensusStringH2;
+            readSetsH1[chunkIdx] = readsBelongingToHap1;
+            readSetsH2[chunkIdx] = readsBelongingToHap2;
+
+            // helen
+            #ifdef _HDF5
+            if (helenFeatureType != HFEAT_NONE) {
+                handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
+                        helenHDF5Files, fullFeatureOutput, trueReferenceBam, trueReferenceBamHap2, params,
+                        logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2, readsBelongingToHap1,
+                        readsBelongingToHap2, polishedConsensusStringH1, polishedConsensusStringH2,
+                        polishedRleConsensusH1, polishedRleConsensusH2);
+            }
+            #endif
 
             // Cleanup
             free(hap1);
             free(hap2);
+            rleString_destruct(polishedRleConsensusH1);
+            rleString_destruct(polishedRleConsensusH2);
+            free(polishedConsensusStringH1);
+            free(polishedConsensusStringH2);
             bubbleGraph_destruct(bg);
             stGenomeFragment_destruct(gf);
             poa_destruct(poa_hap1);
             poa_destruct(poa_hap2);
-            stSet_destruct(readsBelongingToHap1);
-            stSet_destruct(readsBelongingToHap2);
             stHash_destruct(readsToPSeqs);
 
         } else {
 
             // get polished reference string and expand RLE (regardless of whether RLE was applied)
-            poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
+            if (params->polishParams->useRunLengthEncoding) {
+                poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
+            }
             RleString *polishedRleConsensus = poa->refString;
             polishedConsensusString = rleString_expand(polishedRleConsensus);
 
@@ -763,68 +881,24 @@ int main(int argc, char *argv[]) {
         free(logIdentifier);
     }
 
-    // prep for merge
-    assert(bamChunker->chunkCount > 0);
-    int64_t contigStartIdx = 0;
-    char *referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, 0)->refSeqName);
-    lastReportedPercentage = 0;
-    time_t mergeStartTime = time(NULL);
-
-    // for filling missing chunks with N's
-    int64_t spacerSize = (bamChunker->chunkBoundary == 0 ? 50 : bamChunker->chunkBoundary * 3);
-    char *missingChunkSpacer = st_calloc(spacerSize + 1, sizeof(char));
-    for (int64_t i = 0; i < spacerSize; i++) {
-        missingChunkSpacer[i] = 'N';
-    }
-    missingChunkSpacer[spacerSize] = '\0';
-
     // merge chunks
-    st_logCritical("> Merging polished reference strings from %"PRIu64" chunks.\n", bamChunker->chunkCount);
-
-    // find which chunks belong to each contig, merge each contig threaded, write out
-    for (int64_t chunkIdx = 1; chunkIdx <= bamChunker->chunkCount; chunkIdx++) {
-        
-        // we encountered the last chunk in the contig (end of list or new refSeqName)
-        if (chunkIdx == bamChunker->chunkCount || !stString_eq(referenceSequenceName,
-                bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName)) {
-
-            // generate and save sequence
-            char *contigSequence = mergeContigChunksThreaded(chunkResults, contigStartIdx, chunkIdx, numThreads, 
-                    bamChunker->chunkBoundary * 2, params, missingChunkSpacer, referenceSequenceName);
-            fastaWrite(contigSequence, referenceSequenceName, polishedReferenceOutFh);
-
-            // log progress
-            int64_t currentPercentage = (int64_t) (100 * chunkIdx / bamChunker->chunkCount);
-            if (currentPercentage != lastReportedPercentage) {
-                lastReportedPercentage = currentPercentage;
-                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
-                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
-                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
-                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                        currentPercentage, chunkIdx, bamChunker->chunkCount, timeDescriptor);
-                free(timeDescriptor);
-            }
-
-            // Clean up
-            free(contigSequence);
-            free(referenceSequenceName);
-
-            // Reset for next reference sequence
-            if (chunkIdx != bamChunker->chunkCount) {
-                contigStartIdx = chunkIdx;
-                referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName);
-            }
-        }
-        // nothing to do otherwise, just wait until end or new contig
+    if (diploid) {
+        handleDiploidMerge(bamChunker, chunkResultsH1, chunkResultsH2, readSetsH1, readSetsH2, numThreads,
+                params, polishedReferenceOutFh, polishedReferenceOutFhH2);
+    } else {
+        handleMerge(bamChunker, chunkResults, numThreads, params, polishedReferenceOutFh);
     }
 
     // everything has been written, cleanup merging infrastructure
     fclose(polishedReferenceOutFh);
-    if (polishedReferenceOutFhHap2 != NULL) fclose(polishedReferenceOutFhHap2);
-    free(missingChunkSpacer);
+    if (polishedReferenceOutFhH2 != NULL) fclose(polishedReferenceOutFhH2);
     for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
         free(chunkResults[chunkIdx]);
+        if (diploid) {
+            free(chunkResultsH2[chunkIdx]);
+            stSet_destruct(readSetsH1[chunkIdx]);
+            stSet_destruct(readSetsH2[chunkIdx]);
+        }
     }
 
     // Cleanup

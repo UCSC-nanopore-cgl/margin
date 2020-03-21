@@ -982,9 +982,13 @@ RleString *bamChunkReadSubstring_getRleString(BamChunkReadSubstring *readSubstri
 int64_t removeOverlap(char *prefixString, char *suffixString, int64_t approxOverlap, PolishParams *polishParams,
 				      int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
 char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-								int64_t overlap, Params *params, char *missingChunkSpacer, char *referenceSequenceName);
+								int64_t overlap, Params *params, char *referenceSequenceName);
 char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive,
-								int64_t overlap, Params *params, char *missingChunkSpacer);
+								int64_t overlap, Params *params);
+char **mergeContigChunksDiploidThreaded(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+		int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads, Params *params, char *referenceSequenceName);
+char **mergeContigChunksDiploid(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+		stSet **lastReadsH1, stSet **lastReadsH2, int64_t startIdx, int64_t endIdxExclusive, Params *params);
 
 /*
  * View functions

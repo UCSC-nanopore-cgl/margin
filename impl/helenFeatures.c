@@ -461,9 +461,9 @@ void handleDiploidHelenFeatures(
 
         // write the actual features (type dependent)
         poa_writeDiploidHelenFeatures(helenFeatureType, bamChunkReads, helenFeatureOutfileBase,
-                bamChunk, poaH1,
-                trueRefAlignmentToHap1, trueRefAlignmentToHap2, trueRefRleStringToHap1, trueRefRleStringToHap2,
-                splitWeightMaxRunLength, (HelenFeatureHDF5FileInfo**) helenHDF5Files);
+                bamChunk, poaH1, poaH2, readsInH1, readsInH2, trueRefAlignmentToHap1, trueRefAlignmentToHap2,
+                trueRefRleStringToHap1,  trueRefRleStringToHap2, splitWeightMaxRunLength,
+                (HelenFeatureHDF5FileInfo**) helenHDF5Files);
     }
 
     // cleanup
