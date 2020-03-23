@@ -108,7 +108,7 @@ void alignAndSaveChunkConsensusSequence(stList *polishedReferenceStrings, char *
 }
 
 
-char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t overlap, Params *params) {
+char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, Params *params) {
 
     // merge chunks
     stList *polishedReferenceStrings = stList_construct3(0, free); // The polished reference strings, one for each chunk
@@ -133,10 +133,10 @@ char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive
 
 
 char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-                                int64_t overlap, Params *params, char *referenceSequenceName) {
+                                Params *params, char *referenceSequenceName) {
 
     // special unthreaded case
-    if (numThreads == 1) return mergeContigChunks(chunks, startIdx, endIdxExclusive, overlap, params);
+    if (numThreads == 1) return mergeContigChunks(chunks, startIdx, endIdxExclusive, params);
 
     // divide into chunks
     int64_t totalChunks = endIdxExclusive - startIdx;
@@ -153,11 +153,11 @@ char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxE
         int64_t threadedEndIdxExclusive = threadedStartIdx + chunksPerThread;
         if (endIdxExclusive < threadedEndIdxExclusive) threadedEndIdxExclusive = endIdxExclusive;
 
-        outputChunks[thread] = mergeContigChunks(chunks, threadedStartIdx, threadedEndIdxExclusive, overlap, params);
+        outputChunks[thread] = mergeContigChunks(chunks, threadedStartIdx, threadedEndIdxExclusive, params);
     }
 
     // finish
-    char *contig = mergeContigChunks(outputChunks, 0, numThreads, overlap, params);
+    char *contig = mergeContigChunks(outputChunks, 0, numThreads, params);
     for (int64_t i = 0; i < numThreads; i++) {
         free(outputChunks[i]);
     }

@@ -152,7 +152,7 @@ void handleMerge(BamChunker *bamChunker, char **chunkResults, int numThreads, Pa
 
             // generate and save sequence
             char *contigSequence = mergeContigChunksThreaded(chunkResults, contigStartIdx, chunkIdx, numThreads,
-                                                             bamChunker->chunkBoundary * 2, params, referenceSequenceName);
+                                                             params, referenceSequenceName);
             fastaWrite(contigSequence, referenceSequenceName, polishedReferenceOutFh);
 
             // log progress
@@ -225,6 +225,8 @@ void handleDiploidMerge(BamChunker *bamChunker, char **chunkResultsH1, char **ch
             }
 
             // Clean up
+            free(contigSequences[0]);
+            free(contigSequences[1]);
             free(contigSequences);
             free(referenceSequenceName);
 
@@ -809,8 +811,8 @@ int main(int argc, char *argv[]) {
             }
 
             // output
-            RleString *polishedRleConsensusH1 = poa_hap1->refString;
-            RleString *polishedRleConsensusH2 = poa_hap2->refString;
+            RleString *polishedRleConsensusH1 = rleString_copy(poa_hap1->refString);
+            RleString *polishedRleConsensusH2 = rleString_copy(poa_hap2->refString);
             char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
             char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
 
@@ -835,8 +837,6 @@ int main(int argc, char *argv[]) {
             free(hap2);
             rleString_destruct(polishedRleConsensusH1);
             rleString_destruct(polishedRleConsensusH2);
-            free(polishedConsensusStringH1);
-            free(polishedConsensusStringH2);
             bubbleGraph_destruct(bg);
             stGenomeFragment_destruct(gf);
             poa_destruct(poa_hap1);
@@ -916,7 +916,13 @@ int main(int argc, char *argv[]) {
         free(helenHDF5Files);
     }
     #endif
+    stList_destruct(chunkOrder);
     free(chunkResults);
+    if (diploid) {
+        free(chunkResultsH2);
+        free(readSetsH1);
+        free(readSetsH2);
+    }
     free(outputBase);
     free(bamInFile);
     free(referenceFastaFile);
