@@ -157,7 +157,7 @@ void test_symbolRLE(CuTest *testCase) {
 		CuAssertTrue(testCase, a->convertSymbolToChar(i) == toupper(s[i]));
 
 		for(int64_t repeatCount=0; repeatCount<255; repeatCount++) {
-			Symbol j = symbol_addRepeatCount(i, repeatCount);
+			Symbol j = symbol_addRepeatCount(i, repeatCount, MAXIMUM_REPEAT_LENGTH);
 
 			CuAssertTrue(testCase, symbol_stripRepeatCount(j) == i);
 			CuAssertTrue(testCase, symbol_getRepeatLength(j) == repeatCount);
@@ -566,8 +566,10 @@ void test_alignedPairs(CuTest *testCase, char *sX, char *sY) {
 
 	//Now do alignment
 
-	SymbolString sX2 = rleString_constructSymbolString(rleX, 0, rleX->length, params->polishParams->alphabet, params->polishParams->useRepeatCountsInAlignment);
-	SymbolString sY2 = rleString_constructSymbolString(rleY, 0, rleY->length, params->polishParams->alphabet, params->polishParams->useRepeatCountsInAlignment);
+	SymbolString sX2 = rleString_constructSymbolString(rleX, 0, rleX->length, params->polishParams->alphabet,
+	        params->polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
+	SymbolString sY2 = rleString_constructSymbolString(rleY, 0, rleY->length, params->polishParams->alphabet,
+	        params->polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
 
 	stList *alignedPairs = getAlignedPairs(params->polishParams->stateMachineForForwardStrandRead, sX2, sY2, params->polishParams->p, 0, 0);
 
