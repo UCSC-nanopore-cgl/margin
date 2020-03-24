@@ -939,6 +939,7 @@ typedef struct _bamChunker {
 
 typedef struct _bamChunk {
     char *refSeqName;          // name of contig
+    int64_t chunkIdx;
     int64_t chunkBoundaryStart;  // the first 'position' where we have an aligned read
     int64_t chunkStart;        // the actual boundary of the chunk, calculations from chunkMarginStart to chunkStart
     //  should be used to initialize the probabilities at chunkStart

@@ -238,7 +238,7 @@ void test_channelRleWeightIndex(CuTest *testCase) {
 void test_diploidRleWeightIndex(CuTest *testCase) {
 
     int idx;
-    int maxRunLength = POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT;
+    int maxRunLength = POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT;
     int maxIndex = ((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2;
     PoaFeatureDiploidRleWeight *feature = PoaFeature_DiploidRleWeight_construct(0, 0, 0, maxRunLength);
 
@@ -250,7 +250,7 @@ void test_diploidRleWeightIndex(CuTest *testCase) {
 
             idx = PoaFeature_DiploidRleWeight_charIndex(maxRunLength, (Symbol) c, l, FALSE);
             CuAssertTrue(testCase, idx < maxIndex);
-            feature->weightsHOff[idx] += 1;
+            feature->weightsHOn[idx] += 1;
         }
     }
 
@@ -260,14 +260,11 @@ void test_diploidRleWeightIndex(CuTest *testCase) {
 
     idx = PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, FALSE);
     CuAssertTrue(testCase, idx < maxIndex);
-    feature->weightsHOff[idx] += 1;
+    feature->weightsHOn[idx] += 1;
 
     for (int64_t i = 0; i < maxIndex; i++) {
         if (feature->weightsHOn[i] != 1) {
             CuAssertTrue(testCase, feature->weightsHOn[i] == 1);
-        }
-        if (feature->weightsHOff[i] != 1) {
-            CuAssertTrue(testCase, feature->weightsHOff[i] == 1);
         }
     }
 

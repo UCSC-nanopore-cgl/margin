@@ -47,8 +47,8 @@ void usage() {
 
     # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
-    fprintf(stderr, "    -f --produceFeatures     : output features for HELEN.\n");
-    fprintf(stderr, "    -F --featureType         : output features of chunks for HELEN.  Valid types:\n");
+    fprintf(stderr, "    -f --produceFeatures     : output splitRleWeight features for HELEN.\n");
+    fprintf(stderr, "    -F --featureType         : output specific feature type for HELEN (overwrites -f).  Valid types:\n");
     fprintf(stderr, "                                 splitRleWeight:   [default] run lengths split into chunks\n");
     fprintf(stderr, "                                 channelRleWeight: run lengths split into per-nucleotide channels\n");
     fprintf(stderr, "                                 simpleWeight:     weighted likelihood from POA nodes (non-RLE)\n");
@@ -63,9 +63,11 @@ void usage() {
     # endif
 
     fprintf(stderr, "\nMiscellaneous supplementary output options:\n");
+    fprintf(stderr, "    -d --outputPoaDot        : Output base to write out the poa as DOT file [default = NULL]\n");
     fprintf(stderr, "    -i --outputRepeatCounts  : Output base to write out the repeat counts [default = NULL]\n");
     fprintf(stderr, "    -j --outputPoaTsv        : Output base to write out the poa as TSV file [default = NULL]\n");
-    fprintf(stderr, "    -d --outputPoaDot        : Output base to write out the poa as DOT file [default = NULL]\n");
+    fprintf(stderr, "    -m --outputHaplotypeBAM  : Output base to write out phased BAMs [default = NULL]\n");
+    fprintf(stderr, "    -n --outputHaplotypeReads: Output base to write out phased reads [default = NULL]\n");
     fprintf(stderr, "\n");
 }
 
@@ -289,6 +291,8 @@ int main(int argc, char *argv[]) {
     char *outputRepeatCountBase = NULL;
     char *outputPoaTsvBase = NULL;
     char *outputPoaDotBase = NULL;
+    char *outputHaplotypeBamBase = NULL;
+    char *outputHaplotypeReadsBase = NULL;
     int64_t maxDepth = -1;
     bool diploid = FALSE;
 
@@ -332,10 +336,12 @@ int main(int argc, char *argv[]) {
 				{ "outputRepeatCounts", required_argument, 0, 'i'},
 				{ "outputPoaTsv", required_argument, 0, 'j'},
 				{ "outputPoaDot", required_argument, 0, 'd'},
+				{ "outputHaplotypeBAM", required_argument, 0, 'm'},
+				{ "outputHaplotypeReads", required_argument, 0, 'n'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:p:fF:u:hL:i:j:d:t:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:p:fF:u:hL:i:j:d:t:m:n:", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -369,6 +375,12 @@ int main(int argc, char *argv[]) {
             break;
         case 'd':
             outputPoaDotBase = getFileBase(optarg, "poa");
+            break;
+        case 'm':
+            outputHaplotypeBamBase = getFileBase(optarg, "haplotype");
+            break;
+        case 'n':
+            outputHaplotypeReadsBase = getFileBase(optarg, "haplotype");
             break;
         case 'F':
             if (stString_eqcase(optarg, "simpleWeight") || stString_eqcase(optarg, "simple")) {
@@ -820,6 +832,12 @@ int main(int argc, char *argv[]) {
             chunkResultsH2[chunkIdx] = polishedConsensusStringH2;
             readSetsH1[chunkIdx] = readsBelongingToHap1;
             readSetsH2[chunkIdx] = readsBelongingToHap2;
+
+            //ancillary files
+            if (outputHaplotypeBamBase != NULL || outputHaplotypeReadsBase != NULL) {
+                writeHaplotypedOutput(bamChunk, bamInFile, outputHaplotypeBamBase, outputHaplotypeReadsBase,
+                        readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
+            }
 
             // helen
             #ifdef _HDF5

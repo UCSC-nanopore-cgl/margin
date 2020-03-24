@@ -20,7 +20,7 @@ void bamChunker_destruct(BamChunker *bamChunker);
 BamChunk *bamChunker_getChunk(BamChunker *bamChunker, int64_t chunkIdx);
 
 BamChunk *bamChunk_construct();
-BamChunk *bamChunk_construct2(char *refSeqName, int64_t chunkBoundaryStart, int64_t chunkStart, int64_t chunkEnd,
+BamChunk *bamChunk_construct2(char *refSeqName, int64_t chunkIndex, int64_t chunkBoundaryStart, int64_t chunkStart, int64_t chunkEnd,
                               int64_t chunkBoundaryEnd, BamChunker *parent);
 BamChunk *bamChunk_copyConstruct(BamChunk *toCopy);
 void bamChunk_destruct(BamChunk *bamChunk);
@@ -32,6 +32,9 @@ void bamChunk_destruct(BamChunk *bamChunk);
 uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments);
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
                         stList *filteredReads, stList *filteredAlignments, stList *discardedReads, stList *discardedAlignments);
+
+void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase, char *outputReadIDsFileBase,
+                           stSet *readsInH1, stSet *readsInH2, char *logIdentifier);
 
 int64_t getAlignedReadLength(bam1_t *aln);
 int64_t getAlignedReadLength2(bam1_t *aln, int64_t *start_softclip, int64_t *end_softclip);

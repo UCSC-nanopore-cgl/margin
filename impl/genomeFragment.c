@@ -202,7 +202,9 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
 			assert(stSet_search(gf->reads1, pSeq) != NULL || stSet_search(gf->reads2, pSeq) != NULL);
 			assert(stSet_search(gf->reads1, pSeq) == NULL || stSet_search(gf->reads2, pSeq) == NULL);
 
-			stSet_insert(stSet_search(gf->reads1, pSeq) != NULL ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
+			stSet_insert(stSet_search(gf->reads1, pSeq) != NULL ? *readsBelongingToHap1 : *readsBelongingToHap2,
+			        read);
+//			        stString_copy(read->readName));
 		}
 	}
 }
