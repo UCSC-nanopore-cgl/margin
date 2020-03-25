@@ -566,7 +566,7 @@ int main(int argc, char *argv[]) {
             poa_printSummaryStats(poa, stderr);
         }
         if (st_getLogLevel() >= debug) {
-            poa_print(poa, stderr, reads, 5, 5);
+            poa_print(poa, stderr, reads, 5);
         }
 
         // Write any optional outputs about repeat count and POA, etc.
@@ -584,7 +584,7 @@ int main(int argc, char *argv[]) {
                                                         outputPoaTsvBase, chunkIdx, bamChunk->refSeqName,
                                                         bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
             FILE *outputPoaTsvFileHandle = fopen(outputPoaTsvFilename, "w");
-            poa_printCSV(poa, outputPoaTsvFileHandle, reads, 5, 0);
+            poa_printCSV(poa, outputPoaTsvFileHandle, reads, params->polishParams->repeatSubMatrix, 5);
             fclose(outputPoaTsvFileHandle);
             free(outputPoaTsvFilename);
         }

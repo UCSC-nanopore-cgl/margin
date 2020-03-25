@@ -64,6 +64,8 @@ typedef struct _poaDelete PoaDelete;
 typedef struct _poaBaseObservation PoaBaseObservation;
 typedef struct _rleString RleString;
 typedef struct _refMsaView MsaView;
+typedef struct _outputChunkers OutputChunkers;
+
 /*
  * Combined params object
  */
@@ -460,6 +462,8 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment);
 void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,
         stRPHmm *hmm, stList *path, int64_t maxIterations);
 
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh);
+
 void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads, stSet **readsBelongingToHap1, stSet **readsBelongingToHap2);
 
 double getLogProbOfReadGivenHaplotype(uint64_t *haplotypeString, int64_t start, int64_t length,
@@ -676,7 +680,7 @@ stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, Polish
  */
 void poa_print(Poa *poa, FILE *fH,
 			  stList *bamChunkReads,
-			  float indelSignificanceThreshold, float strandBalanceRatio);
+			  float indelSignificanceThreshold);
 
 /*
  * Prints a tab separated version of the POA graph.
@@ -688,29 +692,32 @@ void poa_printDOT(Poa *poa, FILE *fH, stList *bamChunkReads);
  *
  * Format is csv with one line per reference position.
  * The CSV has the following fields (in order):
+ *
  * REF_INDEX: Index of base in POA backbone, 0 is the position before the first actual base, used to represent prefix indels
  * REF_BASE: Base at REF_INDEX in the POA backbone
  * TOTAL_WEIGHT: (float) The expected read coverage of the base at REF_INDEX (float >= 0)
- * POS_STRAND_WEIGHT: (float) Total weight from positive strand reads.
- * NEG_STRAND_WEIGHT: (float) Total weight from negative strand reads.
+ * FRACTION_POS_STRAND: (float) Fraction of weight from positive strand reads.
  * for each base, c, in alphabet (bases A, C, G, T for DNA, in order):
- * NORM_BASE_c_WEIGHT: (float between 0 and 1) The read weight of reads that have a c aligned to the reference base, as a fraction of total weight.
- * NORM_POS_STRAND_BASE_c_WEIGHT: (float between 0 and 1) The read weight of positive strand reads that have a c aligned to the reference base, as a fraction of total weight of positive strand reads.
- * NORM_NEG_BASE_c_WEIGHT: (float between 0 and 1) The read weight of negative strand reads that have a c aligned to the reference base, as a fraction of total weight of negative strand reads.
+ * FRACTION_BASE_c_WEIGHT: (float between 0 and 1) The read weight of reads that have a c aligned to the reference base, as a fraction of total weight.
+ * FRACTION_BASE_c_POS_STRAND: (float between 0 and 1) The read weight of positive strand reads that have a c aligned to the reference base,
+ * as a fraction of total weight of reads have a c aligned to the reference base.
+ *
+ * for each repeat count (from 1 to maxRepeatCount):
+ * LOG_PROB_REPEAT_COUNT_i: Log probability of repeat count i (according to Bayesian model).
+ *
  * for each insert:
  * INSERT_SEQ: The full insertion sequence, not in RLE space
  * TOTAL_WEIGHT: (float) The expected read coverage of the insert
- * TOTAL_POS_STRAND_WEIGHT: (float) The total read weight of positive strand reads.
- * TOTAL_NEG_STRAND_WEIGHT: (float) The total read weight of negative strand reads.
+ * FRACTION_POS_STRAND: (float between 0 and 1) The fraction of read weight from positive strand reads.
+ *
  * for each delete:
  * DELETE_LENGTH: Length of the delete
  * TOTAL_WEIGHT: (float) The expected read coverage of the delete
- * TOTAL_POS_STRAND_WEIGHT: (float) The read weight of positive strand reads.
- * TOTAL_NEG_STRAND_WEIGHT: (float) The read weight of negative strand reads.
+ * FRACTION_POS_STRAND: (float between 0 and 1) The fraction of read weight from positive strand reads.
  */
 void poa_printCSV(Poa *poa, FILE *fH,
-                  stList *bamChunkReads,
-                  float indelSignificanceThreshold, float strandBalanceRatio);
+                  stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix,
+                  float indelSignificanceThreshold);
 
 /*
  * Similar to poa_printCSV, but for a phased poa, giving weights for the two haplotypes separately.
@@ -732,6 +739,13 @@ void poa_printCSV(Poa *poa, FILE *fH,
  * as a fraction of total weight for first haplotype reads with a c aligned to the reference base.
  * FRACTION_BASE_c_POS_STRAND_HAP2: (float between 0 and 1) The read weight of positive-strand second haplotype reads that have a c aligned to the reference base,
  * as a fraction of total weight for second haplotype reads with a c aligned to the reference base.
+ *
+ * for each repeat count for first haplotype (from 1 to maxRepeatCount):
+ * LOG_PROB_HAP1_REPEAT_COUNT_i: Log probability of repeat count i for haplotype1 (according to Bayesian model).
+ *
+ * for each repeat count for first haplotype (from 1 to maxRepeatCount):
+ * LOG_PROB_HAP2_REPEAT_COUNT_i: Log probability of repeat count i for haplotype2 (according to Bayesian model).
+ *
  * for each insert:
  * INSERT_SEQ: The full insertion sequence, not in RLE space
  * TOTAL_WEIGHT: (float) The expected read coverage of the insert
@@ -739,6 +753,7 @@ void poa_printCSV(Poa *poa, FILE *fH,
  * FRACTION_HAP2_WEIGHT: The fraction (float between 0 and 1) of total weight that is in reads that are part of the second haplotype partition.
  * FRACTION_POS_STRAND_HAP1: (float between 0 and 1) The read weight of first haplotype, positive strand reads as a fraction of all first haplotype read weight.
  * FRACTION_POS_STRAND_HAP2: (float between 0 and 1) The read weight of second haplotype, positive strand reads as a fraction of all second haplotype read weight.
+ *
  * for each delete:
  * DELETE_LENGTH: Length of the insert:
  * TOTAL_WEIGHT: (float) The expected read coverage of the insert
@@ -749,9 +764,10 @@ void poa_printCSV(Poa *poa, FILE *fH,
  */
 void poa_printPhasedCSV(Poa *poa, FILE *fH,
                         stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
-                        float indelSignificanceThreshold, float strandBalanceRatio);
+                        RepeatSubMatrix *repeatSubMatrix,
+                        float indelSignificanceThreshold);
 /*
- * Print repeat count observations.
+ * Print individual repeat count observations.
  */
 void poa_printRepeatCounts(Poa *poa, FILE *fH, stList *bamChunkReads);
 
@@ -947,10 +963,22 @@ int64_t repeatSubMatrix_getMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbo
         stList *bamChunkReads, double *logProbability);
 
 /*
+ * Get the log probabilities of repeat counts from minRepeatLength (inclusive) to maxRepeatLength (inclusive)
+ */
+void repeatSubMatrix_getRepeatCountProbs(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
+                                         stList *bamChunkReads, double *logProbabilities, int64_t minRepeatLength, int64_t maxRepeatLength);
+
+/*
  * As repeatSubMatrix_getMLRepeatCount, but for a phasing of the reads.
  */
 int64_t repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base, stList *observations,
 		stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params);
+
+/*
+ * Get the minimum and maximum repeat count observations.
+ */
+void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeatSubMatrix, stList *observations,
+                                                         stList *bamChunkReads, int64_t *minRepeatLength, int64_t *maxRepeatLength);
 
 /*
  * Translate a sequence of aligned pairs (as stIntTuples) whose coordinates are monotonically increasing
@@ -1226,6 +1254,27 @@ char *getLogIdentifier();
  * Run length encoded model emission model for state machine that uses a repeat sub matrix.
  */
 Emissions *rleNucleotideEmissions_construct(Emissions *emissions, RepeatSubMatrix *repeatSubMatrix, bool strand);
+
+/*
+ * Stitching code
+ */
+
+OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *params,
+        char *outputSequenceFile, char *outputPoaFile,
+        char *outputReadPartitionFile, char *outputRepeatCountFile,
+        char *hap1Suffix, char *hap2Suffix);
+
+void
+outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal, Poa *poa,
+                                    stList *reads, BamChunk *bamChunk);
+
+void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
+                                Poa *poaHap1, Poa *poaHap2, BamChunk *bamChunk, stList *reads,
+                                stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stGenomeFragment *gF);
+
+void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased);
+
+void outputChunkers_destruct(OutputChunkers *outputChunkers);
 
 /*
  * HELEN Features

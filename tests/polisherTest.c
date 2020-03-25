@@ -311,7 +311,7 @@ static void test_poa_realign_tiny_example1(CuTest *testCase) {
 	st_logInfo("Read:\t\t%s\n", read->rleRead->rleString);
 	st_logInfo("Reference:\t%s\n", reference->rleString);
 	if (st_getLogLevel() >= info) {
-		poa_print(poa, stderr, reads, 0.0, 0.0);
+		poa_print(poa, stderr, reads, 0.0);
 	}
 
 	// Check inserts
@@ -451,7 +451,7 @@ static void test_poa_realign(CuTest *testCase) {
 
 		st_logInfo("True-reference:%s\n", trueReference);
 		if (st_getLogLevel() >= info) {
-			poa_print(poa, stderr, reads, 5, 5);
+			poa_print(poa, stderr, reads, 5);
 		}
 
 		//Cleanup
@@ -495,7 +495,7 @@ static void test_poa_realignIterative(CuTest *testCase) {
 
 		st_logInfo("True-reference:%s\n", trueReference);
 		if (st_getLogLevel() >= info) {
-			poa_print(poa, stderr, reads, 5, 0);
+			poa_print(poa, stderr, reads, 5);
 		}
 
 		//Cleanup
