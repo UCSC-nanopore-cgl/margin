@@ -2,19 +2,22 @@
  * Copyright (C) 2018 by Benedict Paten (benedictpaten@gmail.com)
  *
  * Released under the MIT license, see LICENSE.txt
+ *
+ * Plan:
+ * ***> Add parallelism / test
+ * ***> Sort out data and tests dir
+ * ***> Cleanup / delete crufty code
+ * ***> Investigate indel bias
  */
 
 #include <getopt.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <memory.h>
 #include <hashTableC.h>
-#include <unistd.h>
 
 #include "marginVersion.h"
 #include "margin.h"
 #include "htsIntegration.h"
-
 
 /*
  * Main functions
@@ -23,7 +26,8 @@
 void usage() {
     fprintf(stderr, "usage: margin <BAM_FILE> <ASSEMBLY_FASTA> <PARAMS> [options]\n");
     fprintf(stderr, "Version: %s \n\n", MARGIN_POLISH_VERSION_H);
-    fprintf(stderr, "Polishes an assembly using the reads in a BAM file and produces polished sequences using a haploid or diploid model:\n");
+    fprintf(stderr,
+            "Polishes an assembly using the reads in a BAM file and produces polished sequences using a haploid or diploid model:\n");
     fprintf(stderr, "    1) a fasta file giving an updated reference.\n");
     fprintf(stderr, "    2) and (optionally) a set of outputs useful further polishing algorithms\n");
 
@@ -34,13 +38,17 @@ void usage() {
 
     fprintf(stderr, "\nDefault options:\n");
     fprintf(stderr, "    -h --help              : Print this help screen\n");
-    fprintf(stderr, "    -d --diploid           : Do diploid polishing, outputting two polished sequences per reference sequence\n");
+    fprintf(stderr,
+            "    -d --diploid           : Do diploid polishing, outputting two polished sequences per reference sequence\n");
     fprintf(stderr, "    -a --logLevel          : Set the log level [default = info]\n");
-    fprintf(stderr, "    -o --outputBase        : Name to use for output files [default = output]\n");
     fprintf(stderr, "    -r --region            : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                               Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
-    fprintf(stderr, "    -i --outputRepeatCounts        : File to write out the repeat counts [default = NULL]\n");
-    fprintf(stderr, "    -j --outputPoaTsv        : File to write out the poa as TSV file [default = NULL]\n");
+    fprintf(stderr, "    -o --output            : Base name to use for output files [default = 'output']\n");
+    fprintf(stderr, "    -i --outputRepeatCounts        : Write repeat count observations, in base_repeat_counts.csv, where 'base' is specified by --output\n");
+    fprintf(stderr, "    -j --outputPoaCsv              : Write poa graph in base_poa.csv, where 'base' is specified by --output\n");
+    fprintf(stderr, "                               If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
+    fprintf(stderr, "    -k --outputReadPhasingCsv      : Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
+    fprintf(stderr, "                               Requires --diploid to be specified\n");
 }
 
 stHash *parseReferenceSequences(char *referenceFastaFile) {
@@ -93,130 +101,6 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
 	return rleRef;
 }
 
-typedef struct _polishedReferenceSequence {
-	/*
-	 * Object for managing the output of a polished reference sequence.
-	 */
-	char *referenceSequenceName;
-	char *referenceSequenceNameSuffix; // Suffix appended to the name of each reference sequence when written
-	// out, allows the distinction on the haplotypes
-	char *referenceSequenceNameForPrinting;
-	stList *polishedReferenceStrings;
-	FILE *polishedReferenceFileHandle;
-	FILE *outputPoaTsvFileHandle;
-	FILE *outputRepeatCountFileHandle;
-} PolishedReferenceSequence;
-
-PolishedReferenceSequence *polishedReferenceSequence_construct(Params *params, char *referenceSequenceNameSuffix,
-		FILE *polishedReferenceFileHandle, FILE *outputPoaTsvFileHandle, FILE *outputRepeatCountFileHandle) {
-	PolishedReferenceSequence *rSeq = st_calloc(1, sizeof(PolishedReferenceSequence));
-
-	rSeq->referenceSequenceNameSuffix = stString_copy(referenceSequenceNameSuffix);
-	rSeq->polishedReferenceFileHandle = polishedReferenceFileHandle;
-	rSeq->outputPoaTsvFileHandle = outputPoaTsvFileHandle;
-	rSeq->outputRepeatCountFileHandle = outputRepeatCountFileHandle;
-
-	return rSeq;
-}
-
-void polishedReferenceSequence_processChunkSequence(PolishedReferenceSequence *rSeq,
-		BamChunk *bamChunk, Poa *poa, stList *reads, Params *params) {
-	// Do run-length decoding
-	//poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
-	char *polishedReferenceString = rleString_expand(poa->refString);
-
-	// Log info about the POA
-	if (st_getLogLevel() >= info) {
-		st_logInfo("Summary stats for POA:\t");
-		poa_printSummaryStats(poa, stderr);
-	}
-
-	// Write any optional outputs about repeat count and POA, etc.
-	if(rSeq->outputPoaTsvFileHandle != NULL) {
-		poa_printTSV(poa, rSeq->outputPoaTsvFileHandle, reads, 5, 0);
-	}
-	if(rSeq->outputRepeatCountFileHandle != NULL) {
-		poa_printRepeatCounts(poa, rSeq->outputRepeatCountFileHandle, reads);
-	}
-
-	// If there is no prior chunk
-	if(rSeq->referenceSequenceName == NULL) {
-		assert(rSeq->polishedReferenceStrings == NULL);
-		rSeq->polishedReferenceStrings = stList_construct3(0, free);
-		rSeq->referenceSequenceName = stString_copy(bamChunk->refSeqName);
-		assert(rSeq->referenceSequenceNameForPrinting == NULL);
-		rSeq->referenceSequenceNameForPrinting = stString_print("%s%s", rSeq->referenceSequenceName, rSeq->referenceSequenceNameSuffix);
-	}
-	// Else, print the prior reference sequence if current chunk not part of that sequence
-	else if(!stString_eq(bamChunk->refSeqName, rSeq->referenceSequenceName)) {
-		assert(stList_length(rSeq->polishedReferenceStrings) > 0);
-
-		// Write the previous polished reference string out
-		char *s = stString_join2("", rSeq->polishedReferenceStrings);
-		fastaWrite(s, rSeq->referenceSequenceNameForPrinting, rSeq->polishedReferenceFileHandle);
-
-		// Clean up
-		free(s);
-		stList_destruct(rSeq->polishedReferenceStrings);
-		free(rSeq->referenceSequenceName);
-		free(rSeq->referenceSequenceNameForPrinting);
-
-		// Reset for next reference sequence
-		rSeq->polishedReferenceStrings = stList_construct3(0, free);
-		rSeq->referenceSequenceName = stString_copy(bamChunk->refSeqName);
-		rSeq->referenceSequenceNameForPrinting = stString_print("%s%s", rSeq->referenceSequenceName, rSeq->referenceSequenceNameSuffix);
-	}
-	// If there was a previous chunk then trim it's polished reference sequence
-	// to remove overlap with the current chunk's polished reference sequence
-	else if(stList_length(rSeq->polishedReferenceStrings) > 0) {
-		char *previousPolishedReferenceString = stList_peek(rSeq->polishedReferenceStrings);
-
-		// Trim the currrent and previous polished reference strings to remove overlap
-		int64_t prefixStringCropEnd, suffixStringCropStart;
-		int64_t overlapMatchWeight = removeOverlap(previousPolishedReferenceString, polishedReferenceString,
-												   bamChunk->parent->chunkBoundary * 2, params->polishParams,
-												   &prefixStringCropEnd, &suffixStringCropStart);
-
-		st_logInfo("Removed overlap between neighbouring chunks. Approx overlap size: %i, overlap-match weight: %f, "
-				"left-trim: %i, right-trim: %i:\n", (int)bamChunk->parent->chunkBoundary * 2, (float)overlapMatchWeight/PAIR_ALIGNMENT_PROB_1,
-				strlen(previousPolishedReferenceString) - prefixStringCropEnd, suffixStringCropStart);
-
-		// Crop the suffix of the previous chunk's polished reference string
-		previousPolishedReferenceString[prefixStringCropEnd] = '\0';
-
-		// Crop the the prefix of the current chunk's polished reference string
-		char *c = polishedReferenceString;
-		polishedReferenceString = stString_copy(&(polishedReferenceString[suffixStringCropStart]));
-		free(c);
-	}
-
-	// Add the polished sequence to the list of polished reference sequence chunks
-	stList_append(rSeq->polishedReferenceStrings, polishedReferenceString);
-}
-
-void polishedReferenceSequence_flush(PolishedReferenceSequence *rSeq) {
-	// Write out the last chunk
-    if(rSeq->referenceSequenceName != NULL) {
-    	// Write the previous polished reference string out
-    	char *s = stString_join2("", rSeq->polishedReferenceStrings);
-    	assert(rSeq->referenceSequenceNameForPrinting != NULL);
-    	fastaWrite(s, rSeq->referenceSequenceNameForPrinting, rSeq->polishedReferenceFileHandle);
-
-    	// Clean up
-    	free(s);
-    	stList_destruct(rSeq->polishedReferenceStrings);
-    	free(rSeq->referenceSequenceName);
-    	free(rSeq->referenceSequenceNameForPrinting);
-    	rSeq->referenceSequenceName = NULL;
-    }
-}
-
-void polishedReferenceSequence_destruct(PolishedReferenceSequence *rSeq) {
-	polishedReferenceSequence_flush(rSeq);
-	free(rSeq->referenceSequenceNameSuffix);
-	free(rSeq);
-}
-
 uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
 	/*
 	 * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
@@ -240,8 +124,9 @@ int main(int argc, char *argv[]) {
     char *outputBase = stString_copy("output");
     char *regionStr = NULL;
     int64_t verboseBitstring = -1;
-    char *outputRepeatCountFile = NULL;
-    char *outputPoaTsvFile = NULL;
+    bool outputPoaCsv = 0;
+    bool outputRepeatCounts = 0;
+    bool outputReadPhasing = 0;
 
     // TODO: When done testing, optionally set random seed using st_randomSeed();
 
@@ -260,15 +145,16 @@ int main(int argc, char *argv[]) {
                 { "logLevel", required_argument, 0, 'a' },
                 { "help", no_argument, 0, 'h' },
 				{ "diploid", no_argument, 0, 'd'},
-                { "outputBase", required_argument, 0, 'o'},
+                { "output", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
                 { "verbose", required_argument, 0, 'v'},
-				{ "outputRepeatCounts", required_argument, 0, 'i'},
-				{ "outputPoaTsv", required_argument, 0, 'j'},
+				{ "outputRepeatCounts", no_argument, 0, 'i'},
+				{ "outputPoaCsv", no_argument, 0, 'j'},
+                { "outputReadPhasingCsv", no_argument, 0, 'k'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -296,11 +182,14 @@ int main(int argc, char *argv[]) {
             verboseBitstring = atoi(optarg);
             break;
         case 'i':
-        	outputRepeatCountFile = stString_copy(optarg);
+            outputRepeatCounts = !outputRepeatCounts;
         	break;
         case 'j':
-        	outputPoaTsvFile = stString_copy(optarg);
+            outputPoaCsv = !outputPoaCsv;
         	break;
+        case 'k':
+            outputReadPhasing = !outputReadPhasing;
+            break;
         default:
             usage();
             return 0;
@@ -325,19 +214,26 @@ int main(int argc, char *argv[]) {
     stHash *referenceSequences = parseReferenceSequences(referenceFastaFile);
 
     // Make output formatting object(s)
-    char *polishedReferenceOutFile = stString_print("%s.fa", outputBase);
-    st_logInfo("> Going to write polished reference in : %s\n", polishedReferenceOutFile);
-    FILE *polishedReferenceFileHandle = fopen(polishedReferenceOutFile, "w");
-    FILE *outputPoaTsvFileHandle = outputPoaTsvFile != NULL ? fopen(outputPoaTsvFile, "w") : NULL;
-    FILE *outputRepeatCountFileHandle = outputRepeatCountFile != NULL ? fopen(outputRepeatCountFile, "w") : NULL;
+    char *outputSequenceFile = stString_print("%s.fa", outputBase);
+    char *outputPoaFile = stString_print("%s_poa.csv", outputBase);
+    char *outputReadPartitionFile = stString_print("%s_reads.csv", outputBase);
+    char *outputRepeatCountFile = stString_print("%s_repeat_counts.csv", outputBase);
 
-    PolishedReferenceSequence *rSeq1 = polishedReferenceSequence_construct(params, diploid ? "_hap_1" : "",
-    		polishedReferenceFileHandle, outputPoaTsvFileHandle, outputRepeatCountFileHandle), *rSeq2 = NULL;
-    if(diploid) {
-    	rSeq2 = polishedReferenceSequence_construct(params, "_hap_2",
-    			polishedReferenceFileHandle, outputPoaTsvFileHandle, outputRepeatCountFileHandle);
+    st_logInfo("Writing polished sequence chunks in: %s\n", outputSequenceFile);
+    if(outputPoaCsv) {
+        st_logInfo("Writing poa chunks in: %s\n", outputPoaFile);
     }
-	free(polishedReferenceOutFile);
+    if(outputReadPhasing) {
+        st_logInfo("Writing read phasing chunks in: ", outputReadPartitionFile);
+    }
+    if(outputRepeatCounts) {
+        st_logInfo("Writing repeat counts chunks in: ", outputRepeatCounts);
+    }
+
+    OutputChunkers *outputChunkers = outputChunkers_construct(1, params, outputSequenceFile,
+            outputPoaCsv ? outputPoaFile : NULL,
+            outputReadPhasing ? outputReadPartitionFile : NULL,
+            outputRepeatCounts ? outputRepeatCountFile : NULL, "_hap1", "_hap2");
 
     // if regionStr is NULL, it will be ignored in construct2
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
@@ -347,7 +243,9 @@ int main(int argc, char *argv[]) {
     // For each chunk of the BAM
 	for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
 		BamChunk *bamChunk = bamChunker_getChunk(bamChunker, chunkIdx);
-    		RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
+
+		// Get substring of the reference
+		RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
 
         st_logInfo("> Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
         		   bamChunk->refSeqName, (int)bamChunk->chunkBoundaryStart,
@@ -361,7 +259,7 @@ int main(int argc, char *argv[]) {
 
 		// Now run the polishing method
 
-		// Generate the haploid partial order alignment (POA)
+		// Generate the haploid, polished partial order alignment (POA)
 		Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
 
 		// If diploid
@@ -404,6 +302,7 @@ int main(int argc, char *argv[]) {
 			Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
 			Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
+			// This does not help, so commenting out - may remove
 			/*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
 			poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
 					readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
@@ -421,8 +320,9 @@ int main(int argc, char *argv[]) {
 			}
 
 			// Output
-			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa_hap1, reads, params);
-			polishedReferenceSequence_processChunkSequence(rSeq2, bamChunk, poa_hap2, reads, params);
+            outputChunkers_processChunkSequencePhased(outputChunkers, 0, chunkIdx,
+                                                           poa_hap1, poa_hap2, bamChunk, reads,
+                                                           readsBelongingToHap1, readsBelongingToHap2, gf);
 
 			// Cleanup
 			free(hap1);
@@ -436,7 +336,7 @@ int main(int argc, char *argv[]) {
 			stHash_destruct(readsToPSeqs);
 		}
 		else {
-			polishedReferenceSequence_processChunkSequence(rSeq1, bamChunk, poa, reads, params);
+            outputChunkers_processChunkSequence(outputChunkers, 0, chunkIdx, poa, reads, bamChunk);
 		}
 
 		// Cleanup
@@ -446,35 +346,27 @@ int main(int argc, char *argv[]) {
         rleString_destruct(reference);
     }
 
-    polishedReferenceSequence_destruct(rSeq1);
-    if(diploid) {
-    		polishedReferenceSequence_destruct(rSeq2);
-    }
+	// Now stitch together the chunks
+	outputChunkers_stitch(outputChunkers, diploid);
 
     // Cleanup
-    st_logInfo("> Finished polishing.\n");
-    fclose(polishedReferenceFileHandle);
-    if(outputPoaTsvFile != NULL) {
-    	fclose(outputPoaTsvFileHandle);
-    	free(outputPoaTsvFile);
-    }
-    if(outputPoaTsvFileHandle != NULL) {
-    	fclose(outputRepeatCountFileHandle);
-    	free(outputRepeatCountFile);
-    }
+    outputChunkers_destruct(outputChunkers);
     bamChunker_destruct(bamChunker);
     stHash_destruct(referenceSequences);
     params_destruct(params);
-
 	free(bamInFile);
 	free(referenceFastaFile);
 	free(paramsFile);
-
-	if (outputBase != NULL) free(outputBase);
+    free(outputSequenceFile);
+    free(outputPoaFile);
+    free(outputReadPartitionFile);
+    free(outputRepeatCountFile);
+	free(outputBase);
 	if (regionStr != NULL) free(regionStr);
+
+    st_logInfo("> Finished polishing.\n");
 
     //while(1); // Use this for testing for memory leaks
 
     return 0;
 }
-

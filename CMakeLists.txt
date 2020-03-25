@@ -220,8 +220,7 @@ set(SONLIB_SOURCES
 
 
 set(SSW_SOURCES
-        externalTools/ssw/ssw.c
-        )
+        externalTools/ssw/ssw.c)
 
 set(CORE_SOURCE_FILES
         impl/chunker.c
@@ -235,10 +234,13 @@ set(CORE_SOURCE_FILES
         impl/pairwiseAligner.c
         impl/parser.c
         impl/partitions.c
-        impl/polisher.c
+        impl/poa.c
         impl/profileSeq.c
         impl/stateMachine.c
         impl/view.c
+        impl/rle.c
+        impl/repeatSubMatrix.c
+        impl/stitching.c
         )
 
 
@@ -248,7 +250,7 @@ set(SOURCE_FILES
         impl/profileSeq.c
         impl/bubbleGraph.c
         impl/randomSequences.c
-        impl/polisher.c
+        impl/poa.c
         externalTools/samtools/bedidx.c
         )
 

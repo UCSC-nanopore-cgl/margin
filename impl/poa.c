@@ -53,10 +53,6 @@ void poaInsert_destruct(PoaInsert *poaInsert) {
 	free(poaInsert);
 }
 
-static bool isBalanced(double forwardStrandWeight, double reverseStrandWeight, double balanceRatio) {
-	return balanceRatio == 0 || (forwardStrandWeight > reverseStrandWeight/balanceRatio && reverseStrandWeight > forwardStrandWeight/balanceRatio);
-}
-
 double poaInsert_getWeight(PoaInsert *insert) {
 	return insert->weightForwardStrand + insert->weightReverseStrand;
 	//return isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, 100) ? insert->weightForwardStrand + insert->weightReverseStrand : 0.0;
@@ -758,7 +754,7 @@ double poa_getTotalErrorWeight(Poa *poa)  {
 }
 
 double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkReads,
-		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a) {
+		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a, stSet *readsToInclude) {
 	/*
 	 * Calculate strand specific base weights.
 	 */
@@ -768,16 +764,18 @@ double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkRead
 	double *baseWeights = st_calloc(a->alphabetSize*2, sizeof(double));
 	for(int64_t i=0; i<stList_length(node->observations); i++) {
 		PoaBaseObservation *baseObs = stList_get(node->observations, i);
-		*totalWeight += baseObs->weight;
 		BamChunkRead *read = stList_get(bamChunkReads, baseObs->readNo);
-		char base = read->rleRead->rleString[baseObs->offset];
-		baseWeights[a->convertCharToSymbol(base) * 2 + (read->forwardStrand ? POS_STRAND_IDX : NEG_STRAND_IDX)] += baseObs->weight;
-		if(read->forwardStrand) {
-			*totalPositiveWeight += baseObs->weight;
-		}
-		else {
-			*totalNegativeWeight += baseObs->weight;
-		}
+        if(readsToInclude == NULL || stSet_search(readsToInclude, read) != NULL) {
+            *totalWeight += baseObs->weight;
+            char base = read->rleRead->rleString[baseObs->offset];
+            baseWeights[a->convertCharToSymbol(base) * 2 +
+                        (read->forwardStrand ? POS_STRAND_IDX : NEG_STRAND_IDX)] += baseObs->weight;
+            if (read->forwardStrand) {
+                *totalPositiveWeight += baseObs->weight;
+            } else {
+                *totalNegativeWeight += baseObs->weight;
+            }
+        }
 	}
 
 	return baseWeights;
@@ -886,17 +884,50 @@ void poa_printDOT(Poa *poa, FILE *fH, stList *bamChunkReads) {
 
 }
 
-void poa_printTSV(Poa *poa, FILE *fH,
-		stList *bamChunkReads,
-		float indelSignificanceThreshold, float strandBalanceRatio) {
+void printMLRepeatCounts(RepeatSubMatrix *repeatSubMatrix, FILE *fh, Symbol base, stList *observations,
+                         stList *bamChunkReads) {
+    int64_t minRepeatLength, maxRepeatLength;
 
-	fprintf(fH, "REF_INDEX\tREF_BASE\tTOTAL_WEIGHT\tPOS_STRAND_WEIGHT\tNEG_STRAND_WEIGHT");
+    // Calculate range of repeat counts observed
+    repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
+                                                        bamChunkReads, &minRepeatLength, &maxRepeatLength);
+
+    if(minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
+        return; // Case we have no valid observations, so assume repeat length of 0
+    }
+
+    assert(maxRepeatLength-minRepeatLength >= 0);
+    double logProbabilities[maxRepeatLength-minRepeatLength+1];
+
+    // Get weights for each repeat count
+    repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observations,
+                                        bamChunkReads, logProbabilities, minRepeatLength, maxRepeatLength);
+
+    // Print the repeat counts
+    for(int64_t i=0; i<minRepeatLength; i++) {
+        fprintf(fh, "0,");
+    }
+    for(int64_t i=minRepeatLength; i<=maxRepeatLength; i++) {
+        fprintf(fh, "%f,", (float)logProbabilities[i-minRepeatLength]);
+    }
+    for(int64_t i=maxRepeatLength+1; i<repeatSubMatrix->maximumRepeatLength; i++) {
+        fprintf(fh, "0,");
+    }
+}
+
+void poa_printCSV(Poa *poa, FILE *fH,
+		stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix,
+		float indelSignificanceThreshold) {
+
+	fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_POS_STRAND");
 	for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
 		char c = poa->alphabet->convertSymbolToChar(j);
-		fprintf(fH, "\tNORM_BASE_%c_WEIGHT\tNORM_POS_STRAND_BASE_%c_WEIGHT\tNORM_NEG_BASE_%c_WEIGHT", c, c, c);
+		fprintf(fH, ",FRACTION_BASE_%c_WEIGHT,FRACTION_BASE_%c_POS_STRAND", c, c);
 	}
-
-	fprintf(fH, "\tINSERTSxN(INSERT_SEQ, TOTAL_WEIGHT, TOTAL_POS_STRAND_WEIGHT, TOTAL_NEG_STRAND_WEIGHT)\tDELETESxN(DELETE_LENGTH, TOTAL_WEIGHT, TOTAL_POS_STRAND_WEIGHT, TOTAL_NEG_STRAND_WEIGHT)\n");
+    for(int64_t j=1; j<repeatSubMatrix->maximumRepeatLength; j++) {
+        fprintf(fH, ",LOG_PROB_REPEAT_COUNT_%" PRIi64 "", j);
+    }
+	fprintf(fH, ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_POS_STRAND),DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_POS_STRAND)\n");
 
 	// Print info for each base in reference in turn
 	for(int64_t i=0; i<stList_length(poa->nodes); i++) {
@@ -907,46 +938,45 @@ void poa_printTSV(Poa *poa, FILE *fH,
 		// Calculate strand specific base weights
 		double totalWeight, totalPositiveWeight, totalNegativeWeight;
 		double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-				&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet);
+				&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
 		
-		fprintf(fH, "%" PRIi64 "\t%c\t%f\t%f\t%f", i, node->base,
-				totalWeight/PAIR_ALIGNMENT_PROB_1, totalPositiveWeight/PAIR_ALIGNMENT_PROB_1,
-				totalNegativeWeight/PAIR_ALIGNMENT_PROB_1);
+		fprintf(fH, "%" PRIi64 ",%c,%f,%f", i, node->base,
+                (float)totalWeight/PAIR_ALIGNMENT_PROB_1, (float)totalPositiveWeight/(totalPositiveWeight + totalNegativeWeight));
 
 		for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
 			double positiveStrandBaseWeight = baseWeights[j*2 + 1];
 			double negativeStrandBaseWeight = baseWeights[j*2 + 0];
 			double totalBaseWeight = positiveStrandBaseWeight + negativeStrandBaseWeight;
 
-			fprintf(fH, "\t%f\t%f\t%f,", node->baseWeights[j]/totalWeight,
-					positiveStrandBaseWeight/totalPositiveWeight, negativeStrandBaseWeight/totalNegativeWeight);
+			fprintf(fH, ",%f,%f", (float)node->baseWeights[j]/totalWeight,
+                    (float)positiveStrandBaseWeight/totalBaseWeight);
 		}
 
 		free(baseWeights);
 
+		// Print repeat counts
+        printMLRepeatCounts(repeatSubMatrix, fH, poa->alphabet->convertCharToSymbol(node->base),
+                node->observations, bamChunkReads);
+
 		// Inserts
 		for(int64_t j=0; j<stList_length(node->inserts); j++) {
 			PoaInsert *insert = stList_get(node->inserts, j);
-			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
-					isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "\tINSERT\t%s\t%f\t%f\t%f",
-						insert->insert->rleString,
-						(float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
-						(float)insert->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
-						(float)insert->weightReverseStrand/PAIR_ALIGNMENT_PROB_1);
+			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
+                char *s = rleString_expand(insert->insert);
+			    fprintf(fH, ",%s,%f,%f",
+						s, (float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
+						(float)insert->weightForwardStrand/poaInsert_getWeight(insert));
+			    free(s);
 			}
 		}
 
 		// Deletes
 		for(int64_t j=0; j<stList_length(node->deletes); j++) {
 			PoaDelete *delete = stList_get(node->deletes, j);
-			if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
-					isBalanced(delete->weightForwardStrand, delete->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "\tDELETE\t%" PRIi64 "\t%f\t%f\t%f",
-						delete->length,
-						(float)poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1,
-						(float)delete->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
-						(float)delete->weightReverseStrand/PAIR_ALIGNMENT_PROB_1);
+			if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
+				fprintf(fH, ",%" PRIi64 ",%f,%f",
+						delete->length, (float)poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1,
+						(float)delete->weightForwardStrand/poaDelete_getWeight(delete));
 			}
 		}
 
@@ -954,9 +984,162 @@ void poa_printTSV(Poa *poa, FILE *fH,
 	}
 }
 
+
+void poa_printPhasedCSV_indelPrint(stList *observations, FILE *fH,
+                                   stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2) {
+    double totalPositiveWeightHap1=0.0, totalNegativeWeightHap1=0.0;
+    double totalPositiveWeightHap2=0.0, totalNegativeWeightHap2=0.0;
+
+    for(int64_t k=0; k<stList_length(observations); k++) {
+        PoaBaseObservation *obs = stList_get(observations, k);
+        BamChunkRead *read = stList_get(bamChunkReads, obs->readNo);
+        if(stSet_search(readsInHap1, read) != NULL) {
+            if(read->forwardStrand) {
+                totalPositiveWeightHap1 += obs->weight;
+            }
+            else {
+                totalNegativeWeightHap1 += obs->weight;
+            }
+        } else if (stSet_search(readsInHap2, read) != NULL) {
+            if(read->forwardStrand) {
+                totalPositiveWeightHap2 += obs->weight;
+            }
+            else {
+                totalNegativeWeightHap2 += obs->weight;
+            }
+        }
+    }
+
+    double totalWeight = totalPositiveWeightHap1 + totalNegativeWeightHap1 + totalPositiveWeightHap2 + totalNegativeWeightHap2;
+
+    fprintf(fH, ",%f,%f,%f,%f,%f",
+            (float)totalWeight/PAIR_ALIGNMENT_PROB_1,
+            (float)(totalPositiveWeightHap1 + totalNegativeWeightHap1)/totalWeight,
+            (float)(totalPositiveWeightHap2 + totalNegativeWeightHap2)/totalWeight,
+            (float)totalPositiveWeightHap1 / (totalPositiveWeightHap1 + totalNegativeWeightHap1),
+            (float)totalPositiveWeightHap2 / (totalPositiveWeightHap2 + totalNegativeWeightHap2));
+}
+
+void poa_printPhasedCSV(Poa *poa, FILE *fH,
+                        stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
+                        RepeatSubMatrix *repeatSubMatrix, float indelSignificanceThreshold) {
+
+    fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
+    for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
+        char c = poa->alphabet->convertSymbolToChar(j);
+        fprintf(fH, ",FRACTION_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c, c);
+    }
+    for(int64_t j=1; j<repeatSubMatrix->maximumRepeatLength; j++) {
+        fprintf(fH, ",LOG_PROB_HAP1_REPEAT_COUNT_%" PRIi64 "", j);
+    }
+    for(int64_t j=1; j<repeatSubMatrix->maximumRepeatLength; j++) {
+        fprintf(fH, ",LOG_PROB_HAP2_REPEAT_COUNT_%" PRIi64 "", j);
+    }
+    fprintf(fH, ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)"
+                ",DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)\n");
+
+    // Print info for each base in reference in turn
+    for(int64_t i=0; i<stList_length(poa->nodes); i++) {
+        PoaNode *node = stList_get(poa->nodes, i);
+
+        // Print base weights
+
+        // Calculate strand specific base weights
+        double totalWeight, totalPositiveWeight, totalNegativeWeight;
+        double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                   &totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
+
+        // Calculate hap1, strand specific base weights
+        double totalWeightHap1, totalPositiveWeightHap1, totalNegativeWeightHap1;
+        double *baseWeightsHap1 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                       &totalWeightHap1, &totalPositiveWeightHap1, &totalNegativeWeightHap1, poa->alphabet, readsInHap1);
+
+        // Calculate hap1, strand specific base weights
+        double totalWeightHap2, totalPositiveWeightHap2, totalNegativeWeightHap2;
+        double *baseWeightsHap2 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
+                                                                       &totalWeightHap2, &totalPositiveWeightHap2, &totalNegativeWeightHap2, poa->alphabet, readsInHap2);
+
+        //fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
+        fprintf(fH, "%" PRIi64 ",%c,%f,%f,%f,%f,%f", i, node->base,
+                (float)totalWeight/PAIR_ALIGNMENT_PROB_1,
+                (float)totalWeightHap1/totalWeight, (float)totalWeightHap2/totalWeight,
+                (float)totalPositiveWeightHap1/totalWeightHap1, (float)totalPositiveWeightHap2/totalWeightHap2);
+
+        for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
+            double positiveStrandBaseWeight = baseWeights[j*2 + 1];
+            double negativeStrandBaseWeight = baseWeights[j*2 + 0];
+            double totalBaseWeight = positiveStrandBaseWeight + negativeStrandBaseWeight;
+
+            double positiveStrandBaseWeightHap1 = baseWeightsHap1[j*2 + 1];
+            double negativeStrandBaseWeightHap1 = baseWeightsHap1[j*2 + 0];
+
+            double positiveStrandBaseWeightHap2 = baseWeightsHap2[j*2 + 1];
+            double negativeStrandBaseWeightHap2 = baseWeightsHap2[j*2 + 0];
+
+            //fprintf(fH, ",NORM_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c);
+            fprintf(fH, ",%f,%f,%f,%f,%f", totalBaseWeight/totalWeight,
+                    (positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1)/totalBaseWeight,
+                    (positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2)/totalBaseWeight,
+                    positiveStrandBaseWeightHap1/(positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1),
+                    positiveStrandBaseWeightHap2/(positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2));
+        }
+
+        free(baseWeights);
+
+        // Split observations between haplotypes (assume reads not in hap1 are in hap2)
+        stList *observationsHap1 = stList_construct();
+        stList *observationsHap2 = stList_construct();
+        for(int64_t i=0; i<stList_length(node->observations); i++) {
+            PoaBaseObservation *observation = stList_get(node->observations, i);
+            BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+            stList_append(stSet_search(readsInHap1, read) != NULL ? observationsHap1 : observationsHap2, observation);
+        }
+
+        // Print repeat counts for hap1
+        printMLRepeatCounts(repeatSubMatrix, fH, poa->alphabet->convertCharToSymbol(node->base),
+                            observationsHap1, bamChunkReads);
+
+        // Print repeat counts for hap2
+        printMLRepeatCounts(repeatSubMatrix, fH, poa->alphabet->convertCharToSymbol(node->base),
+                            observationsHap2, bamChunkReads);
+
+        // Cleanup
+        stList_destruct(observationsHap1);
+        stList_destruct(observationsHap2);
+
+        // Inserts
+        for(int64_t j=0; j<stList_length(node->inserts); j++) {
+            PoaInsert *insert = stList_get(node->inserts, j);
+            if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
+
+                //fprintf(fH, "\tINSERTSxN(INSERT_SEQ, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
+                char *s = rleString_expand(insert->insert);
+                fprintf(fH, ",%s", s);
+                poa_printPhasedCSV_indelPrint(insert->observations, fH,
+                                              bamChunkReads, readsInHap1, readsInHap2);
+                free(s);
+            }
+        }
+
+        // Deletes
+        for(int64_t j=0; j<stList_length(node->deletes); j++) {
+            PoaDelete *delete = stList_get(node->deletes, j);
+            if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
+
+                //fprintf(fH, "\tDELETESxN(DELETE_LENGTH, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
+                fprintf(fH, ",%" PRIi64 "", delete->length);
+                poa_printPhasedCSV_indelPrint(delete->observations, fH,
+                                              bamChunkReads, readsInHap1, readsInHap2);
+            }
+        }
+
+        fprintf(fH, "\n");
+    }
+}
+
 void poa_print(Poa *poa, FILE *fH,
 		stList *bamChunkReads,
-		float indelSignificanceThreshold, float strandBalanceRatio) {
+		float indelSignificanceThreshold) {
 	// Print info for each base in reference in turn
 	for(int64_t i=0; i<stList_length(poa->nodes); i++) {
 		PoaNode *node = stList_get(poa->nodes, i);
@@ -964,7 +1147,7 @@ void poa_print(Poa *poa, FILE *fH,
 		// Calculate strand specific base weights
 		double totalWeight, totalPositiveWeight, totalNegativeWeight;
 		double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-											&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet);
+											&totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
 
 		fprintf(fH, "%" PRIi64 "\t%c total-weight:%f\ttotal-pos-weight:%f\ttotal-neg-weight:%f", i, node->base,
 				totalWeight/PAIR_ALIGNMENT_PROB_1, totalPositiveWeight/PAIR_ALIGNMENT_PROB_1, totalNegativeWeight/PAIR_ALIGNMENT_PROB_1);
@@ -987,20 +1170,20 @@ void poa_print(Poa *poa, FILE *fH,
 		// Inserts
 		for(int64_t j=0; j<stList_length(node->inserts); j++) {
 			PoaInsert *insert = stList_get(node->inserts, j);
-			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
-					isBalanced(insert->weightForwardStrand, insert->weightReverseStrand, strandBalanceRatio)) {
-				fprintf(fH, "Insert\tSeq:%s\tTotal weight:%f\tForward Strand Weight:%f\tReverse Strand Weight:%f\n", insert->insert->rleString,
+			if(poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
+                char *s = rleString_expand(insert->insert);
+			    fprintf(fH, "Insert\tSeq:%s\tTotal weight:%f\tForward Strand Weight:%f\tReverse Strand Weight:%f\n", s,
 						(float)poaInsert_getWeight(insert)/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightForwardStrand/PAIR_ALIGNMENT_PROB_1,
 						(float)insert->weightReverseStrand/PAIR_ALIGNMENT_PROB_1);
+			    free(s);
 			}
 		}
 
 		// Deletes
 		for(int64_t j=0; j<stList_length(node->deletes); j++) {
 			PoaDelete *delete = stList_get(node->deletes, j);
-			if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold &&
-					isBalanced(delete->weightForwardStrand, delete->weightReverseStrand, strandBalanceRatio)) {
+			if(poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
 				fprintf(fH, "Delete\tLength:%" PRIi64 "\tTotal weight:%f\tForward Strand Weight:%f\tReverse Strand Weight:%f\n",
 						delete->length,
 						(float)poaDelete_getWeight(delete)/PAIR_ALIGNMENT_PROB_1,
@@ -1351,172 +1534,8 @@ stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, Polish
 }
 
 /*
- * Functions for run-length encoding/decoding with POAs
+ * Functions for run-length decoding with POAs
  */
-
-RleString *rleString_construct(char *str) {
-	RleString *rleString = st_calloc(1, sizeof(RleString));
-
-	rleString->nonRleLength = strlen(str);
-
-	// Calc length of rle'd str
-	for(uint64_t i=0; i<rleString->nonRleLength; i++) {
-		if(i+1 == rleString->nonRleLength || str[i] != str[i+1]) {
-			rleString->length++;
-		}
-	}
-
-	// Allocate
-	rleString->rleString = st_calloc(rleString->length+1, sizeof(char));
-	rleString->repeatCounts = st_calloc(rleString->length, sizeof(uint64_t));
-
-	// Fill out
-	uint64_t j=0, k=1;
-	for(uint64_t i=0; i<rleString->nonRleLength; i++) {
-		if(i+1 == rleString->nonRleLength || str[i] != str[i+1]) {
-			rleString->rleString[j] = str[i];
-			rleString->repeatCounts[j++] = k;
-			k=1;
-		}
-		else {
-			k++;
-		}
-	}
-	rleString->rleString[j] = '\0';
-	assert(j == rleString->length);
-
-	return rleString;
-}
-
-
-RleString *rleString_constructPreComputed(char *rleChars, uint8_t *rleCounts) {
-	RleString *rleString = st_calloc(1, sizeof(RleString));
-
-	rleString->length = strlen(rleChars);
-	rleString->nonRleLength = 0;
-	for (int64_t i = 0; i < rleString->length; i++) {
-		assert(rleCounts[i] >= 1);
-		rleString->nonRleLength += rleCounts[i];
-	}
-
-	// Allocate
-	rleString->rleString = stString_copy(rleChars);
-	rleString->repeatCounts = st_calloc(rleString->length, sizeof(int64_t));
-
-	// Fill out
-	for(int64_t r=0; r<rleString->length; r++) {
-		// counts
-		rleString->repeatCounts[r] = rleCounts[r];
-	}
-
-	return rleString;
-}
-
-RleString *rleString_construct_no_rle(char *string) {
-	RleString *rleString = st_calloc(1, sizeof(RleString));
-
-	rleString->nonRleLength = strlen(string);
-	rleString->length = rleString->nonRleLength;
-
-	// Allocate
-	rleString->rleString = stString_copy(string);
-	rleString->repeatCounts = st_calloc(rleString->length, sizeof(uint64_t));
-
-	// Fill out repeat counts
-	for(uint64_t i=0; i<rleString->length; i++) {
-		rleString->repeatCounts[i] = 1;
-	}
-
-	return rleString;
-}
-
-RleString *rleString_copySubstring(RleString *rleString, uint64_t start, uint64_t length) {
-	RleString *rleSubstring = st_calloc(1, sizeof(RleString));
-
-	assert(start + length <= rleString->length);
-
-	// Set length of substring
-	rleSubstring->length = length;
-
-	// Copy character substring
-	rleSubstring->rleString = stString_getSubString(rleString->rleString, start, length);
-
-	// Copy repeat count substring and calculate non-rle length
-	rleSubstring->nonRleLength = 0;
-	rleSubstring->repeatCounts = st_calloc(length, sizeof(uint64_t));
-	for(uint64_t i=0; i<rleSubstring->length; i++) {
-		rleSubstring->repeatCounts[i] = rleString->repeatCounts[i+start];
-		rleSubstring->nonRleLength += rleSubstring->repeatCounts[i];
-	}
-
-	return rleSubstring;
-}
-
-void rleString_print(RleString *rleString, FILE *f) {
-	fprintf(f, "%s -- ", rleString->rleString);
-	for(int64_t i=0; i<rleString->length; i++) {
-		fprintf(f, "%" PRIi64 " ", rleString->repeatCounts[i]);
-	}
-}
-
-RleString *rleString_copy(RleString *rleString) {
-	return rleString_copySubstring(rleString, 0, rleString->length);
-}
-
-bool rleString_eq(RleString *r1, RleString *r2) {
-	// If rle length or expanded lengths are not the same, then return false.
-	if(r1->length != r2->length || r1->nonRleLength != r2->nonRleLength) {
-		return 0;
-	}
-	// Check bases and repeat counts for equality
-	for(int64_t i=0; i<r1->length; i++) {
-		if(r1->rleString[i] != r2->rleString[i] ||
-		   r1->repeatCounts[i] != r2->repeatCounts[i]) {
-			return 0;
-		}
-	}
-	return 1;
-}
-
-void rleString_destruct(RleString *rleString) {
-	free(rleString->rleString);
-	free(rleString->repeatCounts);
-	free(rleString);
-}
-
-char *expandChar(char c, uint64_t repeatCount) {
-	char *s = st_malloc(sizeof(char) * (repeatCount+1));
-	for(int64_t j=0; j<repeatCount; j++) {
-		s[j] = c;
-	}
-	s[repeatCount] = '\0';
-	return s;
-}
-
-char *rleString_expand(RleString *rleString) {
-	char *s = st_calloc(rleString->nonRleLength+1, sizeof(char));
-	int64_t j=0;
-	for(int64_t i=0; i<rleString->length; i++) {
-		for(int64_t k=0; k<rleString->repeatCounts[i]; k++) {
-			s[j++] = rleString->rleString[i];
-		}
-	}
-	s[rleString->nonRleLength] = '\0';
-	return s;
-}
-
-void rleString_rotateString(RleString *str, int64_t rotationLength) {
-	char rotatedString[str->length];
-	uint64_t rotatedRepeatCounts[str->length];
-	for(int64_t i=0; i<str->length; i++) {
-		rotatedString[(i+rotationLength)%str->length] = str->rleString[i];
-		rotatedRepeatCounts[(i+rotationLength)%str->length] = str->repeatCounts[i];
-	}
-	for(int64_t i=0; i<str->length; i++) {
-		str->rleString[i] = rotatedString[i];
-		str->repeatCounts[i] = rotatedRepeatCounts[i];
-	}
-}
 
 int64_t getRunLengthMode(Alphabet *alphabet, Symbol base, stList *observations, stList *bamChunkReads) {
     stHash *runLengths = stHash_construct();
@@ -1583,27 +1602,9 @@ void poa_estimatePhasedRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunk
 		poa->refString->nonRleLength += poa->refString->repeatCounts[i-1];
 	}
 }
-
-
 /*
  * Code to restimate bases using the phasing
  */
-
-static int64_t getMax(double *values, int64_t length,
-		double *maxValue) {
-	// Calc the range of repeat observations
-	assert(length > 0);
-	double max = values[0];
-	int64_t maxIndex = 0;
-	for(int64_t i=1; i<length; i++) {
-		if(values[i] > max) {
-			max = values[i];
-			maxIndex = i;
-		}
-	}
-	*maxValue = max;
-	return maxIndex;
-}
 
 void getPhasedBaseWeights(double *logProbabilitiesHap, stList *observations, Poa *poa, stList *bamChunkReads) {
 	for(int64_t i=0; i<poa->alphabet->alphabetSize; i++) { // Initialize memory
@@ -1689,321 +1690,325 @@ void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads,
 	}
 }
 
-uint8_t *rleString_rleQualities(RleString *rleString, uint8_t *qualities) {
-	// calculate read qualities (if set)
-	//TODO unit test this
-	uint8_t *rleQualities = st_calloc(rleString->length, sizeof(uint8_t));
-	uint64_t rawPos = 0;
-	for (uint64_t rlePos = 0; rlePos < rleString->length; rlePos++) {
-		uint8_t min = UINT8_MAX;
-		uint8_t max = 0;
-		int64_t mean = 0;
-		for (uint64_t repeatIdx = 0; repeatIdx < rleString->repeatCounts[rlePos]; repeatIdx++) {
-			uint8_t q = qualities[rawPos++];
-			min = (q < min ? q : min);
-			max = (q > max ? q : max);
-			mean += q;
-		}
-		mean = mean / rleString->repeatCounts[rlePos];
-		assert(mean <= UINT8_MAX);
-		// pick your favorite metric
-		//r->qualities[rlePos] = min;
-		//r->qualities[rlePos] = max;
-		rleQualities[rlePos] = (uint8_t) mean;
-	}
-	assert(rawPos == rleString->nonRleLength);
-	return rleQualities;
-}
-
-uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString) {
-	uint64_t *nonRleToRleCoordinateMap = st_malloc(sizeof(uint64_t) * rleString->nonRleLength);
-
-	uint64_t j=0;
-	for(uint64_t i=0; i<rleString->length; i++) {
-		for(uint64_t k=0; k<rleString->repeatCounts[i]; k++) {
-			nonRleToRleCoordinateMap[j++] = i;
-		}
-	}
-	assert(j == rleString->nonRleLength);
-
-	return nonRleToRleCoordinateMap;
-}
-
-stList *runLengthEncodeAlignment(stList *alignment,
-		uint64_t *seqXNonRleToRleCoordinateMap, uint64_t *seqYNonRleToRleCoordinateMap) {
-	stList *rleAlignment = stList_construct3(0, (void (*)(void *))stIntTuple_destruct);
-
-	int64_t x=-1, y=-1;
-	for(int64_t i=0; i<stList_length(alignment); i++) {
-		stIntTuple *alignedPair = stList_get(alignment, i);
-
-		int64_t x2 = seqXNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 0)];
-		int64_t y2 = seqYNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 1)];
-
-		if(x2 > x && y2 > y) {
-			stList_append(rleAlignment, stIntTuple_construct3(x2, y2, stIntTuple_get(alignedPair, 2)));
-			x = x2; y = y2;
-		}
-	}
-
-	return rleAlignment;
-}
-
-/*
- * Functions for modeling repeat counts
- */
-
-inline double *repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount) {
-    // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
-    if(base == repeatSubMatrix->alphabet->alphabetSize - 1) {base = 0;}
-    // santiy check
-    if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
-        st_errAbort("[repeatSubMatrix_setLogProb] base 'Nn' not supported for repeat estimation\n");
-    }
-    int64_t idx = (strand ? base : 3-base) * repeatSubMatrix->maximumRepeatLength * repeatSubMatrix->maximumRepeatLength +
-            underlyingRepeatCount * repeatSubMatrix->maximumRepeatLength +
-            observedRepeatCount;
-    assert(idx < repeatSubMatrix->maxEntry);
-    assert(idx >= 0);
-	return &(repeatSubMatrix->logProbabilities[idx]);
-}
-
-inline double repeatSubMatrix_getLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount) {
-	double *loc = repeatSubMatrix_setLogProb(repeatSubMatrix, base, strand, observedRepeatCount, underlyingRepeatCount);
-//	printf("%p\n", loc);
-	return *loc;
-}
-
-void repeatSubMatrix_destruct(RepeatSubMatrix *repeatSubMatrix) {
-	alphabet_destruct(repeatSubMatrix->alphabet);
-	free(repeatSubMatrix->baseLogProbs_AT);
-	free(repeatSubMatrix->baseLogProbs_GC);
-	free(repeatSubMatrix->logProbabilities);
-	free(repeatSubMatrix);
-}
-
-RepeatSubMatrix *repeatSubMatrix_constructEmpty(Alphabet *alphabet) {
-	RepeatSubMatrix *repeatSubMatrix = st_calloc(1, sizeof(RepeatSubMatrix));
-	repeatSubMatrix->alphabet = alphabet;
-	repeatSubMatrix->maximumRepeatLength = MAXIMUM_REPEAT_LENGTH;
-	repeatSubMatrix->baseLogProbs_AT = st_calloc(repeatSubMatrix->maximumRepeatLength, sizeof(double));
-	repeatSubMatrix->baseLogProbs_GC = st_calloc(repeatSubMatrix->maximumRepeatLength, sizeof(double));
-	repeatSubMatrix->maxEntry = repeatSubMatrix->alphabet->alphabetSize * repeatSubMatrix->maximumRepeatLength * repeatSubMatrix->maximumRepeatLength;
-	repeatSubMatrix->logProbabilities = st_calloc(repeatSubMatrix->maxEntry, sizeof(double));
-	return repeatSubMatrix;
-}
-
-double repeatSubMatrix_getLogProbForGivenRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
-												     stList *bamChunkReads, int64_t underlyingRepeatCount) {
-	assert(underlyingRepeatCount < repeatSubMatrix->maximumRepeatLength);
-	double logProb = LOG_ONE;
-	for(int64_t i=0; i<stList_length(observations); i++) {
-		PoaBaseObservation *observation = stList_get(observations, i);
-		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
-		int64_t observedRepeatCount = read->rleRead->repeatCounts[observation->offset];
-
-		// Be robust to over-long repeat count observations
-		observedRepeatCount = observedRepeatCount >= repeatSubMatrix->maximumRepeatLength ?
-		        repeatSubMatrix->maximumRepeatLength-1 : observedRepeatCount;
-
-		logProb += repeatSubMatrix_getLogProb(repeatSubMatrix, base, read->forwardStrand,
-		        observedRepeatCount, underlyingRepeatCount) * observation->weight;
-	}
-
-	return logProb/PAIR_ALIGNMENT_PROB_1;
-}
-
-void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeatSubMatrix, stList *observations,
-		stList *bamChunkReads, int64_t *minRepeatLength, int64_t *maxRepeatLength) {
-	// Get the range or repeat observations, used to avoid calculating all repeat lengths, heuristically
-	*minRepeatLength=repeatSubMatrix->maximumRepeatLength;
-	*maxRepeatLength=0;
-	for(int64_t i=0; i<stList_length(observations); i++) {
-		PoaBaseObservation *observation = stList_get(observations, i);
-		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
-		int64_t observedRepeatCount = read->rleRead->repeatCounts[observation->offset];
-		if(observedRepeatCount < *minRepeatLength) {
-			*minRepeatLength = observedRepeatCount;
-		}
-		if(observedRepeatCount > *maxRepeatLength) {
-			*maxRepeatLength = observedRepeatCount;
-		}
-	}
-	if(*maxRepeatLength >= repeatSubMatrix->maximumRepeatLength) {
-		st_logInfo("   Got overlong repeat observation: %" PRIi64 ", ignoring this and cutting off overlong repeat counts to max %"PRId64"\n", *maxRepeatLength, repeatSubMatrix->maximumRepeatLength - 1);
-		*maxRepeatLength = repeatSubMatrix->maximumRepeatLength-1;
-	}
-}
-
-void repeatSubMatrix_getRepeatCountProbs(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
-		stList *bamChunkReads, double *logProbabilities, int64_t minRepeatLength, int64_t maxRepeatLength) {
-	for(int64_t i=minRepeatLength; i<=maxRepeatLength; i++) {
-		logProbabilities[i-minRepeatLength] =
-				repeatSubMatrix_getLogProbForGivenRepeatCount(repeatSubMatrix, base, observations, bamChunkReads, i);
-	}
-}
-
-int64_t repeatSubMatrix_getMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
-		stList *bamChunkReads, double *logProbability) {
-	int64_t minRepeatLength, maxRepeatLength;
-	double logProbabilities[repeatSubMatrix->maximumRepeatLength];
-
-	// Calculate range of repeat counts observed
-	repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
-					bamChunkReads, &minRepeatLength, &maxRepeatLength);
-
-	if(minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
-		*logProbability = LOG_ZERO;
-		return 0; // Case we have no valid observations, so assume repeat length of 0
-	}
-
-	// Get the prob for each repeat count
-	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observations,
-			bamChunkReads, logProbabilities, minRepeatLength, maxRepeatLength);
-
-	return getMax(logProbabilities, maxRepeatLength-minRepeatLength+1, logProbability)+minRepeatLength;
-}
-
-double getRepeatLengthProbForHaplotype(int64_t repeatLength, double *logProbabilitiesHap1, double *logProbabilitiesHap2,
-		int64_t minRepeatLength, double logProbMLHap2, double logProbSubstitution) {
-	double logProbHap2Same = logProbabilitiesHap2[repeatLength-minRepeatLength];
-	return logProbabilitiesHap1[repeatLength-minRepeatLength] +
-			((logProbHap2Same > logProbMLHap2 + logProbSubstitution) ? logProbHap2Same : logProbMLHap2 + logProbSubstitution);
-}
-
-int64_t repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base, stList *observations,
-		stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params) {
-	// Calculate range of repeat counts observed
-	int64_t minRepeatLength, maxRepeatLength;
-	repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
-						bamChunkReads, &minRepeatLength, &maxRepeatLength);
-
-	if(minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
-		*logProbability = LOG_ZERO;
-		return 0; // Case we have no valid observations, so assume repeat length of 0
-	}
-
-	// Split observations between haplotypes
-	stList *observationsHap1 = stList_construct();
-	stList *observationsHap2 = stList_construct();
-	for(int64_t i=0; i<stList_length(observations); i++) {
-		PoaBaseObservation *observation = stList_get(observations, i);
-		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
-		stList_append(stSet_search(readsBelongingToHap1, read) != NULL ? observationsHap1 : observationsHap2, observation);
-	}
-
-	// Get probs for hap 1
-	double logProbabilitiesHap1[repeatSubMatrix->maximumRepeatLength];
-	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observationsHap1,
-				bamChunkReads, logProbabilitiesHap1, minRepeatLength, maxRepeatLength);
-
-	// Get probs for hap 2
-	double logProbabilitiesHap2[repeatSubMatrix->maximumRepeatLength];
-	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observationsHap2,
-				bamChunkReads, logProbabilitiesHap2, minRepeatLength, maxRepeatLength);
-
-	// Get ML prob for haplotype 2
-	double logProbMLHap2;
-	int64_t mLRepeatLengthHap2 = getMax(logProbabilitiesHap2, maxRepeatLength-minRepeatLength+1, &logProbMLHap2)+minRepeatLength;
-
-	// Calculate ML probability of repeat length for haplotype1
-	double mlLogProb = getRepeatLengthProbForHaplotype(minRepeatLength, logProbabilitiesHap1, logProbabilitiesHap2,
-			minRepeatLength, logProbMLHap2, log(params->hetRunLengthSubstitutionProbability));
-	int64_t mlRepeatLength = minRepeatLength;
-	for(int64_t i=minRepeatLength+1; i<=maxRepeatLength; i++) {
-		double p = getRepeatLengthProbForHaplotype(i, logProbabilitiesHap1, logProbabilitiesHap2,
-				minRepeatLength, logProbMLHap2, log(params->hetRunLengthSubstitutionProbability));
-		if(p >= mlLogProb) {
-			mlLogProb = p;
-			mlRepeatLength = i;
-		}
-	}
-	*logProbability = mlLogProb;
-
-	if(mlRepeatLength != existingRepeatCount) {
-		st_logDebug("Got %i repeat length, other hap repeat length %i, log prob:%f, log prob hap1: %f log prob hap2: %f (min rl: %i max: %i) (total obs: %i, hap1: %i, hap2 : %i)\n",
-			(int)mlRepeatLength, (int)mLRepeatLengthHap2, (float)*logProbability, (float)logProbabilitiesHap1[mlRepeatLength-minRepeatLength],
-			(float)logProbMLHap2, (int)minRepeatLength, (int)maxRepeatLength,
-			(int)stList_length(observations), (int)stList_length(observationsHap1), (int)stList_length(observationsHap2));
-	}
-
-	// Cleanup
-	stList_destruct(observationsHap1);
-	stList_destruct(observationsHap2);
-
-	return mlRepeatLength;
-}
-
-int64_t removeOverlap(char *prefixString, char *suffixString, int64_t approxOverlap, PolishParams *polishParams,
-				   int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart) {
-
-	// Align the overlapping suffix of the prefixString and the prefix of the suffix string
-	int64_t prefixStringLength = strlen(prefixString);
-	int64_t suffixStringLength = strlen(suffixString);
-
-	// Get coordinates of substrings to be aligned
-	int64_t i = (prefixStringLength - approxOverlap) < 0 ? 0 : prefixStringLength - approxOverlap;
-	int64_t j = approxOverlap < suffixStringLength ? approxOverlap : suffixStringLength;
-
-	// Crop suffix
-	char c = suffixString[j];
-	suffixString[j] = '\0';
-
-	// Symbol strings
-	SymbolString sX = symbolString_construct(&(prefixString[i]), 0, strlen(&(prefixString[i])), polishParams->alphabet);
-	SymbolString sY = symbolString_construct(suffixString, 0, strlen(suffixString), polishParams->alphabet);
-
-
-	// Use default state machine for alignment
-	StateMachine *sM = stateMachine3_constructNucleotide(threeState);
-
-	// Run the alignment
-	stList *alignedPairs = getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1);
-
-	//
-	symbolString_destruct(sX);
-	symbolString_destruct(sY);
-	stateMachine_destruct(sM);
-
-	/*for(uint64_t i=0; i<stList_length(alignedPairs); i++) {
-		stIntTuple *aPair = stList_get(alignedPairs, i);
-		st_uglyf("Boo %i %i %i\n", (int)stIntTuple_get(aPair, 0), (int)stIntTuple_get(aPair, 1),
-				(int)stIntTuple_get(aPair, 2));
-	}*/
-
-	if(stList_length(alignedPairs) == 0 && st_getLogLevel() >= info) {
-		st_logInfo("    Failed to find good overlap. Suffix-string: %s\n", &(prefixString[i]));
-		st_logInfo("    Failed to find good overlap. Prefix-string: %s\n", suffixString);
-	}
-
-	// Remove the suffix crop
-	suffixString[j] = c;
-
-	// Pick the median point
-	stIntTuple *maxPair = NULL;
-	for(int64_t k=0; k<stList_length(alignedPairs); k++) {
-		stIntTuple *aPair = stList_get(alignedPairs, k);
-		if(maxPair == NULL || stIntTuple_get(aPair, 0) > stIntTuple_get(maxPair, 0)) {
-			maxPair = aPair;
-		}
-	}
-	if(maxPair == NULL) {
-		st_logCritical("    Failed to find any aligned pairs between overlapping strings, not "
-				"doing any trimming (approx overlap: %i, len x: %i, len y: %i)\n", approxOverlap, prefixStringLength, suffixStringLength);
-		*prefixStringCropEnd = prefixStringLength;
-		*suffixStringCropStart = 0;
-	}
-	else {
-		*prefixStringCropEnd = stIntTuple_get(maxPair, 1) + i; // Exclusive
-		*suffixStringCropStart = stIntTuple_get(maxPair, 2);  // Inclusive
-	}
-
-	int64_t overlapWeight = maxPair == NULL ? 0 : stIntTuple_get(maxPair, 0);
-
-	stList_destruct(alignedPairs);
-
-	return overlapWeight;
-}
+//TODO this was removed in a merge.. eventually this can be actually removed
+//<<<<<<< HEAD:impl/polisher.c
+//uint8_t *rleString_rleQualities(RleString *rleString, uint8_t *qualities) {
+//	// calculate read qualities (if set)
+//	//TODO unit test this
+//	uint8_t *rleQualities = st_calloc(rleString->length, sizeof(uint8_t));
+//	uint64_t rawPos = 0;
+//	for (uint64_t rlePos = 0; rlePos < rleString->length; rlePos++) {
+//		uint8_t min = UINT8_MAX;
+//		uint8_t max = 0;
+//		int64_t mean = 0;
+//		for (uint64_t repeatIdx = 0; repeatIdx < rleString->repeatCounts[rlePos]; repeatIdx++) {
+//			uint8_t q = qualities[rawPos++];
+//			min = (q < min ? q : min);
+//			max = (q > max ? q : max);
+//			mean += q;
+//		}
+//		mean = mean / rleString->repeatCounts[rlePos];
+//		assert(mean <= UINT8_MAX);
+//		// pick your favorite metric
+//		//r->qualities[rlePos] = min;
+//		//r->qualities[rlePos] = max;
+//		rleQualities[rlePos] = (uint8_t) mean;
+//	}
+//	assert(rawPos == rleString->nonRleLength);
+//	return rleQualities;
+//}
+//
+//uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString) {
+//	uint64_t *nonRleToRleCoordinateMap = st_malloc(sizeof(uint64_t) * rleString->nonRleLength);
+//
+//	uint64_t j=0;
+//	for(uint64_t i=0; i<rleString->length; i++) {
+//		for(uint64_t k=0; k<rleString->repeatCounts[i]; k++) {
+//			nonRleToRleCoordinateMap[j++] = i;
+//		}
+//	}
+//	assert(j == rleString->nonRleLength);
+//
+//	return nonRleToRleCoordinateMap;
+//}
+//
+//stList *runLengthEncodeAlignment(stList *alignment,
+//		uint64_t *seqXNonRleToRleCoordinateMap, uint64_t *seqYNonRleToRleCoordinateMap) {
+//	stList *rleAlignment = stList_construct3(0, (void (*)(void *))stIntTuple_destruct);
+//
+//	int64_t x=-1, y=-1;
+//	for(int64_t i=0; i<stList_length(alignment); i++) {
+//		stIntTuple *alignedPair = stList_get(alignment, i);
+//
+//		int64_t x2 = seqXNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 0)];
+//		int64_t y2 = seqYNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 1)];
+//
+//		if(x2 > x && y2 > y) {
+//			stList_append(rleAlignment, stIntTuple_construct3(x2, y2, stIntTuple_get(alignedPair, 2)));
+//			x = x2; y = y2;
+//		}
+//	}
+//
+//	return rleAlignment;
+//}
+//
+///*
+// * Functions for modeling repeat counts
+// */
+//
+//inline double *repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount) {
+//    // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
+//    if(base == repeatSubMatrix->alphabet->alphabetSize - 1) {base = 0;}
+//    // santiy check
+//    if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
+//        st_errAbort("[repeatSubMatrix_setLogProb] base 'Nn' not supported for repeat estimation\n");
+//    }
+//    int64_t idx = (strand ? base : 3-base) * repeatSubMatrix->maximumRepeatLength * repeatSubMatrix->maximumRepeatLength +
+//            underlyingRepeatCount * repeatSubMatrix->maximumRepeatLength +
+//            observedRepeatCount;
+//    assert(idx < repeatSubMatrix->maxEntry);
+//    assert(idx >= 0);
+//	return &(repeatSubMatrix->logProbabilities[idx]);
+//}
+//
+//inline double repeatSubMatrix_getLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount) {
+//	double *loc = repeatSubMatrix_setLogProb(repeatSubMatrix, base, strand, observedRepeatCount, underlyingRepeatCount);
+////	printf("%p\n", loc);
+//	return *loc;
+//}
+//
+//void repeatSubMatrix_destruct(RepeatSubMatrix *repeatSubMatrix) {
+//	alphabet_destruct(repeatSubMatrix->alphabet);
+//	free(repeatSubMatrix->baseLogProbs_AT);
+//	free(repeatSubMatrix->baseLogProbs_GC);
+//	free(repeatSubMatrix->logProbabilities);
+//	free(repeatSubMatrix);
+//}
+//
+//RepeatSubMatrix *repeatSubMatrix_constructEmpty(Alphabet *alphabet) {
+//	RepeatSubMatrix *repeatSubMatrix = st_calloc(1, sizeof(RepeatSubMatrix));
+//	repeatSubMatrix->alphabet = alphabet;
+//	repeatSubMatrix->maximumRepeatLength = MAXIMUM_REPEAT_LENGTH;
+//	repeatSubMatrix->baseLogProbs_AT = st_calloc(repeatSubMatrix->maximumRepeatLength, sizeof(double));
+//	repeatSubMatrix->baseLogProbs_GC = st_calloc(repeatSubMatrix->maximumRepeatLength, sizeof(double));
+//	repeatSubMatrix->maxEntry = repeatSubMatrix->alphabet->alphabetSize * repeatSubMatrix->maximumRepeatLength * repeatSubMatrix->maximumRepeatLength;
+//	repeatSubMatrix->logProbabilities = st_calloc(repeatSubMatrix->maxEntry, sizeof(double));
+//	return repeatSubMatrix;
+//}
+//
+//double repeatSubMatrix_getLogProbForGivenRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
+//												     stList *bamChunkReads, int64_t underlyingRepeatCount) {
+//	assert(underlyingRepeatCount < repeatSubMatrix->maximumRepeatLength);
+//	double logProb = LOG_ONE;
+//	for(int64_t i=0; i<stList_length(observations); i++) {
+//		PoaBaseObservation *observation = stList_get(observations, i);
+//		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+//		int64_t observedRepeatCount = read->rleRead->repeatCounts[observation->offset];
+//
+//		// Be robust to over-long repeat count observations
+//		observedRepeatCount = observedRepeatCount >= repeatSubMatrix->maximumRepeatLength ?
+//		        repeatSubMatrix->maximumRepeatLength-1 : observedRepeatCount;
+//
+//		logProb += repeatSubMatrix_getLogProb(repeatSubMatrix, base, read->forwardStrand,
+//		        observedRepeatCount, underlyingRepeatCount) * observation->weight;
+//	}
+//
+//	return logProb/PAIR_ALIGNMENT_PROB_1;
+//}
+//
+//void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeatSubMatrix, stList *observations,
+//		stList *bamChunkReads, int64_t *minRepeatLength, int64_t *maxRepeatLength) {
+//	// Get the range or repeat observations, used to avoid calculating all repeat lengths, heuristically
+//	*minRepeatLength=repeatSubMatrix->maximumRepeatLength;
+//	*maxRepeatLength=0;
+//	for(int64_t i=0; i<stList_length(observations); i++) {
+//		PoaBaseObservation *observation = stList_get(observations, i);
+//		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+//		int64_t observedRepeatCount = read->rleRead->repeatCounts[observation->offset];
+//		if(observedRepeatCount < *minRepeatLength) {
+//			*minRepeatLength = observedRepeatCount;
+//		}
+//		if(observedRepeatCount > *maxRepeatLength) {
+//			*maxRepeatLength = observedRepeatCount;
+//		}
+//	}
+//	if(*maxRepeatLength >= repeatSubMatrix->maximumRepeatLength) {
+//		st_logInfo("   Got overlong repeat observation: %" PRIi64 ", ignoring this and cutting off overlong repeat counts to max %"PRId64"\n", *maxRepeatLength, repeatSubMatrix->maximumRepeatLength - 1);
+//		*maxRepeatLength = repeatSubMatrix->maximumRepeatLength-1;
+//	}
+//}
+//
+//void repeatSubMatrix_getRepeatCountProbs(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
+//		stList *bamChunkReads, double *logProbabilities, int64_t minRepeatLength, int64_t maxRepeatLength) {
+//	for(int64_t i=minRepeatLength; i<=maxRepeatLength; i++) {
+//		logProbabilities[i-minRepeatLength] =
+//				repeatSubMatrix_getLogProbForGivenRepeatCount(repeatSubMatrix, base, observations, bamChunkReads, i);
+//	}
+//}
+//
+//int64_t repeatSubMatrix_getMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
+//		stList *bamChunkReads, double *logProbability) {
+//	int64_t minRepeatLength, maxRepeatLength;
+//	double logProbabilities[repeatSubMatrix->maximumRepeatLength];
+//
+//	// Calculate range of repeat counts observed
+//	repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
+//					bamChunkReads, &minRepeatLength, &maxRepeatLength);
+//
+//	if(minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
+//		*logProbability = LOG_ZERO;
+//		return 0; // Case we have no valid observations, so assume repeat length of 0
+//	}
+//
+//	// Get the prob for each repeat count
+//	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observations,
+//			bamChunkReads, logProbabilities, minRepeatLength, maxRepeatLength);
+//
+//	return getMax(logProbabilities, maxRepeatLength-minRepeatLength+1, logProbability)+minRepeatLength;
+//}
+//
+//double getRepeatLengthProbForHaplotype(int64_t repeatLength, double *logProbabilitiesHap1, double *logProbabilitiesHap2,
+//		int64_t minRepeatLength, double logProbMLHap2, double logProbSubstitution) {
+//	double logProbHap2Same = logProbabilitiesHap2[repeatLength-minRepeatLength];
+//	return logProbabilitiesHap1[repeatLength-minRepeatLength] +
+//			((logProbHap2Same > logProbMLHap2 + logProbSubstitution) ? logProbHap2Same : logProbMLHap2 + logProbSubstitution);
+//}
+//
+//int64_t repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base, stList *observations,
+//		stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params) {
+//	// Calculate range of repeat counts observed
+//	int64_t minRepeatLength, maxRepeatLength;
+//	repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
+//						bamChunkReads, &minRepeatLength, &maxRepeatLength);
+//
+//	if(minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
+//		*logProbability = LOG_ZERO;
+//		return 0; // Case we have no valid observations, so assume repeat length of 0
+//	}
+//
+//	// Split observations between haplotypes
+//	stList *observationsHap1 = stList_construct();
+//	stList *observationsHap2 = stList_construct();
+//	for(int64_t i=0; i<stList_length(observations); i++) {
+//		PoaBaseObservation *observation = stList_get(observations, i);
+//		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+//		stList_append(stSet_search(readsBelongingToHap1, read) != NULL ? observationsHap1 : observationsHap2, observation);
+//	}
+//
+//	// Get probs for hap 1
+//	double logProbabilitiesHap1[repeatSubMatrix->maximumRepeatLength];
+//	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observationsHap1,
+//				bamChunkReads, logProbabilitiesHap1, minRepeatLength, maxRepeatLength);
+//
+//	// Get probs for hap 2
+//	double logProbabilitiesHap2[repeatSubMatrix->maximumRepeatLength];
+//	repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observationsHap2,
+//				bamChunkReads, logProbabilitiesHap2, minRepeatLength, maxRepeatLength);
+//
+//	// Get ML prob for haplotype 2
+//	double logProbMLHap2;
+//	int64_t mLRepeatLengthHap2 = getMax(logProbabilitiesHap2, maxRepeatLength-minRepeatLength+1, &logProbMLHap2)+minRepeatLength;
+//
+//	// Calculate ML probability of repeat length for haplotype1
+//	double mlLogProb = getRepeatLengthProbForHaplotype(minRepeatLength, logProbabilitiesHap1, logProbabilitiesHap2,
+//			minRepeatLength, logProbMLHap2, log(params->hetRunLengthSubstitutionProbability));
+//	int64_t mlRepeatLength = minRepeatLength;
+//	for(int64_t i=minRepeatLength+1; i<=maxRepeatLength; i++) {
+//		double p = getRepeatLengthProbForHaplotype(i, logProbabilitiesHap1, logProbabilitiesHap2,
+//				minRepeatLength, logProbMLHap2, log(params->hetRunLengthSubstitutionProbability));
+//		if(p >= mlLogProb) {
+//			mlLogProb = p;
+//			mlRepeatLength = i;
+//		}
+//	}
+//	*logProbability = mlLogProb;
+//
+//	if(mlRepeatLength != existingRepeatCount) {
+//		st_logDebug("Got %i repeat length, other hap repeat length %i, log prob:%f, log prob hap1: %f log prob hap2: %f (min rl: %i max: %i) (total obs: %i, hap1: %i, hap2 : %i)\n",
+//			(int)mlRepeatLength, (int)mLRepeatLengthHap2, (float)*logProbability, (float)logProbabilitiesHap1[mlRepeatLength-minRepeatLength],
+//			(float)logProbMLHap2, (int)minRepeatLength, (int)maxRepeatLength,
+//			(int)stList_length(observations), (int)stList_length(observationsHap1), (int)stList_length(observationsHap2));
+//	}
+//
+//	// Cleanup
+//	stList_destruct(observationsHap1);
+//	stList_destruct(observationsHap2);
+//
+//	return mlRepeatLength;
+//}
+//
+//int64_t removeOverlap(char *prefixString, char *suffixString, int64_t approxOverlap, PolishParams *polishParams,
+//				   int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart) {
+//
+//	// Align the overlapping suffix of the prefixString and the prefix of the suffix string
+//	int64_t prefixStringLength = strlen(prefixString);
+//	int64_t suffixStringLength = strlen(suffixString);
+//
+//	// Get coordinates of substrings to be aligned
+//	int64_t i = (prefixStringLength - approxOverlap) < 0 ? 0 : prefixStringLength - approxOverlap;
+//	int64_t j = approxOverlap < suffixStringLength ? approxOverlap : suffixStringLength;
+//
+//	// Crop suffix
+//	char c = suffixString[j];
+//	suffixString[j] = '\0';
+//
+//	// Symbol strings
+//	SymbolString sX = symbolString_construct(&(prefixString[i]), 0, strlen(&(prefixString[i])), polishParams->alphabet);
+//	SymbolString sY = symbolString_construct(suffixString, 0, strlen(suffixString), polishParams->alphabet);
+//
+//
+//	// Use default state machine for alignment
+//	StateMachine *sM = stateMachine3_constructNucleotide(threeState);
+//
+//	// Run the alignment
+//	stList *alignedPairs = getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1);
+//
+//	//
+//	symbolString_destruct(sX);
+//	symbolString_destruct(sY);
+//	stateMachine_destruct(sM);
+//
+//	/*for(uint64_t i=0; i<stList_length(alignedPairs); i++) {
+//		stIntTuple *aPair = stList_get(alignedPairs, i);
+//		st_uglyf("Boo %i %i %i\n", (int)stIntTuple_get(aPair, 0), (int)stIntTuple_get(aPair, 1),
+//				(int)stIntTuple_get(aPair, 2));
+//	}*/
+//
+//	if(stList_length(alignedPairs) == 0 && st_getLogLevel() >= info) {
+//		st_logInfo("    Failed to find good overlap. Suffix-string: %s\n", &(prefixString[i]));
+//		st_logInfo("    Failed to find good overlap. Prefix-string: %s\n", suffixString);
+//	}
+//
+//	// Remove the suffix crop
+//	suffixString[j] = c;
+//
+//	// Pick the median point
+//	stIntTuple *maxPair = NULL;
+//	for(int64_t k=0; k<stList_length(alignedPairs); k++) {
+//		stIntTuple *aPair = stList_get(alignedPairs, k);
+//		if(maxPair == NULL || stIntTuple_get(aPair, 0) > stIntTuple_get(maxPair, 0)) {
+//			maxPair = aPair;
+//		}
+//	}
+//	if(maxPair == NULL) {
+//		st_logCritical("    Failed to find any aligned pairs between overlapping strings, not "
+//				"doing any trimming (approx overlap: %i, len x: %i, len y: %i)\n", approxOverlap, prefixStringLength, suffixStringLength);
+//		*prefixStringCropEnd = prefixStringLength;
+//		*suffixStringCropStart = 0;
+//	}
+//	else {
+//		*prefixStringCropEnd = stIntTuple_get(maxPair, 1) + i; // Exclusive
+//		*suffixStringCropStart = stIntTuple_get(maxPair, 2);  // Inclusive
+//	}
+//
+//	int64_t overlapWeight = maxPair == NULL ? 0 : stIntTuple_get(maxPair, 0);
+//
+//	stList_destruct(alignedPairs);
+//
+//	return overlapWeight;
+//}
+//=======
+//>>>>>>> 71d55159ce92b9b54cf79d1b0a394a6e8baf5710:impl/poa.c
 
 // Core polishing logic functions
 
