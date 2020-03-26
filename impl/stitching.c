@@ -331,10 +331,6 @@ int64_t removeOverlap(char *prefixString, char *suffixString, int64_t approxOver
     return overlapWeight;
 }
 
-void stList_removeInterval(stList *l, int64_t start, int64_t length) {
-
-}
-
 void chunkToStitch_trimAdjacentChunks2(char *pSeq, char **seq,
         stList *pPoa, stList *poa, stList *pRepeatCounts, stList *repeatCounts,
         Params *params) {

@@ -101,7 +101,7 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
 	return rleRef;
 }
 
-uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
+uint64_t *getPaddedHaplotypeString(const uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
 	/*
 	 * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
 	 */
@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
             regionStr = stString_copy(optarg);
             break;
         case 'v':
-            verboseBitstring = atoi(optarg);
+            verboseBitstring = strtol(optarg, NULL, 10);
             break;
         case 'i':
             outputRepeatCounts = !outputRepeatCounts;
