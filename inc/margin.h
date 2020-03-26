@@ -1066,12 +1066,15 @@ RleString *bamChunkReadSubstring_getRleString(BamChunkReadSubstring *readSubstri
 /*
  * Remove overlap between two overlapping strings. Returns max weight of split point.
  */
-int64_t removeOverlap(char *prefixString, char *suffixString, int64_t approxOverlap, PolishParams *polishParams,
-				      int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
+int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suffixString, int64_t suffixStringLength,
+                      int64_t approxOverlap, PolishParams *polishParams,
+                      int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
+
 char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-								int64_t overlap, Params *params, char *missingChunkSpacer, char *referenceSequenceName);
+                                int64_t overlap, Params *params, char *missingChunkSpacer, char *referenceSequenceName);
+
 char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive,
-								int64_t overlap, Params *params, char *missingChunkSpacer);
+                        int64_t overlap, Params *params, char *missingChunkSpacer);
 
 /*
  * View functions

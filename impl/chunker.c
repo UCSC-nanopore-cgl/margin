@@ -70,7 +70,8 @@ char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive
 
             // Trim the currrent and previous polished reference strings to remove overlap
             int64_t prefixStringCropEnd, suffixStringCropStart;
-            int64_t overlapMatchWeight = removeOverlap(previousChunk, currentChunk,
+            int64_t overlapMatchWeight = removeOverlap(previousChunk, strlen(previousChunk), currentChunk,
+                                                       strlen(currentChunk),
                                                        overlap, params->polishParams,
                                                        &prefixStringCropEnd, &suffixStringCropStart);
 
