@@ -5,7 +5,6 @@
  */
 
 #include "margin.h"
-#include <htsIntegration.h>
 #include <sonLibListPrivate.h>
 
 char *getLogIdentifier() {
@@ -121,8 +120,9 @@ Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t ma
 
 	stList_append(poa->nodes, poaNode_construct(poa, 'N', 1)); // Add empty prefix node
 	for(int64_t i=0; i<reference->length; i++) {
-		stList_append(poa->nodes, poaNode_construct(poa, toupper(reference->rleString[i]), reference->repeatCounts[i]));
-	}
+        stList_append(poa->nodes,
+                      poaNode_construct(poa, (char) toupper(reference->rleString[i]), reference->repeatCounts[i]));
+    }
 
 	return poa;
 }
@@ -529,17 +529,17 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
 	stSortedSet_destruct(matchesSet);
 }
 
-stList *poa_getAnchorAlignments(Poa *poa, int64_t *poaToConsensusMap, int64_t noOfReads, PolishParams *pp) {
+stList *poa_getAnchorAlignments(Poa *poa, const int64_t *poaToConsensusMap, int64_t noOfReads, PolishParams *pp) {
 
-	// Allocate anchor alignments
-	stList *anchorAlignments = stList_construct3(0, (void (*)(void *))stList_destruct);
-	for(int64_t i=0; i<noOfReads; i++) {
-		stList_append(anchorAlignments, stList_construct3(0, (void (*)(void *))stIntTuple_destruct));
-	}
+    // Allocate anchor alignments
+    stList *anchorAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
+    for (int64_t i = 0; i < noOfReads; i++) {
+        stList_append(anchorAlignments, stList_construct3(0, (void (*)(void *)) stIntTuple_destruct));
+    }
 
-	// Walk through the weights of the POA to construct the anchor alignments
-	for(int64_t i=1; i<stList_length(poa->nodes); i++) {
-		PoaNode *poaNode = stList_get(poa->nodes, i);
+    // Walk through the weights of the POA to construct the anchor alignments
+    for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
+        PoaNode *poaNode = stList_get(poa->nodes, i);
 		// If consensus index is null, then just use the underlying reference sequence of the POA.
 		int64_t consensusIndex = poaToConsensusMap == NULL ? i-1 : poaToConsensusMap[i-1];
 		if(consensusIndex != -1) { // Poa reference position is aligned to the consensus
@@ -785,23 +785,24 @@ double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkRead
  * Functions to print poa
  */
 
-void poa_printRepeatCounts(Poa *poa, FILE *fH, stList *bamChunkReads) {
-		fprintf(fH, "REF_INDEX\tREF_BASE");
-		fprintf(fH, "\tREPEAT_COUNT_OBSxN(READ_BASE:READ_STRAND:REPEAT_COUNT,WEIGHT)\n");
+void poa_printRepeatCountsCSV(Poa *poa, FILE *fH, stList *bamChunkReads) {
+    fprintf(fH, "REF_INDEX,REF_BASE");
+    fprintf(fH, ",REPEAT_COUNT_OBSxN(READ_BASE,READ_STRAND,REPEAT_COUNT,WEIGHT)\n");
 
     // Print info for each base in reference in turn
-    for(int64_t i=0; i<stList_length(poa->nodes); i++) {
+    for (int64_t i = 0; i < stList_length(poa->nodes); i++) {
         PoaNode *node = stList_get(poa->nodes, i);
 
-        fprintf(fH, "%" PRIi64 "\t%c", i, node->base);
+        fprintf(fH, "%" PRIi64 ",%c", i, node->base);
 
-		for(int64_t j=0; j<stList_length(node->observations); j++) {
-			PoaBaseObservation *obs = stList_get(node->observations, j);
-			BamChunkRead *bamChunkRead = stList_get(bamChunkReads, obs->readNo);
-			int64_t repeatCount = bamChunkRead->rleRead->repeatCounts[obs->offset];
-			char base = bamChunkRead->rleRead->rleString[obs->offset];
-			fprintf(fH, "\t%c%c%" PRIi64 ",%.3f", base, bamChunkRead->forwardStrand ? '+' : '-', repeatCount, obs->weight/PAIR_ALIGNMENT_PROB_1);
-		}
+        for (int64_t j = 0; j < stList_length(node->observations); j++) {
+            PoaBaseObservation *obs = stList_get(node->observations, j);
+            BamChunkRead *bamChunkRead = stList_get(bamChunkReads, obs->readNo);
+            int64_t repeatCount = bamChunkRead->rleRead->repeatCounts[obs->offset];
+            char base = bamChunkRead->rleRead->rleString[obs->offset];
+            fprintf(fH, ",%c%c%" PRIi64 ",%.3f", base, bamChunkRead->forwardStrand ? '+' : '-', repeatCount,
+                    obs->weight / PAIR_ALIGNMENT_PROB_1);
+        }
 
 		fprintf(fH, "\n");
 	}
@@ -1079,9 +1080,9 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
             //fprintf(fH, ",NORM_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c);
             fprintf(fH, ",%f,%f,%f,%f,%f", totalBaseWeight/totalWeight,
                     (positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1)/totalBaseWeight,
-                    (positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2)/totalBaseWeight,
-                    positiveStrandBaseWeightHap1/(positiveStrandBaseWeightHap1+negativeStrandBaseWeightHap1),
-                    positiveStrandBaseWeightHap2/(positiveStrandBaseWeightHap2+negativeStrandBaseWeightHap2));
+                    (positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2) / totalBaseWeight,
+                    positiveStrandBaseWeightHap1 / (positiveStrandBaseWeightHap1 + negativeStrandBaseWeightHap1),
+                    positiveStrandBaseWeightHap2 / (positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2));
         }
 
         free(baseWeights);
@@ -1089,8 +1090,8 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
         // Split observations between haplotypes (assume reads not in hap1 are in hap2)
         stList *observationsHap1 = stList_construct();
         stList *observationsHap2 = stList_construct();
-        for(int64_t i=0; i<stList_length(node->observations); i++) {
-            PoaBaseObservation *observation = stList_get(node->observations, i);
+        for (int64_t j = 0; j < stList_length(node->observations); j++) {
+            PoaBaseObservation *observation = stList_get(node->observations, j);
             BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
             stList_append(stSet_search(readsInHap1, read) != NULL ? observationsHap1 : observationsHap2, observation);
         }
@@ -1205,17 +1206,18 @@ void poa_printSummaryStats(Poa *poa, FILE *fH) {
 			totalInsertWeight, totalDeleteWeight, totalInsertWeight + totalDeleteWeight, totalInsertWeight + totalDeleteWeight + totalReferenceMismatchWeight);
 }
 
-uint64_t getMaxWeight(double *weights, uint64_t weightNo, uint64_t referenceIndex, double referenceWeightPenalty) {
-	// Used to pick bases and repeat counts by consensus algorithm
-	double maxWeight = 0;
-	int64_t maxIndex = -1;
-	for(int64_t j=0; j<weightNo; j++) {
-		if(j != referenceIndex && weights[j] >= maxWeight) {
-			maxWeight = weights[j];
-			maxIndex = j;
-		}
-	}
-	assert(maxIndex != -1);
+uint64_t
+getMaxWeight(const double *weights, uint64_t weightNo, uint64_t referenceIndex, double referenceWeightPenalty) {
+    // Used to pick bases and repeat counts by consensus algorithm
+    double maxWeight = 0;
+    int64_t maxIndex = -1;
+    for (int64_t j = 0; j < weightNo; j++) {
+        if (j != referenceIndex && weights[j] >= maxWeight) {
+            maxWeight = weights[j];
+            maxIndex = j;
+        }
+    }
+    assert(maxIndex != -1);
 
 	return weights[referenceIndex] * referenceWeightPenalty > maxWeight ? referenceIndex : maxIndex;
 }
@@ -1283,16 +1285,16 @@ RleString *poa_getConsensus(Poa *poa, int64_t **poaToConsensusMap, PolishParams 
 				matchTransitionWeight = 1.0;
 			}
 			else {
-				// Set the initiation probability according to the average base weight
-				for(int64_t j=1; j<stList_length(poa->nodes); j++) {
-					PoaNode *nNode = stList_get(poa->nodes, j);
-					for(int64_t k=0; k<poa->alphabet->alphabetSize; k++) {
-						matchTransitionWeight += nNode->baseWeights[k];
-					}
-				}
-				matchTransitionWeight /= stList_length(poa->nodes)-1;
-				matchTransitionWeight -= totalIndelWeight;
-			}
+                // Set the initiation probability according to the average base weight
+                for (int64_t j = 1; j < stList_length(poa->nodes); j++) {
+                    PoaNode *nNode = stList_get(poa->nodes, j);
+                    for (int64_t k = 0; k < poa->alphabet->alphabetSize; k++) {
+                        matchTransitionWeight += nNode->baseWeights[k];
+                    }
+                }
+                matchTransitionWeight /= (double) stList_length(poa->nodes) - 1;
+                matchTransitionWeight -= totalIndelWeight;
+            }
 		}
 		else {
 			for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
@@ -1611,36 +1613,37 @@ void getPhasedBaseWeights(double *logProbabilitiesHap, stList *observations, Poa
 		logProbabilitiesHap[i] = 0.0;
 	}
 	for(int64_t i=0; i<stList_length(observations); i++) {
-		PoaBaseObservation *observation = stList_get(observations, i);
-		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
-		int64_t base = poa->alphabet->convertCharToSymbol(read->rleRead->rleString[observation->offset]);
-		assert(base >= 0);;
-		assert(base <poa->alphabet->alphabetSize);
-		logProbabilitiesHap[base] += observation->weight;
-	}
+        PoaBaseObservation *observation = stList_get(observations, i);
+        BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+        int64_t base = poa->alphabet->convertCharToSymbol(read->rleRead->rleString[observation->offset]);
+        assert(base >= 0);
+        assert(base < poa->alphabet->alphabetSize);
+        logProbabilitiesHap[base] += observation->weight;
+    }
 	for(int64_t i=0; i<poa->alphabet->alphabetSize; i++) { // Normalize
 		logProbabilitiesHap[i] /= PAIR_ALIGNMENT_PROB_1;
 	}
 }
 
-double getBaseProbForHaplotype(int64_t base, double *logProbabilitiesHap1, double *logProbabilitiesHap2,
-		double logProbMLHap2, double logProbSubstitution) {
-	double logProbHap2Same = logProbabilitiesHap2[base];
-	return logProbabilitiesHap1[base] +
-			((logProbHap2Same > logProbMLHap2 + logProbSubstitution) ? logProbHap2Same : logProbMLHap2 + logProbSubstitution);
+double getBaseProbForHaplotype(int64_t base, double *logProbabilitiesHap1, const double *logProbabilitiesHap2,
+                               double logProbMLHap2, double logProbSubstitution) {
+    double logProbHap2Same = logProbabilitiesHap2[base];
+    return logProbabilitiesHap1[base] +
+           ((logProbHap2Same > logProbMLHap2 + logProbSubstitution) ? logProbHap2Same : logProbMLHap2 +
+                                                                                        logProbSubstitution);
 }
 
-uint64_t poaNode_getPhasedMLBase(PoaNode *node, stList *bamChunkReads,
-		Poa *poa, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2) {
+uint64_t poaNode_getPhasedMLBase(PoaNode *node, stList *bamChunkReads, Poa *poa, stSet *readsBelongingToHap1) {
 
-	// Split observations between haplotypes
-	stList *observationsHap1 = stList_construct();
-	stList *observationsHap2 = stList_construct();
-	for(int64_t i=0; i<stList_length(node->observations); i++) {
-		PoaBaseObservation *observation = stList_get(node->observations, i);
-		BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
-		stList_append(stSet_search(readsBelongingToHap1, read) != NULL ? observationsHap1 : observationsHap2, observation);
-	}
+    // Split observations between haplotypes
+    stList *observationsHap1 = stList_construct();
+    stList *observationsHap2 = stList_construct();
+    for (int64_t i = 0; i < stList_length(node->observations); i++) {
+        PoaBaseObservation *observation = stList_get(node->observations, i);
+        BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
+        stList_append(stSet_search(readsBelongingToHap1, read) != NULL ? observationsHap1 : observationsHap2,
+                      observation);
+    }
 
 	// Get probs for hap 1
 	double logProbabilitiesHap1[poa->alphabet->alphabetSize];
@@ -1679,15 +1682,15 @@ uint64_t poaNode_getPhasedMLBase(PoaNode *node, stList *bamChunkReads,
 	return mlBase;
 }
 
-void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads,
-		stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params) {
-	poa->refString->nonRleLength = 0;
-	for(uint64_t i=1; i<stList_length(poa->nodes); i++) {
-		PoaNode *node = stList_get(poa->nodes, i);
-		node->base = poa->alphabet->convertSymbolToChar(poaNode_getPhasedMLBase(node, bamChunkReads,
-				poa, readsBelongingToHap1, readsBelongingToHap2));
-		poa->refString->rleString[i-1] = node->base;
-	}
+void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads, stSet *readsBelongingToHap1,
+                                               PolishParams *params) {
+    poa->refString->nonRleLength = 0;
+    for (uint64_t i = 1; i < stList_length(poa->nodes); i++) {
+        PoaNode *node = stList_get(poa->nodes, i);
+        node->base = poa->alphabet->convertSymbolToChar(poaNode_getPhasedMLBase(node, bamChunkReads,
+                                                                                poa, readsBelongingToHap1));
+        poa->refString->rleString[i - 1] = node->base;
+    }
 }
 
 //TODO this was removed in a merge.. eventually this can be actually removed

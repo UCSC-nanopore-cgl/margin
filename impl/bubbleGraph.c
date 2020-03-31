@@ -1356,24 +1356,29 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
 		if(gF->haplotypeString1[i] == gF->haplotypeString2[i]) {
 		  //|| binomialPValue(gF->readsSupportingHaplotype1[i] + gF->readsSupportingHaplotype2[i], gF->readsSupportingHaplotype1[i]) < 0.05) { // gF->readsSupportingHaplotype1[i] < 5 || gF->readsSupportingHaplotype2[i] < 5) { // is homozygous
 			int64_t refAlleleIndex = bubble_getReferenceAlleleIndex(b);
-			if(refAlleleIndex != -1) { // is homozygous alt
-				gF->haplotypeString1[i] = refAlleleIndex; // set to reference allele
-				gF->haplotypeString2[i] = refAlleleIndex;
-			}
-		}
-	}
+            if (refAlleleIndex != -1) { // is homozygous alt
+                gF->haplotypeString1[i] = refAlleleIndex; // set to reference allele
+                gF->haplotypeString2[i] = refAlleleIndex;
+            }
+        }
+    }
 
-	// Check / log the result
-	bubbleGraph_logPhasedBubbleGraph(bg, hmm, path, *readsToPSeqs, profileSeqs, gF);
+    // Check / log the result
+    bubbleGraph_logPhasedBubbleGraph(bg, hmm, path, *readsToPSeqs, profileSeqs, gF);
 
-	// Cleanup
-	stSet_destruct(discardedReadsSet);
-	stList_destruct(forwardStrandProfileSeqs);
-	stList_destruct(reverseStrandProfileSeqs);
-	stList_setDestructor(profileSeqs, (void(*)(void*))stProfileSeq_destruct);
-	stList_destruct(profileSeqs);
+    // Set destructors for later cleanup of profile sequences
+    stSet_setDestructor(gF->reads1, (void (*)(void *)) stProfileSeq_destruct);
+    stSet_setDestructor(gF->reads2, (void (*)(void *)) stProfileSeq_destruct);
+    assert(stList_length(profileSeqs) == stSet_size(gF->reads1) + stSet_size(gF->reads2));
+    assert(stSet_sizeOfIntersection(gF->reads1, gF->reads2) == 0);
 
-	return gF;
+    // Cleanup
+    stSet_destruct(discardedReadsSet);
+    stList_destruct(forwardStrandProfileSeqs);
+    stList_destruct(reverseStrandProfileSeqs);
+    stList_destruct(profileSeqs);
+
+    return gF;
 }
 
 Poa *bubbleGraph_getNewPoa(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, Params *params) {

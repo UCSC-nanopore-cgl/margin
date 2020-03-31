@@ -7,7 +7,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include "sonLib.h"
 
 char getRandomChar() {

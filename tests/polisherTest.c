@@ -999,29 +999,30 @@ void test_polishParams(CuTest *testCase) {
 }
 
 void test_removeOverlapExample(CuTest *testCase) {
-	Params *params = params_readParams(polishParamsFile);
-	PolishParams *polishParams = params->polishParams;
+    Params *params = params_readParams(polishParamsFile);
+    PolishParams *polishParams = params->polishParams;
 
-	//Make prefix
-	char *prefixString = stString_copy("ACGTGATTTCA");
+    //Make prefix
+    char *prefixString = stString_copy("ACGTGATTTCA");
 
-	// Make sufix
-	char *suffixString = stString_copy("GATTTCAACGT");
+    // Make sufix
+    char *suffixString = stString_copy("GATTTCAACGT");
 
-	int64_t approxOverlap = 10;
+    int64_t approxOverlap = 10;
 
-	// Run overlap remover
-	int64_t prefixStringCropEnd, suffixStringCropStart;
-	double overlapWeight = removeOverlap(prefixString, suffixString, approxOverlap, polishParams,
-				  	  	  &prefixStringCropEnd, &suffixStringCropStart);
+    // Run overlap remover
+    int64_t prefixStringCropEnd, suffixStringCropStart;
+    double overlapWeight = removeOverlap(prefixString, strlen(prefixString), suffixString, strlen(suffixString),
+                                         approxOverlap, polishParams,
+                                         &prefixStringCropEnd, &suffixStringCropStart);
 
-	CuAssertIntEquals(testCase, 6, prefixStringCropEnd);
-	CuAssertIntEquals(testCase, 2, suffixStringCropStart);
+    CuAssertIntEquals(testCase, 6, prefixStringCropEnd);
+    CuAssertIntEquals(testCase, 2, suffixStringCropStart);
 
-	// Cleanup
-	params_destruct(params);
-	free(prefixString);
-	free(suffixString);
+    // Cleanup
+    params_destruct(params);
+    free(prefixString);
+    free(suffixString);
 }
 
 void test_removeOverlap_RandomExamples(CuTest *testCase) {
@@ -1029,28 +1030,29 @@ void test_removeOverlap_RandomExamples(CuTest *testCase) {
 	PolishParams *polishParams = params->polishParams;
 
 	for (int64_t test = 0; test < 100; test++) {
-		//Make prefix
-		char *prefixString = getRandomSequence(st_randomInt(1, 100));
+        //Make prefix
+        char *prefixString = getRandomSequence(st_randomInt(1, 100));
 
-		// Make sufix
-		char *suffixString = getRandomSequence(st_randomInt(1, 100));
+        // Make sufix
+        char *suffixString = getRandomSequence(st_randomInt(1, 100));
 
-		int64_t approxOverlap = st_randomInt(0, 100);
+        int64_t approxOverlap = st_randomInt(0, 100);
 
-		// Run overlap remover
-		int64_t prefixStringCropEnd, suffixStringCropStart;
-		removeOverlap(prefixString, suffixString, approxOverlap, polishParams,
-					  &prefixStringCropEnd, &suffixStringCropStart);
+        // Run overlap remover
+        int64_t prefixStringCropEnd, suffixStringCropStart;
+        removeOverlap(prefixString, strlen(prefixString), suffixString, strlen(suffixString), approxOverlap,
+                      polishParams,
+                      &prefixStringCropEnd, &suffixStringCropStart);
 
-		CuAssertTrue(testCase, prefixStringCropEnd >= 0);
-		CuAssertTrue(testCase, prefixStringCropEnd <= strlen(prefixString));
+        CuAssertTrue(testCase, prefixStringCropEnd >= 0);
+        CuAssertTrue(testCase, prefixStringCropEnd <= strlen(prefixString));
 
-		CuAssertTrue(testCase, suffixStringCropStart >= 0);
-		CuAssertTrue(testCase, suffixStringCropStart <= strlen(suffixString));
+        CuAssertTrue(testCase, suffixStringCropStart >= 0);
+        CuAssertTrue(testCase, suffixStringCropStart <= strlen(suffixString));
 
-		free(prefixString);
-		free(suffixString);
-	}
+        free(prefixString);
+        free(suffixString);
+    }
 
 	params_destruct(params);
 }

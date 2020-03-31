@@ -762,7 +762,7 @@ int main(int argc, char *argv[]) {
                                                              outputRepeatCountBase, chunkIdx, bamChunk->refSeqName,
                                                              bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
             FILE *outputRepeatCountFileHandle = fopen(outputRepeatCountFilename, "w");
-            poa_printRepeatCounts(poa, outputRepeatCountFileHandle, reads);
+            poa_printRepeatCountsCSV(poa, outputRepeatCountFileHandle, reads);
             fclose(outputRepeatCountFileHandle);
             free(outputRepeatCountFilename);
         }

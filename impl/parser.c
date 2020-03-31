@@ -349,28 +349,24 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
 			}
 			params->hetSubstitutionProbability = stJson_parseFloat(js, tokens, tokenIndex);
 		} else if (strcmp(keyString, "hetRunLengthSubstitutionProbability") == 0) {
-			if (stJson_parseFloat(js, tokens, ++tokenIndex) < 0) {
-				st_errAbort("ERROR: hetRunLengthSubstitutionProbability parameter must zero or greater\n");
-			}
-			params->hetRunLengthSubstitutionProbability = stJson_parseFloat(js, tokens, tokenIndex);
-		}
-		else if (strcmp(keyString, "useReadAlleles") == 0) {
-		    params->useReadAlleles = stJson_parseBool(js, tokens, ++tokenIndex);
-		}
-		else if (strcmp(keyString, "useReadAllelesInPhasing") == 0) {
-			params->useReadAllelesInPhasing = stJson_parseBool(js, tokens, ++tokenIndex);
-		}
-		else if (strcmp(keyString, "alphabet") == 0) {
-			jsmntok_t tok = tokens[++tokenIndex];
-			char *tokStr = stJson_token_tostr(js, &tok);
-			if(stString_eq(tokStr, "nucleotide")) {
-				params->alphabet = alphabet_constructNucleotide();
-			}
-			else {
-				st_errAbort("ERROR: Unrecognised alphabet type json: %s\n", tokStr);
-			}
-			gotAlphabet = TRUE;
-		} else {
+            if (stJson_parseFloat(js, tokens, ++tokenIndex) < 0) {
+                st_errAbort("ERROR: hetRunLengthSubstitutionProbability parameter must zero or greater\n");
+            }
+            params->hetRunLengthSubstitutionProbability = stJson_parseFloat(js, tokens, tokenIndex);
+        } else if (strcmp(keyString, "useReadAlleles") == 0) {
+            params->useReadAlleles = stJson_parseBool(js, tokens, ++tokenIndex);
+        } else if (strcmp(keyString, "useReadAllelesInPhasing") == 0) {
+            params->useReadAllelesInPhasing = stJson_parseBool(js, tokens, ++tokenIndex);
+        } else if (strcmp(keyString, "alphabet") == 0) {
+            jsmntok_t tok = tokens[++tokenIndex];
+            char *tokStr = stJson_token_tostr(js, &tok);
+            if (stString_eq(tokStr, "nucleotide")) {
+                params->alphabet = alphabet_constructNucleotide();
+            } else {
+                st_errAbort("ERROR: Unrecognised alphabet type json: %s\n", tokStr);
+            }
+            gotAlphabet = TRUE;
+        } else {
             st_errAbort("ERROR: Unrecognised key in polish params json: %s\n", keyString);
         }
     }
@@ -539,3 +535,4 @@ void params_printParameters(Params *params, FILE *fh) {
 	fprintf(fh, "Phase parameters:\n");
 	stRPHmmParameters_printParameters(params->phaseParams, fh);
 }
+

@@ -65,7 +65,7 @@ void alignAndSaveChunkConsensusSequence(stList *polishedReferenceStrings, char *
 
     // Trim the currrent and previous polished reference strings to remove overlap
     int64_t prefixStringCropEnd, suffixStringCropStart;
-    int64_t overlapMatchWeight = removeOverlap(previousChunk, currentChunk,
+    int64_t overlapMatchWeight = removeOverlap(previousChunk, strlen(previousChunk), currentChunk, strlen(currentChunk),
                                                params->polishParams->chunkBoundary * 2, params->polishParams,
                                                &prefixStringCropEnd, &suffixStringCropStart);
 
@@ -122,6 +122,48 @@ char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive
             stList_append(polishedReferenceStrings, stString_copy(currentChunk));
         } else {
             alignAndSaveChunkConsensusSequence(polishedReferenceStrings, currentChunk, params, chunkIdx);
+            /*char *previousChunk = stList_peek(polishedReferenceStrings);
+
+            // Trim the currrent and previous polished reference strings to remove overlap
+            int64_t prefixStringCropEnd, suffixStringCropStart;
+            int64_t overlapMatchWeight = removeOverlap(previousChunk, strlen(previousChunk), currentChunk,
+                                                       strlen(currentChunk),
+                                                       overlap, params->polishParams,
+                                                       &prefixStringCropEnd, &suffixStringCropStart);
+
+            // we have an overlap
+            if (overlapMatchWeight > 0) {
+                st_logInfo(
+                        "    Removed overlap between neighbouring chunks at %"PRId64". "
+                        "Approx overlap size: %i, overlap-match weight: %f, "
+                        "left-trim: %i, right-trim: %i:\n", chunkIdx, overlap,
+                        (float) overlapMatchWeight / PAIR_ALIGNMENT_PROB_1,
+                        strlen(previousChunk) - prefixStringCropEnd, suffixStringCropStart);
+
+                // Crop the suffix of the previous chunk's polished reference string
+                previousChunk[prefixStringCropEnd] = '\0';
+
+                // Crop the the prefix of the current chunk's polished reference string
+                currentChunk = stString_copy(&(currentChunk[suffixStringCropStart]));
+
+                // no good alignment, likely missing chunks but have to be able to handle freaky situations also
+            } else {
+                if (strlen(currentChunk) == 0) {
+                    // missing chunk
+                    st_logInfo("    No overlap found for empty chunk at %"PRId64". Filling empty chunk with Ns.\n", chunkIdx);
+                    currentChunk = stString_copy(missingChunkSpacer);
+                } else if (overlap == 0) {
+                    // poorly configured but could be done (freaky)
+                    st_logInfo("    No overlap configured with non-empty (len %"PRId64") chunk at %"PRId64". \n",
+                               strlen(currentChunk), chunkIdx);
+                    currentChunk = stString_copy(currentChunk);
+                } else {
+                    // couldn't find an overlap (freaky)
+                    st_logInfo("    No overlap found at %"PRId64". Filling Ns in stitch position.\n", chunkIdx);
+                    stList_append(polishedReferenceStrings, stString_copy("NNNNNNNNNN"));
+                    currentChunk = stString_copy(currentChunk);
+                }
+            }*/
         }
     }
 

@@ -39,7 +39,7 @@ RleString *rleString_construct(char *str) {
 }
 
 
-RleString *rleString_constructPreComputed(char *rleChars, uint8_t *rleCounts) {
+RleString *rleString_constructPreComputed(char *rleChars, const uint8_t *rleCounts) {
     RleString *rleString = st_calloc(1, sizeof(RleString));
 
     rleString->length = strlen(rleChars);
@@ -168,7 +168,7 @@ void rleString_rotateString(RleString *str, int64_t rotationLength) {
     }
 }
 
-uint8_t *rleString_rleQualities(RleString *rleString, uint8_t *qualities) {
+uint8_t *rleString_rleQualities(RleString *rleString, const uint8_t *qualities) {
     // calculate read qualities (if set)
     //TODO unit test this
     uint8_t *rleQualities = st_calloc(rleString->length, sizeof(uint8_t));
@@ -209,17 +209,18 @@ uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString) {
 }
 
 stList *runLengthEncodeAlignment(stList *alignment,
-                                 uint64_t *seqXNonRleToRleCoordinateMap, uint64_t *seqYNonRleToRleCoordinateMap) {
-    stList *rleAlignment = stList_construct3(0, (void (*)(void *))stIntTuple_destruct);
+                                 const uint64_t *seqXNonRleToRleCoordinateMap,
+                                 const uint64_t *seqYNonRleToRleCoordinateMap) {
+    stList *rleAlignment = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
 
-    int64_t x=-1, y=-1;
-    for(int64_t i=0; i<stList_length(alignment); i++) {
+    int64_t x = -1, y = -1;
+    for (int64_t i = 0; i < stList_length(alignment); i++) {
         stIntTuple *alignedPair = stList_get(alignment, i);
 
         int64_t x2 = seqXNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 0)];
         int64_t y2 = seqYNonRleToRleCoordinateMap[stIntTuple_get(alignedPair, 1)];
 
-        if(x2 > x && y2 > y) {
+        if (x2 > x && y2 > y) {
             stList_append(rleAlignment, stIntTuple_construct3(x2, y2, stIntTuple_get(alignedPair, 2)));
             x = x2; y = y2;
         }
