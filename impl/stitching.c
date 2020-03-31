@@ -16,10 +16,10 @@ typedef struct _chunkToStitch {
      */
     bool startOfSequence; // Indicates if it is the first chunk in a sequence
     int64_t chunkOrdinal; // The index of the chunk in the sequence of chunks
-    char *seqName1; // The name of the primary sequence being polished
-    char *seqHap1; // The primary sequence
 
-    char *seqName2; // The name of secondary haplotype sequence being polished, may be null.
+    char *seqName; // The name of the sequence being polished
+
+    char *seqHap1; // The primary sequence
     char *seqHap2; // The secondary haplotype, may be null.
 
     // Following from the output CSV files, each line corresponds to a position in the sequences
@@ -30,9 +30,10 @@ typedef struct _chunkToStitch {
     stList *poaHap2StringsLines;
 
     // Lines from the repeat count file
-    stList *repeatCountLines;
+    stList *repeatCountLinesHap1; // If not diploid, this is used to store the POA lines
+    stList *repeatCountLinesHap2;
 
-    // Both these will only be present if phasing
+    // Both these will be present if phasing
     stList *readsHap1Lines; // Reads from primary sequence
     stList *readsHap2Lines; // Reads from the secondary sequence
 } ChunkToStitch;
@@ -41,16 +42,15 @@ int chunkToStitch_cmp(ChunkToStitch *chunk1, ChunkToStitch *chunk2) {
     /*
      * Compares two chunks by their ordinal in the output order.
      */
-    return chunk1->chunkOrdinal < chunk2->chunkOrdinal ? -1 : chunk1->chunkOrdinal > chunk2->chunkOrdinal ? 1 : 0;
+    return chunk1->chunkOrdinal < chunk2->chunkOrdinal ? -1 : (chunk1->chunkOrdinal > chunk2->chunkOrdinal ? 1 : 0);
 }
 
 void chunkToStitch_destruct(ChunkToStitch *chunkToStitch) {
-    free(chunkToStitch->seqName1);
+    free(chunkToStitch->seqName);
     free(chunkToStitch->seqHap1);
 
     // Second sequence and remaining fields are optional
-    if(chunkToStitch->seqName2 != NULL) {
-        free(chunkToStitch->seqName2);
+    if (chunkToStitch->seqHap2 != NULL) {
         free(chunkToStitch->seqHap2);
     }
 
@@ -61,8 +61,11 @@ void chunkToStitch_destruct(ChunkToStitch *chunkToStitch) {
         stList_destruct(chunkToStitch->poaHap2StringsLines);
     }
 
-    if (chunkToStitch->repeatCountLines != NULL) {
-        stList_destruct(chunkToStitch->repeatCountLines);
+    if (chunkToStitch->repeatCountLinesHap1 != NULL) {
+        stList_destruct(chunkToStitch->repeatCountLinesHap1);
+    }
+    if (chunkToStitch->repeatCountLinesHap2 != NULL) {
+        stList_destruct(chunkToStitch->repeatCountLinesHap2);
     }
 
     if (chunkToStitch->readsHap1Lines != NULL) {
@@ -150,7 +153,7 @@ bool chunkToStitch_readSequenceChunk(FILE *fh, ChunkToStitch *chunk, bool phased
      */
 
     // Read the next set of lines from the file
-    stList *lines = readChunk(fh, &chunk->seqName1, &chunk->chunkOrdinal);
+    stList *lines = readChunk(fh, &chunk->seqName, &chunk->chunkOrdinal);
 
     // If we get nothing we have exhausted the file
     if(lines == NULL) {
@@ -162,15 +165,23 @@ bool chunkToStitch_readSequenceChunk(FILE *fh, ChunkToStitch *chunk, bool phased
 
     if(phased) {
         int64_t i;
-        lines = readChunk(fh, &chunk->seqName2, &i);
-        if(lines == NULL) {
+        char *name;
+        lines = readChunk(fh, &name, &i);
+        if (lines == NULL) {
             st_errAbort("Error trying get alt sequence from chunk");
         }
-        if(i != chunk->chunkOrdinal) {
-            st_errAbort("Got an unexpected chunk ordinal (%" PRIi64 ") in reading second haplotype chunk (expected: %" PRIi64 ")\n", i, chunk->chunkOrdinal);
+        if (i != chunk->chunkOrdinal) {
+            st_errAbort(
+                    "Got an unexpected chunk ordinal (%" PRIi64 ") in reading second haplotype chunk (expected: %" PRIi64 ")\n",
+                    i, chunk->chunkOrdinal);
+        }
+        if (!stString_eq(chunk->seqName, name)) {
+            st_errAbort("Got an unexpected hap2 sequence name: %s in reading chunk (expected: %s)\n", name,
+                        chunk->seqName);
         }
         chunk->seqHap2 = stString_join2("", lines);
         stList_destruct(lines); // Cleanup
+        free(name);
     }
 
     return 1;
@@ -180,9 +191,9 @@ void chunkToStitch_readPoaChunk(FILE *fh, ChunkToStitch *chunk, bool phased) {
     /*
      * Reads a chunk from a POA containing file.
      */
-    chunk->poaHap1StringsLines = readChunk2(fh, chunk->seqName1, chunk->chunkOrdinal);
+    chunk->poaHap1StringsLines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
     if(phased) {
-        chunk->poaHap2StringsLines = readChunk2(fh, chunk->seqName2, chunk->chunkOrdinal);
+        chunk->poaHap2StringsLines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
     }
 }
 
@@ -190,17 +201,18 @@ void chunkToStitch_readReadPhasingChunk(FILE *fh, ChunkToStitch *chunk) {
     /*
      * Reads a read phasing chunk.
      */
-    chunk->readsHap1Lines = readChunk2(fh, chunk->seqName1, chunk->chunkOrdinal);
-    chunk->readsHap2Lines = readChunk2(fh, chunk->seqName2, chunk->chunkOrdinal);
+    chunk->readsHap1Lines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
+    chunk->readsHap2Lines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
 }
 
-void chunkToStitch_readRepeatCountChunk(FILE *fh, ChunkToStitch *chunk) {
+void chunkToStitch_readRepeatCountChunk(FILE *fh, ChunkToStitch *chunk, bool phased) {
     /*
      * Reads repeat counts chunk
      */
-    chunk->repeatCountLines = readChunk2(fh, chunk->seqName1,
-                                         chunk->chunkOrdinal); // Note, we only report repeat counts
-    // with respect to the primary (hap1) sequence
+    chunk->repeatCountLinesHap1 = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
+    if (phased) {
+        chunk->repeatCountLinesHap2 = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
+    }
 }
 
 stSet *getReadNames(stList *readPartitionLines) {
@@ -225,11 +237,13 @@ stList *removeReadLinesWithTheseNames(stList *readPartitionLines, stSet *filterT
      * Removes these read lines with read names matching those in filterTheseReadNames.
      */
     stList *filteredReadPartitionLines = stList_construct3(0, free);
-    for (int64_t i = 1; i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line
+    for (int64_t i = 1;
+         i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line,
+        // so header line is removed by this step
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
         if (stSet_search(filterTheseReadNames, stList_get(tokens, 0)) ==
-            NULL) { // If name is not i filterTheseReadNames
+            NULL) { // If name is not in filterTheseReadNames
             stList_append(filteredReadPartitionLines, line);
         } else {
             free(line);
@@ -249,7 +263,18 @@ static void swap(void **a, void **b) {
     *b = c;
 }
 
-void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chunk) {
+static void addToReadsSeen(stSet *readsSeen, stSet *readsToAdd) {
+    stSetIterator *it = stSet_getIterator(readsToAdd);
+    char *readName;
+    while ((readName = stSet_getNext(it)) != NULL) {
+        if (stSet_search(readsSeen, readName) == NULL) {
+            stSet_insert(readsSeen, stString_copy(readName));
+        }
+    }
+    stSet_destructIterator(it);
+}
+
+void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chunk, stSet *readsSeen) {
     /*
      * Phases chunk so that hap1 in chunk corresponds to hap1 in pChunk (as best as we can tell).
      */
@@ -271,31 +296,35 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
     int64_t transPhase = j + k; // Number of reads consistently phased in trans configuration
 
     // Log the support for the phasing
-    st_logDebug("In phasing between two chunks got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
-                PRIi64 " hap1 and %" PRIi64 " hap2 reads in chunk and %" PRIi64 " reads in intersections\n",
-                stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads), stSet_size(chunkHap1Reads),
-                stSet_size(chunkHap2Reads), i + j + k + l);
-    st_logDebug(" Got %" PRIi64 " (%f%) in h11-h21 intersection, %" PRIi64 " (%f%) in h11-h22 intersection\n", i, j,
-                (double) i / (i + j), (double) j / (i + j));
-    st_logDebug(" Got %" PRIi64 " (%f%) in h12-h21 intersection, %" PRIi64 " (%f%) in h12-h22 intersection\n", k, l,
-                (double) k / (k + l), (double) l / (k + l));
+    st_logInfo("In phasing between two chunks got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
+               PRIi64 " hap1 and %" PRIi64 " hap2 reads in chunk and %" PRIi64 " reads in intersections\n",
+               stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads), stSet_size(chunkHap1Reads),
+               stSet_size(chunkHap2Reads), i + j + k + l);
+    st_logInfo(
+            " Support for phasing cis-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h21 intersection, %" PRIi64 " (%f%) in h12-h22 intersection\n",
+            i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
+            (double) l / (double) (i + j));
+    st_logInfo(
+            " Support for phasing trans-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h22 intersection, %" PRIi64 " (%f%) in h12-h21 intersection\n",
+            j + k, (double) (j + k) / (double) (i + j + k + l), j, (double) j / (double) (k + l), k,
+            (double) k / (double) (k + l));
 
     // Switch the relative phasing if the trans phase configuration has more support
     if (cisPhase < transPhase) {
         st_logDebug("Flipping phase of chunk\n");
-        swap((void *) &chunk->seqName1, (void *) &chunk->seqName2);
         swap((void *) &chunk->seqHap1, (void *) &chunk->seqHap2);
         swap((void *) &chunk->poaHap1StringsLines, (void *) &chunk->poaHap2StringsLines);
         swap((void *) &chunk->readsHap1Lines, (void *) &chunk->readsHap2Lines);
+        swap((void *) &chunk->repeatCountLinesHap1, (void *) &chunk->repeatCountLinesHap2);
     }
 
     //Remove duplicated reads from output
-    stSet *readsToFilter = stSet_getUnion(pChunkHap1Reads, pChunkHap2Reads);
-    chunk->readsHap1Lines = removeReadLinesWithTheseNames(chunk->readsHap1Lines, readsToFilter);
-    chunk->readsHap2Lines = removeReadLinesWithTheseNames(chunk->readsHap2Lines, readsToFilter);
+    addToReadsSeen(readsSeen, pChunkHap1Reads);
+    addToReadsSeen(readsSeen, pChunkHap2Reads);
+    chunk->readsHap1Lines = removeReadLinesWithTheseNames(chunk->readsHap1Lines, readsSeen);
+    chunk->readsHap2Lines = removeReadLinesWithTheseNames(chunk->readsHap2Lines, readsSeen);
 
     // Cleanup
-    stSet_destruct(readsToFilter);
     stSet_destruct(pChunkHap1Reads);
     stSet_destruct(pChunkHap2Reads);
     stSet_destruct(chunkHap1Reads);
@@ -325,7 +354,7 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
     // Run the alignment
     stList *alignedPairs = getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1);
 
-    // Cleani[
+    // Cleanup
     symbolString_destruct(sX);
     symbolString_destruct(sY);
     stateMachine_destruct(sM);
@@ -364,59 +393,101 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
     return overlapWeight;
 }
 
-void chunkToStitch_trimAdjacentChunks2(char *pSeq, char **seq,
-        stList *pPoa, stList *poa, stList *pRepeatCounts, stList *repeatCounts,
-        Params *params) {
+void renumberCSVLines(stList *csvLines, int64_t index) {
+    /*
+     * Renumber the CSV lines in the output so that they are all sequential
+     */
+    for (int64_t i = 0; i < stList_length(csvLines); i++) { // Start from 0 as header line is already gone
+        char *line = stList_get(csvLines, i);
+        stList *tokens = stString_splitByString(line, ",");
+        free(stList_get(tokens, 0)); // Cleanup the old index
+        stList_set(tokens, 0, stString_print("%" PRIi64 "", index++));
+        stList_set(csvLines, i, stString_join2(",", tokens));
+        stList_destruct(tokens);
+    }
+}
+
+void chunkToStitch_trimAdjacentChunks2(char **pSeq, char **seq,
+                                       stList *pPoa, stList *poa, stList *pRepeatCounts, stList *repeatCounts,
+                                       Params *params, int64_t *lengthOfSequenceOutputSoFar) {
+    // Convert to RLE space
+    RleString *pSeqRle = params->polishParams->useRunLengthEncoding ?
+                         rleString_construct(*pSeq) : rleString_construct_no_rle(*pSeq);
+    RleString *seqRle = params->polishParams->useRunLengthEncoding ?
+                        rleString_construct(*seq) : rleString_construct_no_rle(*seq);
+
     // Get the trim factor
     int64_t pSeqCropEnd, seqCropStart;
-    int64_t pSeqLength = strlen(pSeq), seqLength = strlen(*seq);
-    int64_t overlapMatchWeight = removeOverlap(pSeq, pSeqLength, *seq, seqLength,
+    int64_t overlapMatchWeight = removeOverlap(pSeqRle->rleString, pSeqRle->length, seqRle->rleString, seqRle->length,
                                                params->polishParams->chunkBoundary * 2,
                                                params->polishParams, &pSeqCropEnd, &seqCropStart);
 
     // Log
-    st_logInfo("Removed overlap between neighbouring chunks. Approx overlap size: %i, overlap-match weight: %f, "
-               "left-trim: %i, right-trim: %i:\n", (int) params->polishParams->chunkBoundary * 2,
-               (float) overlapMatchWeight / PAIR_ALIGNMENT_PROB_1,
-               strlen(pSeq) - pSeqCropEnd, seqCropStart);
+    st_logInfo(
+            "Removed overlap between neighbouring chunks (in RLE space). Approx overlap size: %i, overlap-match weight: %f, "
+            "left-trim: %i, right-trim: %i:\n", (int) params->polishParams->chunkBoundary * 2,
+            (float) overlapMatchWeight / PAIR_ALIGNMENT_PROB_1,
+            pSeqRle->length - pSeqCropEnd, seqCropStart);
 
     // Trim the sequences
 
     // Crop the suffix of the previous sequence
-    pSeq[pSeqCropEnd] = '\0';
+    RleString *pSeqRleCropped = rleString_copySubstring(pSeqRle, 0, pSeqCropEnd);
+    free(*pSeq);
+    *pSeq = rleString_expand(pSeqRleCropped);
 
     // Crop the the prefix of the current chunk's sequence
-    char *c = *seq;
-    *seq = stString_copy(&(*seq[seqCropStart]));
-    free(c);
+    RleString *seqRleCropped = rleString_copySubstring(seqRle, seqCropStart, seqRle->length - seqCropStart);
+    free(*seq);
+    *seq = rleString_expand(seqRleCropped);
 
     // Trim the remaining stuff
+    int64_t suffixRleTrimLength = pSeqRle->length - pSeqCropEnd;
+    *lengthOfSequenceOutputSoFar += pSeqCropEnd;
 
     // Poa
-    stList_removeInterval(pPoa, stList_length(pPoa) - (pSeqLength - pSeqCropEnd), pSeqLength - pSeqCropEnd);
-    stList_removeInterval(poa, 0, seqCropStart + 1);
+    if (poa != NULL) {
+        stList_removeInterval(pPoa, stList_length(pPoa) - suffixRleTrimLength, suffixRleTrimLength);
+        stList_removeInterval(poa, 0, seqCropStart + 2);
+        renumberCSVLines(poa, 1 + *lengthOfSequenceOutputSoFar);
+    }
 
     // Repeat counts
-    stList_removeInterval(pRepeatCounts, stList_length(pPoa) - (pSeqLength - pSeqCropEnd), pSeqLength - pSeqCropEnd);
-    stList_removeInterval(repeatCounts, 0, seqCropStart + 1);
+    if (repeatCounts != NULL) {
+        stList_removeInterval(pRepeatCounts, stList_length(pRepeatCounts) - suffixRleTrimLength, suffixRleTrimLength);
+        stList_removeInterval(repeatCounts, 0, seqCropStart + 2);
+        renumberCSVLines(repeatCounts, 1 + *lengthOfSequenceOutputSoFar);
+    }
+
+    // Cleanup
+    rleString_destruct(pSeqRle);
+    rleString_destruct(pSeqRleCropped);
+    rleString_destruct(seqRle);
+    rleString_destruct(seqRleCropped);
 }
 
-void chunkToStitch_trimAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chunk, Params *params) {
+void chunkToStitch_trimAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chunk, Params *params,
+                                      int64_t *lengthOfSequenceOutputSoFarHap1,
+                                      int64_t *lengthOfSequenceOutputSoFarHap2) {
     /*
      * Trims the right end of pChunk and the left end of chunk so that they do not overlap, but are directly contiguous.
      */
     // Checks that they are part of the same sequence
-    assert(stString_eq(pChunk->seqName1, chunk->seqName1));
-    assert(stString_eq(pChunk->seqName2, chunk->seqName2));
+    assert(stString_eq(pChunk->seqName, chunk->seqName));
 
     // Trim haplotype 1 sequences
-    chunkToStitch_trimAdjacentChunks2(pChunk->seqHap1, &chunk->seqHap1,
+    chunkToStitch_trimAdjacentChunks2(&pChunk->seqHap1, &chunk->seqHap1,
                                       pChunk->poaHap1StringsLines, chunk->poaHap1StringsLines,
-                                      pChunk->repeatCountLines, chunk->repeatCountLines, params);
+                                      pChunk->repeatCountLinesHap1, chunk->repeatCountLinesHap1,
+                                      params, lengthOfSequenceOutputSoFarHap1);
 
-    // Trim haplotype 2 sequences
-    chunkToStitch_trimAdjacentChunks2(pChunk->seqHap2, &chunk->seqHap2,
-                                      pChunk->poaHap2StringsLines, chunk->poaHap2StringsLines, NULL, NULL, params);
+    // Trim haplotype 2 sequences, if it exists
+    if (chunk->seqHap2 != NULL) {
+        chunkToStitch_trimAdjacentChunks2(&pChunk->seqHap2, &chunk->seqHap2,
+                                          pChunk->poaHap2StringsLines, chunk->poaHap2StringsLines,
+                                          pChunk->repeatCountLinesHap2, chunk->repeatCountLinesHap2,
+                                          params, lengthOfSequenceOutputSoFarHap2);
+    }
 }
 
 /*
@@ -436,7 +507,8 @@ typedef struct _outputChunker {
     // Repeat count file
     char *outputRepeatCountFile;
     FILE *outputRepeatCountFileHandle;
-    // Read partition file
+    // Read partition file - this must be specified if phasing is to be performed, as the
+    // information is needed for stitching
     char *outputReadPartitionFile;
     FILE *outputReadPartitionFileHandle;
 
@@ -477,10 +549,10 @@ OutputChunker *outputChunker_construct(Params *params, char *outputSequenceFile,
 }
 
 void
-outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, Poa *poa, BamChunk *bamChunk,
+outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName, Poa *poa,
                                    stList *reads) {
     // Create chunk name
-    char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", bamChunk->refSeqName, chunkOrdinal);
+    char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", sequenceName, chunkOrdinal);
 
     // Do run-length decoding
     char *outputSequence = rleString_expand(poa->refString);
@@ -498,8 +570,9 @@ outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOr
 
     // Now repeat counts
     if (outputChunker->outputRepeatCountFileHandle != NULL) {
-        fprintf(outputChunker->outputRepeatCountFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poa->nodes)+1);
-        poa_printRepeatCounts(poa, outputChunker->outputRepeatCountFileHandle, reads);
+        fprintf(outputChunker->outputRepeatCountFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
+                stList_length(poa->nodes) + 1);
+        poa_printRepeatCountsCSV(poa, outputChunker->outputRepeatCountFileHandle, reads);
     }
 
     // Cleanup
@@ -519,37 +592,39 @@ outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *he
 
     // Poa
     if (outputChunker->outputPoaFileHandle != NULL) {
-        fprintf(outputChunker->outputPoaFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poa->nodes)+1);
+        fprintf(outputChunker->outputPoaFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poa->nodes) + 1);
         poa_printPhasedCSV(poa, outputChunker->outputPoaFileHandle, reads, readsBelongingToHap1, readsBelongingToHap2,
-                            outputChunker->params->polishParams->repeatSubMatrix, 5);
+                           outputChunker->params->polishParams->repeatSubMatrix, 5);
+    }
+
+    // Output the repeat counts
+    if (outputChunker->outputRepeatCountFileHandle != NULL) {
+        fprintf(outputChunker->outputRepeatCountFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
+                stList_length(poa->nodes) + 1);
+        poa_printRepeatCountsCSV(poa, outputChunker->outputRepeatCountFileHandle, reads);
     }
 }
 
 void
-outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int64_t chunkOrdinal, Poa *poaHap1, Poa *poaHap2,
-                                         BamChunk *bamChunk, stList *reads, stSet *readsBelongingToHap1,
+outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName,
+                                         Poa *poaHap1, Poa *poaHap2, stList *reads, stSet *readsBelongingToHap1,
                                          stSet *readsBelongingToHap2, stGenomeFragment *gF) {
     // Create chunk name
-    char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", bamChunk->refSeqName, chunkOrdinal);
+    char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", sequenceName, chunkOrdinal);
 
     outputChunker_processChunkSequencePhased2(outputChunker, headerLinePrefix,
-                                            poaHap1, reads, readsBelongingToHap1, readsBelongingToHap2);
+                                              poaHap1, reads, readsBelongingToHap1, readsBelongingToHap2);
 
     outputChunker_processChunkSequencePhased2(outputChunker, headerLinePrefix,
                                               poaHap2, reads, readsBelongingToHap2, readsBelongingToHap1);
 
     // Output the read partition
-    if (outputChunker->outputReadPartitionFileHandle != NULL) {
-        fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
-                stSet_size(gF->reads1)+stSet_size(gF->reads2)+1);
-        stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle);
-    }
-
-    // Output the repeat counts
-    if (outputChunker->outputRepeatCountFileHandle != NULL) {
-        fprintf(outputChunker->outputRepeatCountFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poaHap1->nodes)+1);
-        poa_printRepeatCounts(poaHap1, outputChunker->outputRepeatCountFileHandle, reads);
-    }
+    fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
+            stSet_size(gF->reads1) + 1);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 1);
+    fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
+            stSet_size(gF->reads2) + 1);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 0);
 
     // Cleanup
     free(headerLinePrefix);
@@ -568,11 +643,11 @@ ChunkToStitch *outputChunker_readChunk(OutputChunker *outputChunker, bool phased
     if (outputChunker->outputPoaFile != NULL) {
         chunkToStitch_readPoaChunk(outputChunker->outputPoaFileHandle, chunk, phased);
     }
-    if (phased && outputChunker->outputReadPartitionFile != NULL) {
+    if (phased) {
         chunkToStitch_readReadPhasingChunk(outputChunker->outputReadPartitionFileHandle, chunk);
     }
     if (outputChunker->outputRepeatCountFile != NULL) {
-        chunkToStitch_readRepeatCountChunk(outputChunker->outputRepeatCountFileHandle, chunk);
+        chunkToStitch_readRepeatCountChunk(outputChunker->outputRepeatCountFileHandle, chunk, phased);
     }
 
     return chunk;
@@ -630,6 +705,42 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
     }
 }
 
+void writeLines(FILE *fh, stList *lines) {
+    for (int64_t i = 0; i < stList_length(lines); i++) {
+        fprintf(fh, "%s\n", stList_get(lines, i));
+    }
+}
+
+void outputChunker_writeChunkToFinalOutput(OutputChunker *outputChunker,
+                                           char *seqName, char *seq, stList *poaLines, stList *repeatCountLines,
+                                           stList *readPartitionLines, bool startOfSequence) {
+    /*
+     * Writes the chunk to the final output files
+     */
+
+    // Write the sequence
+    if (startOfSequence) {
+        fastaWrite(seq, seqName, outputChunker->outputSequenceFileHandle);
+    } else {
+        fprintf(outputChunker->outputSequenceFileHandle, "%s\n", seq);
+    }
+
+    // Write the POA
+    if (outputChunker->outputPoaFile != NULL) {
+        writeLines(outputChunker->outputPoaFileHandle, poaLines);
+    }
+
+    // Write the repeat counts
+    if (outputChunker->outputRepeatCountFile != NULL) {
+        writeLines(outputChunker->outputRepeatCountFileHandle, repeatCountLines);
+    }
+
+    // Write the read
+    if (outputChunker->outputReadPartitionFile != NULL) {
+        writeLines(outputChunker->outputReadPartitionFileHandle, readPartitionLines);
+    }
+}
+
 void outputChunker_destruct(OutputChunker *outputChunker) {
     // Close any open file descriptors
     outputChunker_close(outputChunker);
@@ -669,73 +780,97 @@ struct _outputChunkers {
     Params *params;
 };
 
-static char *printFileName(char *fileName, int64_t index, char *suffix) {
-    if(fileName == NULL) {
+static char *printTempFileName(char *fileName, int64_t index) {
+    if (fileName == NULL) {
         return NULL;
     }
-    return stString_print("%s_%" PRIi64 "%s", fileName, index, suffix);
+    return stString_print("%s.%" PRIi64 ".temp", fileName, index);
 }
 
-static char *printFileName2(char *fileName, char *suffix, char *fileSuffix) {
-    if(fileName == NULL) {
+static char *printFinalFileName(char *fileName, char *suffix) {
+    if (fileName == NULL) {
         return NULL;
     }
-    return stString_print("%s%s.%s", fileName, suffix, fileSuffix);
+    return stString_print("%s%s", fileName, suffix == NULL ? "" : suffix);
 }
 
 OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *params,
                                          char *outputSequenceFile, char *outputPoaFile,
                                          char *outputReadPartitionFile, char *outputRepeatCountFile,
                                          char *hap1Suffix, char *hap2Suffix) {
+    if (hap2Suffix != NULL) {
+        if (stString_eq(hap1Suffix, hap2Suffix)) {
+            st_errAbort("Hap1 and hap2 suffixes are identical, can not open distinct files for output\n");
+        }
+        // Make temporary read phasing file if not specified
+        if (outputReadPartitionFile == NULL) {
+            outputReadPartitionFile = "temp_read_phasing_file.csv";
+            st_logInfo("Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
+        }
+    }
+
     OutputChunkers *outputChunkers = st_calloc(1, sizeof(OutputChunkers));
     outputChunkers->params = params;
     // Make the temporary, parallel chunkers
     outputChunkers->tempFileChunkers = stList_construct3(0, (void (*)(void *)) outputChunker_destruct);
     for (int64_t i = 0; i < noOfOutputChunkers; i++) {
         stList_append(outputChunkers->tempFileChunkers, outputChunker_construct(params,
-                                                                                printFileName(outputSequenceFile, i,
-                                                                                              "_temp.fa"),
-                                                                                printFileName(outputPoaFile, i,
-                                                                                              "_temp.csv"),
-                                                                                printFileName(outputReadPartitionFile,
-                                                                                              i, "_temp.csv"),
-                                                                                printFileName(outputRepeatCountFile, i,
-                                                                                              "_temp.csv")));
+                                                                                printTempFileName(outputSequenceFile,
+                                                                                                  i),
+                                                                                printTempFileName(outputPoaFile, i),
+                                                                                printTempFileName(
+                                                                                        outputReadPartitionFile, i),
+                                                                                printTempFileName(outputRepeatCountFile,
+                                                                                                  i)));
     }
     // Make the final output chunkers
     outputChunkers->outputChunkerHap1 = outputChunker_construct(params,
-                                                                printFileName2(outputSequenceFile, hap1Suffix, "fa"),
-                                                                printFileName2(outputPoaFile, hap1Suffix, "csv"),
-                                                                printFileName2(outputReadPartitionFile, hap1Suffix, "csv"),
-                                                                printFileName2(outputRepeatCountFile, hap1Suffix, "csv"));
+                                                                printFinalFileName(outputSequenceFile, hap1Suffix),
+                                                                printFinalFileName(outputPoaFile, hap1Suffix),
+                                                                printFinalFileName(outputReadPartitionFile, hap1Suffix),
+                                                                printFinalFileName(outputRepeatCountFile, hap1Suffix));
 
-    if(hap2Suffix != NULL) {
+    /*st_logInfo("Writing polished sequence chunks in: %s\n", outputSequenceFile);
+    if(outputPoaCsv) {
+        st_logInfo("Writing poa chunks in: %s\n", outputPoaFile);
+    }
+    if(outputReadPhasing) {
+        st_logInfo("Writing read phasing chunks in: ", outputReadPartitionFile);
+    }
+    if(outputRepeatCounts) {
+        st_logInfo("Writing repeat counts chunks in: ", outputRepeatCounts);
+    }*/
+
+    if (hap2Suffix != NULL) {
         outputChunkers->outputChunkerHap2 = outputChunker_construct(params,
-                                                                    printFileName2(outputSequenceFile, hap2Suffix,
-                                                                                   "fa"),
-                                                                    printFileName2(outputPoaFile, hap2Suffix, "csv"),
-                                                                    printFileName2(outputReadPartitionFile, hap2Suffix,
-                                                                                   "csv"),
-                                                                    printFileName2(outputRepeatCountFile, hap2Suffix,
-                                                                                   "csv"));
+                                                                    printFinalFileName(outputSequenceFile, hap2Suffix),
+                                                                    printFinalFileName(outputPoaFile, hap2Suffix),
+                                                                    printFinalFileName(outputReadPartitionFile,
+                                                                                       hap2Suffix),
+                                                                    printFinalFileName(outputRepeatCountFile,
+                                                                                       hap2Suffix));
     }
 
     return outputChunkers;
 }
 
 void
-outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal, Poa *poa,
-                                    stList *reads, BamChunk *bamChunk) {
-    outputChunker_processChunkSequence(stList_get(outputChunkers->tempFileChunkers, chunker), chunkOrdinal, poa, bamChunk,
+outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
+                                    char *sequenceName, Poa *poa,
+                                    stList *reads) {
+    outputChunker_processChunkSequence(stList_get(outputChunkers->tempFileChunkers, chunker), chunkOrdinal,
+                                       sequenceName, poa,
                                        reads);
 }
 
 void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
-                                               Poa *poaHap1, Poa *poaHap2, BamChunk *bamChunk, stList *reads,
+                                               char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
                                                stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
                                                stGenomeFragment *gF) {
     outputChunker_processChunkSequencePhased(stList_get(outputChunkers->tempFileChunkers, chunker), chunkOrdinal,
-                                             poaHap1, poaHap2, bamChunk, reads, readsBelongingToHap1,
+                                             sequenceName,
+                                             poaHap1,
+                                             poaHap2, reads, readsBelongingToHap1,
                                              readsBelongingToHap2, gF);
 }
 
@@ -781,59 +916,28 @@ static ChunkToStitch *outputChunkers_readChunk(OutputChunkers *outputChunkers, b
 
 static ChunkToStitch *outputChunkers_getNextChunkInSequence(OutputChunkers *outputChunkers,
                                                      stSortedSet *orderedChunks, bool phased) {
+    ChunkToStitch *chunk;
     while (1) {
-        ChunkToStitch *chunk = outputChunkers_readChunk(outputChunkers, phased);
+        chunk = outputChunkers_readChunk(outputChunkers, phased);
         if (chunk == NULL) {
-            if (stSortedSet_size(orderedChunks) != 0) {
+            if (stSortedSet_size(orderedChunks) == 0) {
+                return NULL;
+            }
+            chunk = stSortedSet_getFirst(orderedChunks);
+            if (chunk->chunkOrdinal != outputChunkers->chunkOrderNo) {
                 st_errAbort("Did not retrieve all the chunks from the temporary output");
             }
-            return NULL;
+            break;
         }
         stSortedSet_insert(orderedChunks, chunk);
         chunk = stSortedSet_getFirst(orderedChunks);
         if (chunk->chunkOrdinal == outputChunkers->chunkOrderNo) {
-            stSortedSet_remove(orderedChunks, chunk);
-            outputChunkers->chunkOrderNo++;
-            return chunk;
+            break;
         }
     }
-}
-
-void writeLines(FILE *fh, stList *lines) {
-    for(int64_t i=0; i<stList_length(lines); i++) {
-        fprintf(fh, "%s\n", stList_get(lines, i));
-    }
-}
-
-void outputChunker_writeChunkToFinalOutput(OutputChunker *outputChunker,
-        char *seqName, char *seq, stList *poaLines, stList *repeatCountLines,
-        stList *readPartitionLines, bool startOfSequence) {
-    /*
-     * Writes the chunk to the final output files
-     */
-
-    // Write the sequence
-    if(startOfSequence) {
-        fastaWrite(seq, seqName, outputChunker->outputSequenceFileHandle);
-    }
-    else {
-        fprintf(outputChunker->outputSequenceFileHandle, "%s\n", seq);
-    }
-
-    // Write the POA
-    if(outputChunker->outputPoaFile != NULL) {
-        writeLines(outputChunker->outputPoaFileHandle, poaLines);
-    }
-
-    // Write the repeat counts
-    if(outputChunker->outputRepeatCountFile != NULL && repeatCountLines != NULL) {
-        writeLines(outputChunker->outputRepeatCountFileHandle, repeatCountLines);
-    }
-
-    // Write the read
-    if(outputChunker->outputReadPartitionFile != NULL) {
-        writeLines(outputChunker->outputReadPartitionFileHandle, readPartitionLines);
-    }
+    stSortedSet_remove(orderedChunks, chunk);
+    outputChunkers->chunkOrderNo++;
+    return chunk;
 }
 
 void outputChunkers_writeChunk(OutputChunkers *outputChunkers, ChunkToStitch *chunk) {
@@ -841,12 +945,13 @@ void outputChunkers_writeChunk(OutputChunkers *outputChunkers, ChunkToStitch *ch
      * Writes the chunk to the final output files
      */
     outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap1,
-                                        chunk->seqName1, chunk->seqHap1, chunk->poaHap1StringsLines,
-                                        chunk->repeatCountLines, chunk->readsHap1Lines, chunk->startOfSequence);
+                                          chunk->seqName, chunk->seqHap1, chunk->poaHap1StringsLines,
+                                          chunk->repeatCountLinesHap1, chunk->readsHap1Lines, chunk->startOfSequence);
     if(outputChunkers->outputChunkerHap2 != NULL) {
         outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap2,
-                                              chunk->seqName2, chunk->seqHap2, chunk->poaHap2StringsLines,
-                                              NULL, chunk->readsHap2Lines, chunk->startOfSequence);
+                                              chunk->seqName, chunk->seqHap2, chunk->poaHap2StringsLines,
+                                              chunk->repeatCountLinesHap2, chunk->readsHap2Lines,
+                                              chunk->startOfSequence);
     }
 }
 
@@ -864,8 +969,15 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
     // Get the first chunk
     ChunkToStitch *pChunk = outputChunkers_getNextChunkInSequence(outputChunkers, orderedChunks, phased), *chunk;
 
+    // Length of the output sequences
+    int64_t lengthOfSequenceOutputSoFarHap1 = 0;
+    int64_t lengthOfSequenceOutputSoFarHap2 = 0;
+
+    // Set to keep track of read names
+    stSet *readsSeen = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+
     // Set the start of sequence flag
-    if(pChunk != NULL) {
+    if (pChunk != NULL) {
         pChunk->startOfSequence = 1;
     }
 
@@ -875,15 +987,19 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
 
         // If phased, ensure the chunks phasing is consistent
         if (phased) {
-            chunkToStitch_phaseAdjacentChunks(pChunk, chunk);
+            chunkToStitch_phaseAdjacentChunks(pChunk, chunk, readsSeen);
         }
 
         // Set the flag determining if this is the start of a new sequence
-        chunk->startOfSequence = stString_eq(pChunk->seqName1, chunk->seqName1);
+        chunk->startOfSequence = !stString_eq(pChunk->seqName, chunk->seqName);
 
-        // Trim the boundaries of the two chunks so that they don't overlap
-        if(!chunk->startOfSequence) {
-            chunkToStitch_trimAdjacentChunks(pChunk, chunk, outputChunkers->params);
+
+        if (chunk->startOfSequence) { // Reset the lengths of the new sequence output
+            lengthOfSequenceOutputSoFarHap1 = 0;
+            lengthOfSequenceOutputSoFarHap2 = 0;
+        } else { // Trim the boundaries of the two chunks so that they don't overlap
+            chunkToStitch_trimAdjacentChunks(pChunk, chunk, outputChunkers->params,
+                                             &lengthOfSequenceOutputSoFarHap1, &lengthOfSequenceOutputSoFarHap2);
         }
 
         // Write out the pChunk
@@ -909,6 +1025,7 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
         st_errAbort("Got chunks left over after writing out chunks");
     }
     stSortedSet_destruct(orderedChunks);
+    stSet_destruct(readsSeen);
 }
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers) {

@@ -326,6 +326,7 @@ if (HDF5_FOUND)
             tests/marginTest.c
             tests/viewTest.c
             tests/featureTest.c
+            tests/stitchingTest.c
             )
 else()
     add_executable(allTests
@@ -339,6 +340,6 @@ else()
             tests/polisherTest.c
             tests/stRPHmmTest.c
             tests/viewTest.c
-            )
+            tests/stitchingTest.c)
 endif()
 target_link_libraries(allTests marginLib)

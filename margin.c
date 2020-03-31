@@ -4,7 +4,9 @@
  * Released under the MIT license, see LICENSE.txt
  *
  * Plan:
- * ***> Add parallelism / test
+ * ***> Add parallelism
+
+ * ***> memory leaks
  * ***> Sort out data and tests dir
  * ***> Cleanup / delete crufty code
  * ***> Investigate indel bias
@@ -219,21 +221,11 @@ int main(int argc, char *argv[]) {
     char *outputReadPartitionFile = stString_print("%s_reads.csv", outputBase);
     char *outputRepeatCountFile = stString_print("%s_repeat_counts.csv", outputBase);
 
-    st_logInfo("Writing polished sequence chunks in: %s\n", outputSequenceFile);
-    if(outputPoaCsv) {
-        st_logInfo("Writing poa chunks in: %s\n", outputPoaFile);
-    }
-    if(outputReadPhasing) {
-        st_logInfo("Writing read phasing chunks in: ", outputReadPartitionFile);
-    }
-    if(outputRepeatCounts) {
-        st_logInfo("Writing repeat counts chunks in: ", outputRepeatCounts);
-    }
-
     OutputChunkers *outputChunkers = outputChunkers_construct(1, params, outputSequenceFile,
-            outputPoaCsv ? outputPoaFile : NULL,
-            outputReadPhasing ? outputReadPartitionFile : NULL,
-            outputRepeatCounts ? outputRepeatCountFile : NULL, "_hap1", "_hap2");
+                                                              outputPoaCsv ? outputPoaFile : NULL,
+                                                              outputReadPhasing ? outputReadPartitionFile : NULL,
+                                                              outputRepeatCounts ? outputRepeatCountFile : NULL,
+                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
 
     // if regionStr is NULL, it will be ignored in construct2
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
@@ -310,33 +302,37 @@ int main(int argc, char *argv[]) {
 			poa_estimatePhasedBasesUsingBayesianModel(poa_hap2, reads,
 								readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
 
-			if(params->polishParams->useRunLengthEncoding) {
-				st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
-				poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap1, reads,
-						params->polishParams->repeatSubMatrix, readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
+            if (params->polishParams->useRunLengthEncoding) {
+                st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
+                poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap1, reads,
+                                                                 params->polishParams->repeatSubMatrix,
+                                                                 readsBelongingToHap1, readsBelongingToHap2,
+                                                                 params->polishParams);
 
-				poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap2, reads,
-						params->polishParams->repeatSubMatrix, readsBelongingToHap2, readsBelongingToHap1, params->polishParams);
-			}
+                poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap2, reads,
+                                                                 params->polishParams->repeatSubMatrix,
+                                                                 readsBelongingToHap2, readsBelongingToHap1,
+                                                                 params->polishParams);
+            }
 
-			// Output
-            outputChunkers_processChunkSequencePhased(outputChunkers, 0, chunkIdx,
-                                                           poa_hap1, poa_hap2, bamChunk, reads,
-                                                           readsBelongingToHap1, readsBelongingToHap2, gf);
+            // Output
+            outputChunkers_processChunkSequencePhased(outputChunkers, 0, chunkIdx, bamChunk->refSeqName,
+                                                      poa_hap1, poa_hap2, reads,
+                                                      readsBelongingToHap1, readsBelongingToHap2, gf);
 
-			// Cleanup
-			free(hap1);
-			free(hap2);
-			bubbleGraph_destruct(bg);
-			stGenomeFragment_destruct(gf);
-			poa_destruct(poa_hap1);
-			poa_destruct(poa_hap2);
-			stSet_destruct(readsBelongingToHap1);
-			stSet_destruct(readsBelongingToHap2);
-			stHash_destruct(readsToPSeqs);
+            // Cleanup
+            free(hap1);
+            free(hap2);
+            bubbleGraph_destruct(bg);
+            poa_destruct(poa_hap1);
+            poa_destruct(poa_hap2);
+            stSet_destruct(readsBelongingToHap1);
+            stSet_destruct(readsBelongingToHap2);
+            stHash_destruct(readsToPSeqs);
+            stGenomeFragment_destruct(gf);
 		}
 		else {
-            outputChunkers_processChunkSequence(outputChunkers, 0, chunkIdx, poa, reads, bamChunk);
+            outputChunkers_processChunkSequence(outputChunkers, 0, chunkIdx, bamChunk->refSeqName, poa, reads);
 		}
 
 		// Cleanup

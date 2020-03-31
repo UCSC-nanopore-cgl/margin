@@ -124,19 +124,7 @@ double logAddP(double a, double b, bool maxNotSum);
 
 #define MAXIMUM_REPEAT_LENGTH 51
 
-// Each value is expressed as an unsigned integer scaled linearly from 0 to 2^16-1,
-// with 0 = log(1) and 2^16-1 = -7 = log(0.0000001)
-uint16_t scaleToLogIntegerSubMatrix(double logProb);
-
-double invertScaleToLogIntegerSubMatrix(int64_t i);
-
-void setSubstitutionProb(uint16_t *logSubMatrix, double *logSubMatrixSlow,
-        int64_t sourceCharacterIndex,
-        int64_t derivedCharacterIndex, double prob);
-
 #define ALLELE_LOG_PROB_BITS 8
-
-
 
 /*
  * Binary partition stuff
@@ -212,8 +200,6 @@ void stProfileSeq_destruct(stProfileSeq *seq);
 void stProfileSeq_print(stProfileSeq *seq, FILE *fileHandle);
 
 uint8_t *stProfileSeq_getProb(stProfileSeq *seq, uint64_t site, uint64_t allele);
-
-int stRPProfileSeq_cmpFn(const void *a, const void *b);
 
 /*
  * Emission probabilities methods
@@ -462,11 +448,11 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment);
 void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,
         stRPHmm *hmm, stList *path, int64_t maxIterations);
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh);
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool hap1);
 
 void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads, stSet **readsBelongingToHap1, stSet **readsBelongingToHap2);
 
-double getLogProbOfReadGivenHaplotype(uint64_t *haplotypeString, int64_t start, int64_t length,
+double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString, int64_t start, int64_t length,
                                       stProfileSeq *profileSeq, stReference *ref);
 
 
@@ -666,8 +652,8 @@ Poa *poa_realign(stList *bamChunkReads, stList *alignments, RleString *reference
  * sequence. See poa_getConsensus for description of poaToConsensusMap. If poaToConsensusMap is NULL then
  * the alignment is just the reference sequence of the poa.
  */
-stList *poa_getAnchorAlignments(Poa *poa, int64_t *poaToConsensusMap, int64_t noOfReads,
-							    PolishParams *polishParams);
+stList *poa_getAnchorAlignments(Poa *poa, const int64_t *poaToConsensusMap, int64_t noOfReads,
+                                PolishParams *polishParams);
 
 /*
  * Generates a set of maximal expected alignments for the reads aligned to the the POA reference sequence.
@@ -766,10 +752,11 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
                         stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
                         RepeatSubMatrix *repeatSubMatrix,
                         float indelSignificanceThreshold);
+
 /*
  * Print individual repeat count observations.
  */
-void poa_printRepeatCounts(Poa *poa, FILE *fH, stList *bamChunkReads);
+void poa_printRepeatCountsCSV(Poa *poa, FILE *fH, stList *bamChunkReads);
 
 /*
  * Prints some summary stats on the POA.
@@ -862,8 +849,8 @@ void poa_estimatePhasedRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunk
 /*
  * Uses phasing to estimate ML bases.
  */
-void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads,
-		stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params);
+void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads, stSet *readsBelongingToHap1,
+                                               PolishParams *params);
 
 // Data structure for representing RLE strings
 struct _rleString {
@@ -879,7 +866,9 @@ struct _rleString {
 char *expandChar(char c, uint64_t repeatCount);
 
 RleString *rleString_construct(char *string);
-RleString *rleString_constructPreComputed(char *rleChars, uint8_t *rleCounts);
+
+RleString *rleString_constructPreComputed(char *rleChars, const uint8_t *rleCounts);
+
 RleString *rleString_construct_no_rle(char *string);
 
 void rleString_destruct(RleString *rlString);
@@ -917,7 +906,7 @@ SymbolString rleString_constructSymbolString(RleString *s, int64_t start, int64_
  */
 uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString);
 
-uint8_t *rleString_rleQualities(RleString *rleString, uint8_t *qualities);
+uint8_t *rleString_rleQualities(RleString *rleString, const uint8_t *qualities);
 
 // Data structure for storing log-probabilities of observing
 // one repeat count given another
@@ -985,7 +974,8 @@ void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeat
  * in both underlying sequences (seqX and seqY) into an equivalent run-length encoded space alignment.
  */
 stList *runLengthEncodeAlignment(stList *alignment,
-		uint64_t *seqXNonRleToRleCoordinateMap, uint64_t *seqYNonRleToRleCoordinateMap);
+                                 const uint64_t *seqXNonRleToRleCoordinateMap,
+                                 const uint64_t *seqYNonRleToRleCoordinateMap);
 
 /*
  * Make edited string with given insert. Edit start is the index of the position to insert the string.
@@ -1268,12 +1258,14 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
         char *hap1Suffix, char *hap2Suffix);
 
 void
-outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal, Poa *poa,
-                                    stList *reads, BamChunk *bamChunk);
+outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
+                                    char *sequenceName, Poa *poa,
+                                    stList *reads);
 
 void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
-                                Poa *poaHap1, Poa *poaHap2, BamChunk *bamChunk, stList *reads,
-                                stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stGenomeFragment *gF);
+                                               char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
+                                               stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
+                                               stGenomeFragment *gF);
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased);
 

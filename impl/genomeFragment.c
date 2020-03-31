@@ -67,18 +67,18 @@ stGenomeFragment *stGenomeFragment_construct(stRPHmm *hmm, stList *path) {
     return gF;
 }
 
-double getLogProbOfReadGivenHaplotype(uint64_t *haplotypeString,
-		int64_t start, int64_t length, stProfileSeq *profileSeq, stReference *ref) {
+double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString,
+                                      int64_t start, int64_t length, stProfileSeq *profileSeq, stReference *ref) {
     /*
      * Returns the log probability of the read given the haplotype.
      */
     double totalProb = 0.0;
 
     uint64_t firstAllele = ref->sites[profileSeq->refStart].alleleOffset;
-    for(int64_t i=0; i<profileSeq->length; i++) {
+    for (int64_t i = 0; i < profileSeq->length; i++) {
         // Get base in the haplotype sequence
         int64_t j = i + profileSeq->refStart - start;
-        if(j >= 0 && j < length) {
+        if (j >= 0 && j < length) {
             uint64_t allele = haplotypeString[j];
             stSite *site = &(ref->sites[i+profileSeq->refStart]);
             totalProb -= profileSeq->profileProbs[site->alleleOffset-firstAllele + allele];
@@ -94,23 +94,25 @@ double getProbabilityOfBeingInPartition(stProfileSeq *pSeq, uint64_t *haplotypeS
      */
     double i = getLogProbOfReadGivenHaplotype(haplotypeString1, start, length, pSeq, ref);
     double j = getLogProbOfReadGivenHaplotype(haplotypeString2, start, length, pSeq, ref);
-    return i-(i+j);
+    return i -
+           stMath_logAdd(i, j); // TODO: Fix this to be actual probability - currently base of i and j logs is not clear
 }
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh) {
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool hap1) {
     /*
      * Prints reads in partition as a CSV file, each line being a read name and the probability the read is in the partition.
      */
-    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_IN_HAP1_PARTITION\n");
-    for(int64_t i=0; i<2; i++) {
-        stSetIterator *it = stSet_getIterator(i == 0 ? gF->reads1 : gF->reads2);
-        stProfileSeq *pSeq;
-        while ((pSeq = stSet_getNext(it)) != NULL) {
-            double p = getProbabilityOfBeingInPartition(pSeq, gF->haplotypeString1, gF->haplotypeString2,
-                    gF->refStart, gF->length, gF->reference);
-            fprintf(fh, "%s,%f\n", pSeq->readId, p);
-        }
+    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_PARTITION\n");
+    stSetIterator *it = stSet_getIterator(hap1 ? gF->reads1 : gF->reads2);
+    stProfileSeq *pSeq;
+    while ((pSeq = stSet_getNext(it)) != NULL) {
+        double p = hap1 ? getProbabilityOfBeingInPartition(pSeq, gF->haplotypeString1, gF->haplotypeString2,
+                                                           gF->refStart, gF->length, gF->reference) :
+                   getProbabilityOfBeingInPartition(pSeq, gF->haplotypeString2, gF->haplotypeString1, gF->refStart,
+                                                    gF->length, gF->reference);
+        fprintf(fh, "%s,%f\n", pSeq->readId, p);
     }
+    stSet_destructIterator(it);
 }
 
 stSet *findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(uint64_t *haplotypeString1, uint64_t *haplotypeString2,
@@ -245,13 +247,13 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment) {
     free(genomeFragment->haplotypeString2);
     free(genomeFragment->ancestorString);
 
-    // Reads
-    stSet_destruct(genomeFragment->reads1);
-    stSet_destruct(genomeFragment->reads2);
-
     // Coverages
     free(genomeFragment->readsSupportingHaplotype1);
     free(genomeFragment->readsSupportingHaplotype2);
+
+    // Reads
+    stSet_destruct(genomeFragment->reads1);
+    stSet_destruct(genomeFragment->reads2);
 
     free(genomeFragment);
 }
