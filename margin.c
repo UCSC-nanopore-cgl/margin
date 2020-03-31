@@ -39,18 +39,20 @@ void usage() {
     fprintf(stderr, "    PARAMS is the file with marginPolish parameters.\n");
 
     fprintf(stderr, "\nDefault options:\n");
-    fprintf(stderr, "    -h --help              : Print this help screen\n");
-    fprintf(stderr,
-            "    -d --diploid           : Do diploid polishing, outputting two polished sequences per reference sequence\n");
-    fprintf(stderr, "    -a --logLevel          : Set the log level [default = info]\n");
-    fprintf(stderr, "    -r --region            : If set, will only compute for given chromosomal region.\n");
-    fprintf(stderr, "                               Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
-    fprintf(stderr, "    -o --output            : Base name to use for output files [default = 'output']\n");
-    fprintf(stderr, "    -i --outputRepeatCounts        : Write repeat count observations, in base_repeat_counts.csv, where 'base' is specified by --output\n");
-    fprintf(stderr, "    -j --outputPoaCsv              : Write poa graph in base_poa.csv, where 'base' is specified by --output\n");
-    fprintf(stderr, "                               If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
-    fprintf(stderr, "    -k --outputReadPhasingCsv      : Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
-    fprintf(stderr, "                               Requires --diploid to be specified\n");
+    fprintf(stderr, "    -h --help                : Print this help screen\n");
+    fprintf(stderr, "    -d --diploid             : Do diploid polishing, outputting two polished sequences per reference sequence\n");
+    fprintf(stderr, "    -a --logLevel            : Set the log level [default = info]\n");
+    # ifdef _OPENMP
+    fprintf(stderr, "    -t --threads             : Set number of concurrent threads [default = 1]\n");
+    #endif
+    fprintf(stderr, "    -r --region              : If set, will only compute for given chromosomal region.\n");
+    fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
+    fprintf(stderr, "    -o --output              : Base name to use for output files [default = 'output']\n");
+    fprintf(stderr, "    -i --outputRepeatCounts  : Write repeat count observations, in base_repeat_counts.csv, where 'base' is specified by --output\n");
+    fprintf(stderr, "    -j --outputPoaCsv        : Write poa graph in base_poa.csv, where 'base' is specified by --output\n");
+    fprintf(stderr, "                                 If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
+    fprintf(stderr, "    -k --outputReadPhasingCsv: Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
+    fprintf(stderr, "                                 Requires --diploid to be specified\n");
 }
 
 stHash *parseReferenceSequences(char *referenceFastaFile) {
@@ -125,6 +127,7 @@ int main(int argc, char *argv[]) {
     char *referenceFastaFile = NULL;
     char *outputBase = stString_copy("output");
     char *regionStr = NULL;
+    int numThreads = 1;
     int64_t verboseBitstring = -1;
     bool outputPoaCsv = 0;
     bool outputRepeatCounts = 0;
@@ -146,6 +149,9 @@ int main(int argc, char *argv[]) {
         static struct option long_options[] = {
                 { "logLevel", required_argument, 0, 'a' },
                 { "help", no_argument, 0, 'h' },
+                # ifdef _OPENMP
+                { "threads", required_argument, 0, 't'},
+                #endif
 				{ "diploid", no_argument, 0, 'd'},
                 { "output", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
@@ -156,7 +162,7 @@ int main(int argc, char *argv[]) {
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:t:", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -192,6 +198,12 @@ int main(int argc, char *argv[]) {
         case 'k':
             outputReadPhasing = !outputReadPhasing;
             break;
+        case 't':
+            numThreads = atoi(optarg);
+            if (numThreads <= 0) {
+                st_errAbort("Invalid thread count: %d", numThreads);
+            }
+            break;
         default:
             usage();
             return 0;
@@ -201,6 +213,13 @@ int main(int argc, char *argv[]) {
     // Initialization from arguments
     st_setLogLevelFromString(logLevelString);
     free(logLevelString);
+    # ifdef _OPENMP
+        if (numThreads <= 0) {
+            numThreads = 1;
+        }
+        omp_set_num_threads(numThreads);
+        st_logCritical("Running OpenMP with %d threads.\n", omp_get_max_threads());
+    # endif
 
     // Parse parameters
     st_logInfo("> Using the diploid model: %s\n", diploid ? "True" : "False");
@@ -221,7 +240,7 @@ int main(int argc, char *argv[]) {
     char *outputReadPartitionFile = stString_print("%s_reads.csv", outputBase);
     char *outputRepeatCountFile = stString_print("%s_repeat_counts.csv", outputBase);
 
-    OutputChunkers *outputChunkers = outputChunkers_construct(1, params, outputSequenceFile,
+    OutputChunkers *outputChunkers = outputChunkers_construct(numThreads, params, outputSequenceFile,
                                                               outputPoaCsv ? outputPoaFile : NULL,
                                                               outputReadPhasing ? outputReadPartitionFile : NULL,
                                                               outputRepeatCounts ? outputRepeatCountFile : NULL,
@@ -233,7 +252,15 @@ int main(int argc, char *argv[]) {
     		   (int)bamChunker->chunkSize, (int)bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr);
 
     // For each chunk of the BAM
+    # ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic,1)
+    # endif
 	for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
+        # ifdef _OPENMP
+        int64_t threadIdx = omp_get_thread_num();
+        # else
+        int64_t threadIdx = 0;
+        # endif
 		BamChunk *bamChunk = bamChunker_getChunk(bamChunker, chunkIdx);
 
 		// Get substring of the reference
@@ -316,7 +343,7 @@ int main(int argc, char *argv[]) {
             }
 
             // Output
-            outputChunkers_processChunkSequencePhased(outputChunkers, 0, chunkIdx, bamChunk->refSeqName,
+            outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
                                                       poa_hap1, poa_hap2, reads,
                                                       readsBelongingToHap1, readsBelongingToHap2, gf);
 
@@ -332,7 +359,7 @@ int main(int argc, char *argv[]) {
             stGenomeFragment_destruct(gf);
 		}
 		else {
-            outputChunkers_processChunkSequence(outputChunkers, 0, chunkIdx, bamChunk->refSeqName, poa, reads);
+            outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 		}
 
 		// Cleanup

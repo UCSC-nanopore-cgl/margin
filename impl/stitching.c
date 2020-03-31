@@ -296,12 +296,12 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
     int64_t transPhase = j + k; // Number of reads consistently phased in trans configuration
 
     // Log the support for the phasing
-    st_logInfo("In phasing between two chunks got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
+    st_logInfo("In phasing between chunks %"PRId64" and %"PRId64" got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
                PRIi64 " hap1 and %" PRIi64 " hap2 reads in chunk and %" PRIi64 " reads in intersections\n",
-               stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads), stSet_size(chunkHap1Reads),
-               stSet_size(chunkHap2Reads), i + j + k + l);
+               pChunk->chunkOrdinal, chunk->chunkOrdinal, stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads),
+               stSet_size(chunkHap1Reads), stSet_size(chunkHap2Reads), i + j + k + l);
     st_logInfo(
-            " Support for phasing cis-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h21 intersection, %" PRIi64 " (%f%) in h12-h22 intersection\n",
+            " Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h21 intersection, %" PRIi64 " (%f%) in h12-h22 intersection\n",
             i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
             (double) l / (double) (i + j));
     st_logInfo(
@@ -548,8 +548,7 @@ OutputChunker *outputChunker_construct(Params *params, char *outputSequenceFile,
     return outputChunker;
 }
 
-void
-outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName, Poa *poa,
+void outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName, Poa *poa,
                                    stList *reads) {
     // Create chunk name
     char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", sequenceName, chunkOrdinal);
@@ -580,8 +579,7 @@ outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOr
     free(outputSequence);
 }
 
-void
-outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *headerLinePrefix,
+void outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *headerLinePrefix,
                                           Poa *poa, stList *reads, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2) {
     // Output the sequence
     char *outputSequence = rleString_expand(poa->refString);  // Do run-length decoding
@@ -605,8 +603,7 @@ outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *he
     }
 }
 
-void
-outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName,
+void outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName,
                                          Poa *poaHap1, Poa *poaHap2, stList *reads, stSet *readsBelongingToHap1,
                                          stSet *readsBelongingToHap2, stGenomeFragment *gF) {
     // Create chunk name
@@ -686,7 +683,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
      */
     outputChunker_close(outputChunker); // Closes file streams
 
-    // Delete the sequence output file
+    /*// Delete the sequence output file
     stFile_rmrf(outputChunker->outputSequenceFile);
 
     // Delete repeat count file
@@ -702,7 +699,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
     // Delete read partition file
     if (outputChunker->outputReadPartitionFile != NULL) {
         stFile_rmrf(outputChunker->outputReadPartitionFile);
-    }
+    }*/
 }
 
 void writeLines(FILE *fh, stList *lines) {
