@@ -201,6 +201,8 @@ void chunkToStitch_readReadPhasingChunk(FILE *fh, ChunkToStitch *chunk) {
     /*
      * Reads a read phasing chunk.
      */
+    assert(chunk->readsHap1Lines == NULL);
+    assert(chunk->readsHap2Lines == NULL);
     chunk->readsHap1Lines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
     chunk->readsHap2Lines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
 }
@@ -252,6 +254,7 @@ stList *removeReadLinesWithTheseNames(stList *readPartitionLines, stSet *filterT
     }
     // Cleanup
     stList_setDestructor(readPartitionLines, NULL);
+    free(stList_get(readPartitionLines, 0)); //the "header line" present in all read partition lines
     stList_destruct(readPartitionLines);
 
     return filteredReadPartitionLines;
@@ -301,11 +304,11 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
                pChunk->chunkOrdinal, chunk->chunkOrdinal, stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads),
                stSet_size(chunkHap1Reads), stSet_size(chunkHap2Reads), i + j + k + l);
     st_logInfo(
-            " Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h21 intersection, %" PRIi64 " (%f%) in h12-h22 intersection\n",
+            " Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h21 intersection, %" PRIi64 " (%f%%) in h12-h22 intersection\n",
             i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
             (double) l / (double) (i + j));
     st_logInfo(
-            " Support for phasing trans-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%) in h11-h22 intersection, %" PRIi64 " (%f%) in h12-h21 intersection\n",
+            " Support for phasing trans-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h22 intersection, %" PRIi64 " (%f%%) in h12-h21 intersection\n",
             j + k, (double) (j + k) / (double) (i + j + k + l), j, (double) j / (double) (k + l), k,
             (double) k / (double) (k + l));
 
@@ -704,7 +707,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
 
 void writeLines(FILE *fh, stList *lines) {
     for (int64_t i = 0; i < stList_length(lines); i++) {
-        fprintf(fh, "%s\n", stList_get(lines, i));
+        fprintf(fh, "%s\n", (char*)stList_get(lines, i));
     }
 }
 
