@@ -1270,9 +1270,14 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
                                                stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
                                                stGenomeFragment *gF);
 
-void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased);
+void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers);
+
+/*
+ * Misc
+ */
+char *getTimeDescriptorFromSeconds(int64_t seconds);
 
 /*
  * HELEN Features

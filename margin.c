@@ -370,7 +370,7 @@ int main(int argc, char *argv[]) {
     }
 
 	// Now stitch together the chunks
-	outputChunkers_stitch(outputChunkers, diploid);
+	outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
 
     // Cleanup
     outputChunkers_destruct(outputChunkers);

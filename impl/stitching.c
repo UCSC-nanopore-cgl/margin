@@ -5,6 +5,7 @@
 //
 
 #include "margin.h"
+#include "htsIntegration.h"
 
 /*
  * ChunkToStitch
@@ -45,9 +46,30 @@ int chunkToStitch_cmp(ChunkToStitch *chunk1, ChunkToStitch *chunk2) {
     return chunk1->chunkOrdinal < chunk2->chunkOrdinal ? -1 : (chunk1->chunkOrdinal > chunk2->chunkOrdinal ? 1 : 0);
 }
 
+ChunkToStitch *chunkToStitch_construct(char *seqName, int64_t chunkOrdinal, bool phased,
+        bool initRepeatCounts, bool initPoa) {
+    ChunkToStitch *chunk = calloc(1, sizeof(ChunkToStitch));
+    chunk->seqName = seqName;
+    chunk->chunkOrdinal = chunkOrdinal;
+    if (phased) {
+        chunk->readsHap1Lines = stList_construct3(0, free);
+        chunk->readsHap2Lines = stList_construct3(0, free);
+    }
+    if (initRepeatCounts) {
+        chunk->repeatCountLinesHap1 = stList_construct3(0, free);
+        if (phased) chunk->repeatCountLinesHap2 = stList_construct3(0, free);
+    }
+    if (initPoa) {
+        chunk->poaHap1StringsLines = stList_construct3(0, free);
+        if (phased) chunk->poaHap2StringsLines = stList_construct3(0, free);
+    }
+
+    return chunk;
+}
+
 void chunkToStitch_destruct(ChunkToStitch *chunkToStitch) {
-    free(chunkToStitch->seqName);
-    free(chunkToStitch->seqHap1);
+    if (chunkToStitch->seqName != NULL) free(chunkToStitch->seqName);
+    if (chunkToStitch->seqHap1 != NULL) free(chunkToStitch->seqHap1);
 
     // Second sequence and remaining fields are optional
     if (chunkToStitch->seqHap2 != NULL) {
@@ -197,6 +219,7 @@ void chunkToStitch_readPoaChunk(FILE *fh, ChunkToStitch *chunk, bool phased) {
     }
 }
 
+
 void chunkToStitch_readReadPhasingChunk(FILE *fh, ChunkToStitch *chunk) {
     /*
      * Reads a read phasing chunk.
@@ -226,8 +249,8 @@ stSet *getReadNames(stList *readPartitionLines) {
     for (int64_t i = 1; i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
-        assert(stSet_search(readNames, stList_get(tokens, 0)) ==
-               NULL); // Sanity check that read name is not present twice
+        if ((stSet_search(readNames, stList_get(tokens, 0)) != NULL))
+        assert(stSet_search(readNames, stList_get(tokens, 0)) == NULL); // Sanity check that read name is not present twice
         stSet_insert(readNames, stList_removeFirst(tokens)); // First field is the read name
         stList_destruct(tokens);
     }
@@ -239,13 +262,12 @@ stList *removeReadLinesWithTheseNames(stList *readPartitionLines, stSet *filterT
      * Removes these read lines with read names matching those in filterTheseReadNames.
      */
     stList *filteredReadPartitionLines = stList_construct3(0, free);
-    for (int64_t i = 1;
-         i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line,
+    for (int64_t i = 1; i < stList_length(readPartitionLines); i++) {
+        // Start from first line after the CSV header line,
         // so header line is removed by this step
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
-        if (stSet_search(filterTheseReadNames, stList_get(tokens, 0)) ==
-            NULL) { // If name is not in filterTheseReadNames
+        if (stSet_search(filterTheseReadNames, stList_get(tokens, 0)) == NULL) { // If name is not in filterTheseReadNames
             stList_append(filteredReadPartitionLines, line);
         } else {
             free(line);
@@ -686,7 +708,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
      */
     outputChunker_close(outputChunker); // Closes file streams
 
-    /*// Delete the sequence output file
+    // Delete the sequence output file
     stFile_rmrf(outputChunker->outputSequenceFile);
 
     // Delete repeat count file
@@ -702,7 +724,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
     // Delete read partition file
     if (outputChunker->outputReadPartitionFile != NULL) {
         stFile_rmrf(outputChunker->outputReadPartitionFile);
-    }*/
+    }
 }
 
 void writeLines(FILE *fh, stList *lines) {
@@ -772,6 +794,7 @@ void outputChunker_destruct(OutputChunker *outputChunker) {
  */
 
 struct _outputChunkers {
+    int64_t noOfOutputChunkers;
     stList *tempFileChunkers;
     int64_t tempFileChunkerCounter;
     int64_t chunkOrderNo;
@@ -810,6 +833,7 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
     }
 
     OutputChunkers *outputChunkers = st_calloc(1, sizeof(OutputChunkers));
+    outputChunkers->noOfOutputChunkers = noOfOutputChunkers;
     outputChunkers->params = params;
     // Make the temporary, parallel chunkers
     outputChunkers->tempFileChunkers = stList_construct3(0, (void (*)(void *)) outputChunker_destruct);
@@ -854,8 +878,7 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
     return outputChunkers;
 }
 
-void
-outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
+void outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
                                     char *sequenceName, Poa *poa,
                                     stList *reads) {
     outputChunker_processChunkSequence(stList_get(outputChunkers->tempFileChunkers, chunker), chunkOrdinal,
@@ -955,7 +978,8 @@ void outputChunkers_writeChunk(OutputChunkers *outputChunkers, ChunkToStitch *ch
     }
 }
 
-void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
+//TODO remove
+void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
     /*
      * Stitch together the outputs
      */
@@ -1027,6 +1051,240 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
     stSortedSet_destruct(orderedChunks);
     stSet_destruct(readsSeen);
 }
+
+void updateStitchingChunk(ChunkToStitch *stitched, ChunkToStitch *pChunk, stList *hap1Seqs, stList *hap2Seqs,
+                          bool phased, bool trackPoa, bool trackRepeatCounts) {
+
+    stList_append(hap1Seqs, stString_copy(pChunk->seqHap1));
+    if (phased) {
+        stList_append(hap2Seqs, stString_copy(pChunk->seqHap2));
+        stList_appendAll(stitched->readsHap1Lines, pChunk->readsHap1Lines);
+        stList_appendAll(stitched->readsHap2Lines, pChunk->readsHap2Lines);
+        stList_setDestructor(pChunk->readsHap1Lines, NULL);
+        stList_setDestructor(pChunk->readsHap2Lines, NULL);
+    }
+    if (trackPoa) {
+        stList_appendAll(stitched->poaHap1StringsLines, pChunk->poaHap1StringsLines);
+        stList_setDestructor(pChunk->poaHap1StringsLines, NULL);
+        if (phased) {
+            stList_appendAll(stitched->poaHap2StringsLines, pChunk->poaHap2StringsLines);
+            stList_setDestructor(pChunk->poaHap2StringsLines, NULL);
+        }
+    }
+    if (trackRepeatCounts) {
+        stList_appendAll(stitched->repeatCountLinesHap1, pChunk->repeatCountLinesHap1);
+        stList_setDestructor(pChunk->repeatCountLinesHap1, NULL);
+        if (phased) {
+            stList_appendAll(stitched->repeatCountLinesHap2, pChunk->repeatCountLinesHap2);
+            stList_setDestructor(pChunk->repeatCountLinesHap2, NULL);
+        }
+    }
+}
+
+void removeDuplicateStringsFromList(stList **toFilter) {
+    stSet *encounteredStrings = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
+    stList *unfiltered = *toFilter;
+    stList *filtered = stList_construct3(0, free);
+    for (int64_t i = 0; i < stList_length(unfiltered); i++) {
+        char *readId = stList_get(unfiltered, i);
+        if (stSet_search(encounteredStrings, readId) == NULL) {
+            stList_append(filtered, readId);
+            stSet_insert(encounteredStrings, readId);
+        } else {
+            free(readId);
+        }
+    }
+    stList_setDestructor(unfiltered, NULL);
+    stList_destruct(unfiltered);
+    stSet_destruct(encounteredStrings);
+    *toFilter = filtered;
+}
+
+ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, bool phased,
+        Params *params) {
+    // sanity check
+
+    // Get the first chunk
+    ChunkToStitch *pChunk = chunks[startIdx];
+    ChunkToStitch *chunk = NULL;
+
+    // Length of the output sequences
+    int64_t lengthOfSequenceOutputSoFarHap1 = 0;
+    int64_t lengthOfSequenceOutputSoFarHap2 = 0;
+
+    // Our "stitched" chunk
+    bool trackRepeatCounts = pChunk->repeatCountLinesHap1 != NULL;
+    bool trackPoa = pChunk->poaHap1StringsLines != NULL;
+    ChunkToStitch *stitched = chunkToStitch_construct(NULL, -1, phased, trackRepeatCounts, trackPoa);
+
+    // Lists to keep track of haplotype strings
+    stList *hap1Seqs = stList_construct3(0, free);
+    stList *hap2Seqs = (phased ? stList_construct3(0, free) : NULL);
+
+    // Set to keep track of read names
+    stSet *readsSeen = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+
+    // Get each successive chunk and stitch and phase progressively
+    for (int64_t chunkIndex = startIdx+1; chunkIndex < endIdxExclusive; chunkIndex++) {
+        assert(pChunk != NULL);
+        chunk = chunks[chunkIndex];
+
+        // If phased, ensure the chunks phasing is consistent
+        if (phased) {
+            chunkToStitch_phaseAdjacentChunks(pChunk, chunk, readsSeen);
+        }
+        chunkToStitch_trimAdjacentChunks(pChunk, chunk, params,
+                &lengthOfSequenceOutputSoFarHap1, &lengthOfSequenceOutputSoFarHap2);
+
+        // Save to stitched
+        updateStitchingChunk(stitched, pChunk, hap1Seqs, hap2Seqs, phased, trackPoa, trackRepeatCounts);
+
+        // cleanup
+        chunkToStitch_destruct(pChunk);
+
+        // Set the new pChunk
+        pChunk = chunk;
+    }
+
+    // save the last chunk
+    updateStitchingChunk(stitched, pChunk, hap1Seqs, hap2Seqs, phased, trackPoa, trackRepeatCounts);
+    stitched->seqHap1 = stString_join2("", hap1Seqs);
+    if (phased) {
+        stitched->seqHap2 = stString_join2("", hap2Seqs);
+        // remove duplicates from stitched reads
+        removeDuplicateStringsFromList(&stitched->readsHap1Lines);
+        removeDuplicateStringsFromList(&stitched->readsHap2Lines);
+    }
+
+    // cleanup
+    chunkToStitch_destruct(pChunk);
+    stSet_destruct(readsSeen);
+    stList_destruct(hap1Seqs);
+    if (phased) stList_destruct(hap2Seqs);
+
+    // fin
+    return stitched;
+}
+
+
+ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
+                                bool phased, Params *params, char *referenceSequenceName) {
+
+    // special unthreaded case
+    if (numThreads == 1) return mergeContigChunkz(chunks, startIdx, endIdxExclusive, phased, params);
+
+    // divide into chunks
+    int64_t totalChunks = endIdxExclusive - startIdx;
+    int64_t chunksPerThread = (int64_t) ceil(1.0 * totalChunks / numThreads);
+    while (startIdx + chunksPerThread * (numThreads - 1) >= endIdxExclusive) {numThreads--;}
+    ChunkToStitch **outputChunks = st_calloc(numThreads, sizeof(ChunkToStitch*));
+
+    // multithread loop
+    st_logInfo("  Merging chunks for %s from (%"PRId64", %"PRId64"] with %"PRId64" chunks per thread on %"PRId64" threads \n",
+               referenceSequenceName, startIdx, endIdxExclusive, chunksPerThread, numThreads);
+    #pragma omp parallel for schedule(static,1)
+    for (int64_t thread = 0; thread < numThreads; thread++) {
+        int64_t threadedStartIdx = startIdx + chunksPerThread * thread;
+        int64_t threadedEndIdxExclusive = threadedStartIdx + chunksPerThread;
+        if (endIdxExclusive < threadedEndIdxExclusive) threadedEndIdxExclusive = endIdxExclusive;
+
+        outputChunks[thread] = mergeContigChunkz(chunks, threadedStartIdx, threadedEndIdxExclusive, phased, params);
+    }
+
+    // finish
+    ChunkToStitch *stitched = mergeContigChunkz(outputChunks, 0, numThreads, phased, params);
+    stitched->seqName = stString_copy(referenceSequenceName);
+    stitched->startOfSequence = true;
+    free(outputChunks); //chunks are freed in mergeCC
+    return stitched;
+}
+
+
+void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount) {
+
+    // prep for merge
+    assert(chunkCount > 0);
+
+    // Setup to write out the chunks
+    outputChunkers_openForStitching(outputChunkers);
+
+    // Create a cache to hold the chunks, ordered by their ordinal
+    int64_t foundChunks = 0;
+    ChunkToStitch **chunks = st_calloc(chunkCount, sizeof(ChunkToStitch *));
+
+    /// get all chunks
+    for (int64_t i = 0; i < outputChunkers->noOfOutputChunkers; i++) {
+        ChunkToStitch *chunk = NULL;
+        while ((chunk = outputChunker_readChunk(stList_get(outputChunkers->tempFileChunkers, i), phased)) != NULL) {
+            if (chunks[chunk->chunkOrdinal] != NULL) {
+                st_errAbort("Encountered chunk %"PRId64" twice while reading from temp files!");
+            }
+            chunks[chunk->chunkOrdinal] = chunk;
+            foundChunks++;
+        }
+    }
+
+    // sanity check debugging
+    if (foundChunks != chunkCount) {
+        int64_t i = 0;
+        stList *missingChunks = stList_construct3(0, free);
+        while (i < outputChunkers->noOfOutputChunkers && stList_length(missingChunks) < 10) {
+            if (chunks[i] == NULL) stList_append(missingChunks, stString_print("%s", i));
+        }
+        if (stList_length(missingChunks) == 10 && i != outputChunkers->noOfOutputChunkers) stList_append(missingChunks, "..");
+        st_errAbort("Missing %"PRId64" chunks: %s\n", chunkCount - foundChunks, stString_join2(", ", missingChunks));
+    }
+
+
+    // prep for merging
+    int64_t contigStartIdx = 0;
+    char *referenceSequenceName = stString_copy(chunks[0]->seqName);
+    int64_t  lastReportedPercentage = 0;
+    time_t mergeStartTime = time(NULL);
+    st_logCritical("> Merging polished reference strings from %"PRIu64" chunks.\n", chunkCount);
+
+    // find which chunks belong to each contig, merge each contig threaded, write out
+    for (int64_t chunkIdx = 1; chunkIdx <= chunkCount; chunkIdx++) {
+
+        // we encountered the last chunk in the contig (end of list or new refSeqName)
+        if (chunkIdx == chunkCount || !stString_eq(referenceSequenceName, chunks[chunkIdx]->seqName)) {
+
+            // generate and save sequences
+            ChunkToStitch *stitched = mergeContigChunkzThreaded(chunks, contigStartIdx, chunkIdx,
+                    outputChunkers->noOfOutputChunkers, phased, outputChunkers->params, referenceSequenceName);
+            outputChunkers_writeChunk(outputChunkers, stitched);
+
+            // log progress
+            int64_t currentPercentage = (int64_t) (100 * chunkIdx / chunkCount);
+            if (currentPercentage != lastReportedPercentage) {
+                lastReportedPercentage = currentPercentage;
+                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
+                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
+                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
+                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
+                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
+                               currentPercentage, chunkIdx, chunkCount, timeDescriptor);
+                free(timeDescriptor);
+            }
+
+            // Clean up
+            chunkToStitch_destruct(stitched);
+            free(referenceSequenceName);
+
+            // Reset for next reference sequence
+            if (chunkIdx != chunkCount) {
+                contigStartIdx = chunkIdx;
+                referenceSequenceName = stString_copy(chunks[chunkIdx]->seqName);
+            }
+        }
+        // nothing to do otherwise, just wait until end or new contig
+    }
+
+    // cleanup
+    free(chunks); //chunks are freed as they're merged
+
+}
+
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers) {
     // Close the file streams and delete the temporary files of the temp file chunkers

@@ -105,7 +105,7 @@ void test_stitching(CuTest *testCase) {
         }
 
         // Do stitching
-        outputChunkers_stitch(outputChunkers, 0);
+        outputChunkers_stitch(outputChunkers, 0, stList_length(randomizedChunks));
 
         // Destroy chunkers
         outputChunkers_destruct(outputChunkers);
