@@ -1193,8 +1193,6 @@ ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startId
 
     // finish
     ChunkToStitch *stitched = mergeContigChunkz(outputChunks, 0, numThreads, phased, params);
-    stitched->seqName = stString_copy(referenceSequenceName);
-    stitched->startOfSequence = true;
     free(outputChunks); //chunks are freed in mergeCC
     return stitched;
 }
@@ -1252,6 +1250,8 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
             // generate and save sequences
             ChunkToStitch *stitched = mergeContigChunkzThreaded(chunks, contigStartIdx, chunkIdx,
                     outputChunkers->noOfOutputChunkers, phased, outputChunkers->params, referenceSequenceName);
+            stitched->seqName = stString_copy(referenceSequenceName);
+            stitched->startOfSequence = true;
             outputChunkers_writeChunk(outputChunkers, stitched);
 
             // log progress

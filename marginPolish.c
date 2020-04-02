@@ -11,7 +11,6 @@
 #include <hashTableC.h>
 #include <unistd.h>
 #include <time.h>
-#include <sys/stat.h>
 #include "marginVersion.h"
 
 #include "margin.h"
@@ -71,52 +70,8 @@ void usage() {
     fprintf(stderr, "\n");
 }
 
-char *getFileBase(char *base, char *defawlt) {
-    struct stat fileStat;
-    int64_t rc = stat(base, &fileStat);
-    if (S_ISDIR(fileStat.st_mode)) {
-        if (optarg[strlen(base) - 1] == '/') optarg[strlen(base) - 1] = '\0';
-        return stString_print("%s/%s", base, defawlt);
-    } else {
-        return stString_copy(base);
-    }
-}
 
-
-
-//TODO move these to a better spot
-stHash *parseReferenceSequences(char *referenceFastaFile) {
-    /*
-     * Get hash of reference sequence names in fasta to their sequences, doing some munging on the sequence names.
-     */
-    st_logCritical("> Parsing reference sequences from file: %s\n", referenceFastaFile);
-    FILE *fh = fopen(referenceFastaFile, "r");
-    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
-    fclose(fh);
-    // log names and transform (if necessary)
-    stList *refSeqNames = stHash_getKeys(referenceSequences);
-    int64_t origRefSeqLen = stList_length(refSeqNames);
-    st_logDebug("\tReference contigs: \n");
-    for (int64_t i = 0; i < origRefSeqLen; ++i) {
-        char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
-        st_logDebug("\t\t%s\n", fullRefSeqName);
-        char refSeqName[128] = "";
-        if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
-            // this transformation is necessary for cases where the reference has metadata after the contig name:
-            // >contig001 length=1000 date=1999-12-31
-            char *newKey = stString_copy(refSeqName);
-            char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
-            stHash_insert(referenceSequences, newKey, refSeq);
-            stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
-            st_logDebug("\t\t\t-> %s\n", newKey);
-        }
-    }
-    stList_destruct(refSeqNames);
-
-    return referenceSequences;
-}
-
-void handleMerge(BamChunker *bamChunker, char **chunkResults, int numThreads, Params *params, FILE *polishedReferenceOutFh) {
+/*void handleMerge(BamChunker *bamChunker, char **chunkResults, int numThreads, Params *params, FILE *polishedReferenceOutFh) {
 
     // prep for merge
     assert(bamChunker->chunkCount > 0);
@@ -224,41 +179,7 @@ void handleDiploidMerge(BamChunker *bamChunker, char **chunkResultsH1, char **ch
         // nothing to do otherwise, just wait until end or new contig
     }
 
-}
-
-RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params) {
-    /*
-     * Get corresponding substring of the reference for a given bamChunk.
-     */
-    char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
-    if (fullReferenceString == NULL) {
-        st_logCritical("> ERROR: Reference sequence missing from reference map: %s \n", bamChunk->refSeqName);
-        return NULL;
-    }
-    int64_t refLen = strlen(fullReferenceString);
-    char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
-                                                  (refLen < bamChunk->chunkBoundaryEnd ? refLen : bamChunk->chunkBoundaryEnd) - bamChunk->chunkBoundaryStart);
-
-    RleString *rleRef = params->polishParams->useRunLengthEncoding ?
-                        rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
-    free(referenceString);
-
-    return rleRef;
-}
-
-
-uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
-    /*
-     * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
-     */
-    uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
-
-    for(uint64_t i=0; i<gf->length; i++) {
-        paddedHap[i+gf->refStart] = hap[i];
-    }
-
-    return paddedHap;
-}
+}*/
 
 
 int main(int argc, char *argv[]) {
@@ -525,7 +446,7 @@ int main(int argc, char *argv[]) {
     stHash *referenceSequences = parseReferenceSequences(referenceFastaFile);
 
     // Open output files
-    char *polishedReferenceOutFile = stString_print((diploid ? "%s.h1.fa" : "%s.fa"), outputBase);
+    /*char *polishedReferenceOutFile = stString_print((diploid ? "%s.h1.fa" : "%s.fa"), outputBase);
     st_logCritical("> Going to write polished reference in :      %s\n", polishedReferenceOutFile);
     FILE *polishedReferenceOutFh = fopen(polishedReferenceOutFile, "w");
     if (polishedReferenceOutFh == NULL) {
@@ -542,7 +463,7 @@ int main(int argc, char *argv[]) {
         }
         free(polishedReferenceOutFileH2);
     }
-    free(polishedReferenceOutFile);
+    free(polishedReferenceOutFile);*/
 
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
@@ -567,18 +488,21 @@ int main(int argc, char *argv[]) {
     #endif
 
     // Each chunk produces a char* as output which is saved here
-    char **chunkResults = st_calloc(bamChunker->chunkCount, sizeof(char*));
+    /*char **chunkResults = st_calloc(bamChunker->chunkCount, sizeof(char*));*/
 
-    // diploid info
-    char **chunkResultsH1 = chunkResults; //just for naming consistency
-    char **chunkResultsH2 = NULL;
-    stSet **readSetsH1 = NULL;
-    stSet **readSetsH2 = NULL;
-    if (diploid) {
-        chunkResultsH2 = st_calloc(bamChunker->chunkCount, sizeof(char*));
-        readSetsH1 = st_calloc(bamChunker->chunkCount, sizeof(stSet*));
-        readSetsH2 = st_calloc(bamChunker->chunkCount, sizeof(stSet*));
-    }
+    // output info
+    char *outputSequenceFile = stString_print("%s.fa", outputBase);
+    char *outputReadPartitionFile = stString_print("%s.reads.csv", outputBase);
+    char *outputPoaFile = (outputPoaTsvBase == NULL ? NULL : stString_print("%s.poa.csv", outputPoaTsvBase));
+    char *outputRepeatCountFile = (outputRepeatCountBase == NULL ? NULL :
+            stString_print("%s.repeatCount.csv", outputRepeatCountBase));
+
+    // output chunker tracks intermediate output files
+    OutputChunkers *outputChunkers = outputChunkers_construct(numThreads, params, outputSequenceFile,
+            outputPoaTsvBase != NULL ? outputPoaFile : NULL,
+            diploid ? outputReadPartitionFile : NULL,
+            outputRepeatCountBase != NULL ? outputRepeatCountFile : NULL,
+            diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
 
     // (may) need to shuffle chunks
     stList *chunkOrder = stList_construct3(0, (void (*)(void*))stIntTuple_destruct);
@@ -609,14 +533,16 @@ int main(int argc, char *argv[]) {
         bool logProgress = FALSE;
         int64_t currentPercentage = (int64_t) (100 * i / bamChunker->chunkCount);
         # ifdef _OPENMP
-        logIdentifier = stString_print(" T%02d_C%05"PRId64, omp_get_thread_num(), chunkIdx);
-        if (omp_get_thread_num() == 0) {
+        int64_t threadIdx = omp_get_thread_num();
+        logIdentifier = stString_print(" T%02d_C%05"PRId64, threadIdx, chunkIdx);
+        if (threadIdx == 0) {
             if (currentPercentage != lastReportedPercentage) {
                 logProgress = TRUE;
                 lastReportedPercentage = currentPercentage;
             }
         }
         # else
+        int64_t threadIdx = 0;
         logIdentifier = stString_copy("");
         if (currentPercentage != lastReportedPercentage) {
             logProgress = TRUE;
@@ -805,16 +731,19 @@ int main(int argc, char *argv[]) {
                                                                  readsBelongingToHap2, readsBelongingToHap1, params->polishParams);
             }
 
-            // output
+            // Output
+            outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
+                                                      poa_hap1, poa_hap2, reads,
+                                                      readsBelongingToHap1, readsBelongingToHap2, gf);
             RleString *polishedRleConsensusH1 = rleString_copy(poa_hap1->refString);
             RleString *polishedRleConsensusH2 = rleString_copy(poa_hap2->refString);
             char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
             char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
 
-            chunkResultsH1[chunkIdx] = polishedConsensusStringH1;
+            /*chunkResultsH1[chunkIdx] = polishedConsensusStringH1;
             chunkResultsH2[chunkIdx] = polishedConsensusStringH2;
             readSetsH1[chunkIdx] = readsBelongingToHap1;
-            readSetsH2[chunkIdx] = readsBelongingToHap2;
+            readSetsH2[chunkIdx] = readsBelongingToHap2;*/
 
             //ancillary files
             if (outputHaplotypeBamBase != NULL || outputHaplotypeReadsBase != NULL) {
@@ -836,8 +765,12 @@ int main(int argc, char *argv[]) {
             // Cleanup
             free(hap1);
             free(hap2);
+            stSet_destruct(readsBelongingToHap1);
+            stSet_destruct(readsBelongingToHap2);
             rleString_destruct(polishedRleConsensusH1);
             rleString_destruct(polishedRleConsensusH2);
+            free(polishedConsensusStringH1);
+            free(polishedConsensusStringH2);
             bubbleGraph_destruct(bg);
             stGenomeFragment_destruct(gf);
             poa_destruct(poa_hap1);
@@ -850,20 +783,25 @@ int main(int argc, char *argv[]) {
             if (params->polishParams->useRunLengthEncoding) {
                 poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
             }
-            RleString *polishedRleConsensus = poa->refString;
-            polishedConsensusString = rleString_expand(polishedRleConsensus);
 
             // save polished reference string to chunk output array
-            chunkResults[chunkIdx] = polishedConsensusString;
+            /*chunkResults[chunkIdx] = polishedConsensusString;*/
+
+            // output
+            outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 
             // HELEN feature outputs
             #ifdef _HDF5
+            RleString *polishedRleConsensus = poa->refString;
+            polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
                 handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
                                     helenHDF5Files, fullFeatureOutput, trueReferenceBam, params, logIdentifier, chunkIdx,
                                     bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
 
             }
+            free(polishedConsensusString);
+            rleString_destruct(polishedRleConsensus);
             #endif
         }
 
@@ -883,15 +821,16 @@ int main(int argc, char *argv[]) {
     }
 
     // merge chunks
-    if (diploid) {
+    /*if (diploid) {
         handleDiploidMerge(bamChunker, chunkResultsH1, chunkResultsH2, readSetsH1, readSetsH2, numThreads,
                 params, polishedReferenceOutFh, polishedReferenceOutFhH2);
     } else {
         handleMerge(bamChunker, chunkResults, numThreads, params, polishedReferenceOutFh);
-    }
+    }*/
+    outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
 
     // everything has been written, cleanup merging infrastructure
-    fclose(polishedReferenceOutFh);
+    /*fclose(polishedReferenceOutFh);
     if (polishedReferenceOutFhH2 != NULL) fclose(polishedReferenceOutFhH2);
     for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
         free(chunkResults[chunkIdx]);
@@ -900,9 +839,10 @@ int main(int argc, char *argv[]) {
             stSet_destruct(readSetsH1[chunkIdx]);
             stSet_destruct(readSetsH2[chunkIdx]);
         }
-    }
+    }*/
 
     // Cleanup
+    outputChunkers_destruct(outputChunkers);
     bamChunker_destruct(bamChunker);
     stHash_destruct(referenceSequences);
     params_destruct(params);
@@ -918,12 +858,16 @@ int main(int argc, char *argv[]) {
     }
     #endif
     stList_destruct(chunkOrder);
-    free(chunkResults);
+    /*free(chunkResults);
     if (diploid) {
         free(chunkResultsH2);
         free(readSetsH1);
         free(readSetsH2);
-    }
+    }*/
+    free(outputSequenceFile);
+    if (outputPoaFile != NULL) free(outputPoaFile);
+    if (outputReadPartitionFile != NULL) free(outputReadPartitionFile);
+    if (outputRepeatCountFile != NULL) free(outputRepeatCountFile);
     free(outputBase);
     free(bamInFile);
     free(referenceFastaFile);

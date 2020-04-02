@@ -1278,6 +1278,10 @@ void outputChunkers_destruct(OutputChunkers *outputChunkers);
  * Misc
  */
 char *getTimeDescriptorFromSeconds(int64_t seconds);
+stHash *parseReferenceSequences(char *referenceFastaFile);
+char *getFileBase(char *base, char *defawlt);
+RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params);
+uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params);
 
 /*
  * HELEN Features
