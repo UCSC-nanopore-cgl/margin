@@ -221,7 +221,7 @@ stSet *getReadNames(stList *readPartitionLines) {
      * of strings.
      */
     stSet *readNames = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
-    for (int64_t i = 1; i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line
+    for (int64_t i = 0; i < stList_length(readPartitionLines); i++) {
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
         assert(stSet_search(readNames, stList_get(tokens, 0)) ==
@@ -237,9 +237,7 @@ stList *removeReadLinesWithTheseNames(stList *readPartitionLines, stSet *filterT
      * Removes these read lines with read names matching those in filterTheseReadNames.
      */
     stList *filteredReadPartitionLines = stList_construct3(0, free);
-    for (int64_t i = 1;
-         i < stList_length(readPartitionLines); i++) { // Start from first line after the CSV header line,
-        // so header line is removed by this step
+    for (int64_t i = 0; i < stList_length(readPartitionLines); i++) {
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
         if (stSet_search(filterTheseReadNames, stList_get(tokens, 0)) ==

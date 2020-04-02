@@ -4,9 +4,6 @@
  * Released under the MIT license, see LICENSE.txt
  *
  * Plan:
- * ***> Add parallelism
-
- * ***> memory leaks
  * ***> Sort out data and tests dir
  * ***> Cleanup / delete crufty code
  * ***> Investigate indel bias
