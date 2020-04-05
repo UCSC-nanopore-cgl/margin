@@ -1,11 +1,6 @@
 {
- 
-  "maxNotSumTransitions" : true,
-
-  "maxPartitionsInAColumn" : 50,
-
-  "maxCoverageDepth" : 64,
-
-  "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 4
- 
+  "maxNotSumTransitions": true,
+  "maxPartitionsInAColumn": 50,
+  "maxCoverageDepth": 64,
+  "minReadCoverageToSupportPhasingBetweenHeterozygousSites": 4
 }
