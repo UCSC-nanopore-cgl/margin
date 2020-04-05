@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-#from __future__ import print_function
+# from __future__ import print_function
 
 import sys
-import os
+
 
 def main():
     """Splits a fasta sequence into a file per sequence.
@@ -18,6 +18,7 @@ def main():
                         # Write out fasta seq
                         with open(sys.argv[1] + ("_%s" % seqIndex), 'w') as fh2:
                             fh2.write(header + "\n" + seq + "\n")
+
                 writeSeq()
                 seqIndex += 1
                 header = line
@@ -25,6 +26,7 @@ def main():
             else:
                 seq += line[:-1]
         writeSeq()
-        
+
+
 if __name__ == '__main__':
     main()

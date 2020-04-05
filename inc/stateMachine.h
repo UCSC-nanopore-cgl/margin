@@ -16,9 +16,9 @@ typedef uint16_t Symbol;
 typedef struct _hmm Hmm;
 
 typedef struct _symbolString {
-	Alphabet *alphabet;
-	Symbol *sequence;
-	int64_t length;
+    Alphabet *alphabet;
+    Symbol *sequence;
+    int64_t length;
 } SymbolString;
 
 Symbol symbol_getRepeatLength(Symbol s);
@@ -38,13 +38,13 @@ void symbolString_destruct(SymbolString s);
  */
 
 struct _alphabet {
-	uint64_t alphabetSize;
+    uint64_t alphabetSize;
 
-	Symbol (*convertCharToSymbol)(char i);
+    Symbol (*convertCharToSymbol)(char i);
 
-	char (*convertSymbolToChar)(Symbol i);
+    char (*convertSymbolToChar)(Symbol i);
 
-	bool (*symbolsEqual)(Symbol, Symbol);
+    bool (*symbolsEqual)(Symbol, Symbol);
 };
 
 Alphabet *alphabet_constructNucleotide();
@@ -58,12 +58,12 @@ Alphabet *alphabet_constructRLENucleotide();
  */
 
 typedef enum {
-    nucleotideEmissions=0,
-	nucleotideEmissionsSymmetric=1,
+    nucleotideEmissions = 0,
+    nucleotideEmissionsSymmetric = 1,
 } EmissionType;
 
 struct _emissions {
-	Alphabet *alphabet;
+    Alphabet *alphabet;
 
     double (*emission)(Emissions *e, Symbol cX, Symbol cY);
 
@@ -75,10 +75,10 @@ struct _emissions {
 };
 
 typedef struct _nucleotideEmissions {
-	Emissions e;
-	double EMISSION_MATCH_PROBS[16]; //Match emission probs
-	double EMISSION_GAP_X_PROBS[4]; //Gap X emission probs
-	double EMISSION_GAP_Y_PROBS[4]; //Gap Y emission probs
+    Emissions e;
+    double EMISSION_MATCH_PROBS[16]; //Match emission probs
+    double EMISSION_GAP_X_PROBS[4]; //Gap X emission probs
+    double EMISSION_GAP_Y_PROBS[4]; //Gap Y emission probs
 } NucleotideEmissions;
 
 void nucleotideEmissions_reverseComplement(NucleotideEmissions *ne);
@@ -94,8 +94,8 @@ void emissions_destruct(Emissions *e);
  */
 
 typedef enum {
-    threeState=2,
-    threeStateAsymmetric=3
+    threeState = 2,
+    threeStateAsymmetric = 3
 } StateMachineType;
 
 typedef struct _stateMachine StateMachine;
@@ -117,17 +117,21 @@ struct _stateMachine {
     double (*raggedStartStateProb)(StateMachine *sM, int64_t state);
 
     //Cells (states at a given coordinate(
-    void (*cellCalculate)(StateMachine *sM, double *current, double *lower, double *middle, double *upper, Symbol cX, Symbol cY,
-            void(*doTransition)(double *, double *, int64_t, int64_t, double, double, void *), void *extraArgs);
+    void (*cellCalculate)(StateMachine *sM, double *current, double *lower, double *middle, double *upper, Symbol cX,
+                          Symbol cY,
+                          void(*doTransition)(double *, double *, int64_t, int64_t, double, double, void *),
+                          void *extraArgs);
 
     void (*printFn)(StateMachine *e, FILE *f);
 };
 
 StateMachine *hmm_getStateMachine(Hmm *hmm);
 
-StateMachine *stateMachine3_construct(StateMachineType type, Emissions *e); //the type is to specify symmetric/asymmetric
+StateMachine *
+stateMachine3_construct(StateMachineType type, Emissions *e); //the type is to specify symmetric/asymmetric
 
-StateMachine *stateMachine3_constructNucleotide(StateMachineType type); // Construct with default nucleotide emission model
+StateMachine *
+stateMachine3_constructNucleotide(StateMachineType type); // Construct with default nucleotide emission model
 
 void stateMachine_destruct(StateMachine *stateMachine);
 

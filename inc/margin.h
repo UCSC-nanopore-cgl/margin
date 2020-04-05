@@ -81,6 +81,7 @@ struct _params {
 };
 
 Params *params_readParams(char *paramsFile);
+
 Params *params_readParams2(char *paramsFile, bool requirePolish, bool requirePhase);
 
 void params_destruct(Params *params);
@@ -92,7 +93,7 @@ void params_printParameters(Params *params, FILE *fh);
  */
 
 stList *filterReadsByCoverageDepth(stList *profileSeqs, stRPHmmParameters *params, stList *filteredProfileSeqs,
-        stList *discardedProfileSeqs);
+								   stList *discardedProfileSeqs);
 
 stList *getRPHmms(stList *profileSeqs, stRPHmmParameters *params);
 
@@ -133,12 +134,12 @@ double logAddP(double a, double b, bool maxNotSum);
 // The maximum read depth the model can support
 #define MAX_READ_PARTITIONING_DEPTH 64
 
-char * intToBinaryString(uint64_t i);
+char *intToBinaryString(uint64_t i);
 
 uint64_t makeAcceptMask(uint64_t depth);
 
 uint64_t mergePartitionsOrMasks(uint64_t partition1, uint64_t partition2,
-        uint64_t depthOfPartition1, uint64_t depthOfPartition2);
+								uint64_t depthOfPartition1, uint64_t depthOfPartition2);
 
 uint64_t maskPartition(uint64_t partition, uint64_t mask);
 
@@ -179,21 +180,21 @@ void stReference_destruct(stReference *ref);
  */
 
 struct _stProfileSeq {
-    stReference *ref;
-    char *readId;
-    uint64_t refStart; // The first site in the reference
-    uint64_t length; // Number of reference sites
-    uint64_t alleleOffset; // The index of the first allele in this sequence
-    // in a sequence of all alleles in the reference, ordered first by site then
-    // by order in the site.
+	stReference *ref;
+	char *readId;
+	uint64_t refStart; // The first site in the reference
+	uint64_t length; // Number of reference sites
+	uint64_t alleleOffset; // The index of the first allele in this sequence
+	// in a sequence of all alleles in the reference, ordered first by site then
+	// by order in the site.
 
-    // The log-probability of alleles, as specified by uint8_t
-    // Each is expressed as an 8 bit unsigned int, with the value from 0 to -255
-    uint8_t *profileProbs;
+	// The log-probability of alleles, as specified by uint8_t
+	// Each is expressed as an 8 bit unsigned int, with the value from 0 to -255
+	uint8_t *profileProbs;
 };
 
 stProfileSeq *stProfileSeq_constructEmptyProfile(stReference *ref, char *readId,
-                                                 int64_t referenceStart, int64_t length);
+												 int64_t referenceStart, int64_t length);
 
 void stProfileSeq_destruct(stProfileSeq *seq);
 
@@ -205,11 +206,11 @@ uint8_t *stProfileSeq_getProb(stProfileSeq *seq, uint64_t site, uint64_t allele)
  * Emission probabilities methods
  */
 double emissionLogProbability(stRPColumn *column, stRPCell *cell, uint64_t *bitCountVectors,
-                                stReference *reference,
-                                stRPHmmParameters *params);
+							  stReference *reference,
+							  stRPHmmParameters *params);
 
 void fillInPredictedGenome(stGenomeFragment *gF, uint64_t partition,
-        stRPColumn *column, stRPHmmParameters *params);
+						   stRPColumn *column, stRPHmmParameters *params);
 
 /*
  * Constituent functions tested and used to do bit twiddling
@@ -227,30 +228,30 @@ uint64_t *calculateCountBitVectors(uint8_t **seqs, stReference *ref,
  * Struct for hmm parameters
  */
 struct _stRPHmmParameters {
-    /*
-     * Parameters used for the HMM computation
-     */
-    bool maxNotSumTransitions;
+	/*
+	 * Parameters used for the HMM computation
+	 */
+	bool maxNotSumTransitions;
 
-    // Filters on the number of states in a column
-    // Used to prune the hmm
-    int64_t minPartitionsInAColumn;
-    int64_t maxPartitionsInAColumn;
-    double minPosteriorProbabilityForPartition;
+	// Filters on the number of states in a column
+	// Used to prune the hmm
+	int64_t minPartitionsInAColumn;
+	int64_t maxPartitionsInAColumn;
+	double minPosteriorProbabilityForPartition;
 
-    // MaxCoverageDepth is the maximum depth of profileSeqs to allow at any base.
-    // If the coverage depth is higher than this then some profile seqs are randomly discarded.
-    int64_t maxCoverageDepth;
-    int64_t minReadCoverageToSupportPhasingBetweenHeterozygousSites;
+	// MaxCoverageDepth is the maximum depth of profileSeqs to allow at any base.
+	// If the coverage depth is higher than this then some profile seqs are randomly discarded.
+	int64_t maxCoverageDepth;
+	int64_t minReadCoverageToSupportPhasingBetweenHeterozygousSites;
 
-    // Ensure symmetry in the HMM such that the inverted partition of each partition is included in the HMM
-    bool includeInvertedPartitions;
+	// Ensure symmetry in the HMM such that the inverted partition of each partition is included in the HMM
+	bool includeInvertedPartitions;
 
-    // Number of rounds of iterative refinement to attempt to improve the partition.
-    int64_t roundsOfIterativeRefinement;
+	// Number of rounds of iterative refinement to attempt to improve the partition.
+	int64_t roundsOfIterativeRefinement;
 
-    // Flag used to determine if the ancestor substitution probabilities are used
-    bool includeAncestorSubProb;
+	// Flag used to determine if the ancestor substitution probabilities are used
+	bool includeAncestorSubProb;
 };
 
 void stRPHmmParameters_destruct(stRPHmmParameters *params);
@@ -263,17 +264,17 @@ void stRPHmmParameters_printParameters(stRPHmmParameters *params, FILE *fH);
  */
 struct _stRPHmm {
 	stReference *ref;
-    int64_t refStart; // First site in reference
-    int64_t refLength; // Number of sites in the reference
-    stList *profileSeqs; // List of stProfileSeq
-    int64_t columnNumber; // Number of columns, excluding merge columns
-    int64_t maxDepth;
-    stRPColumn *firstColumn;
-    stRPColumn *lastColumn;
-    const stRPHmmParameters *parameters;
-    //Forward/backward probability calculation things
-    double forwardLogProb;
-    double backwardLogProb;
+	int64_t refStart; // First site in reference
+	int64_t refLength; // Number of sites in the reference
+	stList *profileSeqs; // List of stProfileSeq
+	int64_t columnNumber; // Number of columns, excluding merge columns
+	int64_t maxDepth;
+	stRPColumn *firstColumn;
+	stRPColumn *lastColumn;
+	const stRPHmmParameters *parameters;
+	//Forward/backward probability calculation things
+	double forwardLogProb;
+	double backwardLogProb;
 };
 
 stRPHmm *stRPHmm_construct(stProfileSeq *profileSeq, stRPHmmParameters *params);
@@ -315,18 +316,18 @@ void logHmm(stRPHmm *hmm, stGenomeFragment *gF);
  * Column of read partitioning hmm
  */
 struct _stRPColumn {
-    int64_t refStart; // First site in the reference
-    int64_t length; // Number of sites
-    int64_t depth;
-    stProfileSeq **seqHeaders;
-    uint8_t **seqs;
-    stRPCell *head;
-    stRPMergeColumn *nColumn, *pColumn;
-    double totalLogProb;
+	int64_t refStart; // First site in the reference
+	int64_t length; // Number of sites
+	int64_t depth;
+	stProfileSeq **seqHeaders;
+	uint8_t **seqs;
+	stRPCell *head;
+	stRPMergeColumn *nColumn, *pColumn;
+	double totalLogProb;
 };
 
 stRPColumn *stRPColumn_construct(int64_t refStart, int64_t length, int64_t depth,
-        stProfileSeq **seqHeaders, uint8_t **seqs);
+								 stProfileSeq **seqHeaders, uint8_t **seqs);
 
 void stRPColumn_destruct(stRPColumn *column);
 
@@ -343,9 +344,9 @@ stSet *stRPColumn_getColumnSequencesAsSet(stRPColumn *column);
  * State of read partitioning hmm
  */
 struct _stRPCell {
-    uint64_t partition;
-    double forwardLogProb, backwardLogProb;
-    stRPCell *nCell;
+	uint64_t partition;
+	double forwardLogProb, backwardLogProb;
+	stRPCell *nCell;
 };
 
 stRPCell *stRPCell_construct(int64_t partition);
@@ -361,11 +362,11 @@ double stRPCell_posteriorProb(stRPCell *cell, stRPColumn *column);
  * Merge column of read partitioning hmm
  */
 struct _stRPMergeColumn {
-    uint64_t maskFrom;
-    uint64_t maskTo;
-    stHash *mergeCellsFrom;
-    stHash *mergeCellsTo;
-    stRPColumn *nColumn, *pColumn;
+	uint64_t maskFrom;
+	uint64_t maskTo;
+	stHash *mergeCellsFrom;
+	stHash *mergeCellsTo;
+	stRPColumn *nColumn, *pColumn;
 };
 
 stRPMergeColumn *stRPMergeColumn_construct(uint64_t maskFrom, uint64_t maskTo);
@@ -385,13 +386,13 @@ int64_t stRPMergeColumn_numberOfPartitions(stRPMergeColumn *mColumn);
  * Merge cell of read partitioning hmm
  */
 struct _stRPMergeCell {
-    uint64_t fromPartition;
-    uint64_t toPartition;
-    double forwardLogProb, backwardLogProb;
+	uint64_t fromPartition;
+	uint64_t toPartition;
+	double forwardLogProb, backwardLogProb;
 };
 
 stRPMergeCell *stRPMergeCell_construct(uint64_t fromPartition,
-        uint64_t toPartition, stRPMergeColumn *mColumn);
+									   uint64_t toPartition, stRPMergeColumn *mColumn);
 
 void stRPMergeCell_destruct(stRPMergeCell *mCell);
 
@@ -413,47 +414,49 @@ struct _stGenomeFragment {
 	stSet *reads1; // The reads in the first partition
 	stSet *reads2; // The reads in the second partition
 
-    // A string where each element represents the predicted genotype at the corresponding
-    // position.
-    // A genotype is represented by an integer in the range [0, allele_number**2), where
+	// A string where each element represents the predicted genotype at the corresponding
+	// position.
+	// A genotype is represented by an integer in the range [0, allele_number**2), where
 	// where allele_number is the number alleles at the given site
-    // A genotype expresses two characters. For two characters x, y represented by two integers
-    // in [0, allele_number) then the genotype is expressed as x * allele_number + y if x <= y
-    // else y * allele_number + x
-    uint64_t *genotypeString;
+	// A genotype expresses two characters. For two characters x, y represented by two integers
+	// in [0, allele_number) then the genotype is expressed as x * allele_number + y if x <= y
+	// else y * allele_number + x
+	uint64_t *genotypeString;
 
-    // Strings representing the predicted haplotypes, where each element is a reference to an allele
-    uint64_t *haplotypeString1;
-    uint64_t *haplotypeString2;
-    uint64_t *ancestorString; // predicted ancestral alleles
+	// Strings representing the predicted haplotypes, where each element is a reference to an allele
+	uint64_t *haplotypeString1;
+	uint64_t *haplotypeString2;
+	uint64_t *ancestorString; // predicted ancestral alleles
 
-    // Number of reads supporting each allele
-    uint64_t *readsSupportingHaplotype1;
-    uint64_t *readsSupportingHaplotype2;
+	// Number of reads supporting each allele
+	uint64_t *readsSupportingHaplotype1;
+	uint64_t *readsSupportingHaplotype2;
 
-    // An array of genotype posterior probabilities,
-    // each between 0 and 1, for the corresponding genotypes
-    // in the genotype string
-    float *genotypeProbs;
-    float *haplotypeProbs1;
-    float *haplotypeProbs2;
+	// An array of genotype posterior probabilities,
+	// each between 0 and 1, for the corresponding genotypes
+	// in the genotype string
+	float *genotypeProbs;
+	float *haplotypeProbs1;
+	float *haplotypeProbs2;
 };
 
-stGenomeFragment *stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2);
+stGenomeFragment *
+stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2);
 
 stGenomeFragment *stGenomeFragment_construct(stRPHmm *hmm, stList *path);
 
 void stGenomeFragment_destruct(stGenomeFragment *genomeFragment);
 
 void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,
-        stRPHmm *hmm, stList *path, int64_t maxIterations);
+										   stRPHmm *hmm, stList *path, int64_t maxIterations);
 
 void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool hap1);
 
-void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads, stSet **readsBelongingToHap1, stSet **readsBelongingToHap2);
+void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads,
+										 stSet **readsBelongingToHap1, stSet **readsBelongingToHap2);
 
 double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString, int64_t start, int64_t length,
-                                      stProfileSeq *profileSeq, stReference *ref);
+									  stProfileSeq *profileSeq, stReference *ref);
 
 
 // Verbosity for what's printed.  To add more verbose options, you need to update:
@@ -461,6 +464,7 @@ double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString, int64_t s
 #define LOG_TRUE_POSITIVES 1
 #define LOG_FALSE_POSITIVES 2
 #define LOG_FALSE_NEGATIVES 4
+
 void setVerbosity(stRPHmmParameters *params, int64_t bitstring);
 
 /*
@@ -475,21 +479,21 @@ void writeParamFile(char *outputFilename, stRPHmmParameters *params);
  */
 
 struct _stReadHaplotypeSequence {
-    int64_t readStart;
-    int64_t phaseBlock;
-    int64_t length;
-    int8_t haplotype;
-    void *next;
+	int64_t readStart;
+	int64_t phaseBlock;
+	int64_t length;
+	int8_t haplotype;
+	void *next;
 };
 
 stReadHaplotypeSequence *stReadHaplotypeSequence_construct(int64_t readStart, int64_t phaseBlock, int64_t length,
-                                                           int8_t haplotype);
+														   int8_t haplotype);
 
 char *stReadHaplotypeSequence_toString(stReadHaplotypeSequence *rhs);
 
 char *stReadHaplotypeSequence_toStringEmpty();
 
-void stReadHaplotypeSequence_destruct(stReadHaplotypeSequence * rhs);
+void stReadHaplotypeSequence_destruct(stReadHaplotypeSequence *rhs);
 
 /*
  * stReadHaplotypePartitionTable
@@ -499,12 +503,12 @@ void stReadHaplotypeSequence_destruct(stReadHaplotypeSequence * rhs);
 stReadHaplotypePartitionTable *stReadHaplotypePartitionTable_construct(int64_t initialSize);
 
 void stReadHaplotypePartitionTable_add(stReadHaplotypePartitionTable *hpt, char *readName, int64_t readStart,
-                                       int64_t phaseBlock, int64_t length, int8_t haplotype);
+									   int64_t phaseBlock, int64_t length, int8_t haplotype);
 
 void stReadHaplotypePartitionTable_destruct(stReadHaplotypePartitionTable *hpt);
 
 void populateReadHaplotypePartitionTable(stReadHaplotypePartitionTable *hpt, stGenomeFragment *gF, stRPHmm *hmm,
-                                         stList *path);
+										 stList *path);
 
 /*
  * Parsing methods
@@ -600,14 +604,14 @@ struct _poaInsert {
 	RleString *insert; // RLE string representing characters of insert e.g. "GAT" with repeat counts "121", etc.
 	double weightForwardStrand;
 	double weightReverseStrand;
-    stList *observations; // Individual events representing event, a list of PoaObservations
+	stList *observations; // Individual events representing event, a list of PoaObservations
 };
 
 struct _poaDelete {
 	int64_t length; // Length of delete
 	double weightForwardStrand;
 	double weightReverseStrand;
-    stList *observations; // Individual events representing event, a list of PoaObservations
+	stList *observations; // Individual events representing event, a list of PoaObservations
 };
 
 struct _poaBaseObservation {
@@ -634,8 +638,9 @@ Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t ma
  * Adds to given POA the matches, inserts and deletes from the alignment of the given read to the reference.
  * Adds the inserts and deletes so that they are left aligned.
  */
-void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stList *matches, stList *inserts, stList *deletes,
-		PolishParams *polishParams);
+void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stList *matches, stList *inserts,
+				 stList *deletes,
+				 PolishParams *polishParams);
 
 /*
  * Creates a POA representing the reference and the expected inserts / deletes and substitutions from the
@@ -653,7 +658,7 @@ Poa *poa_realign(stList *bamChunkReads, stList *alignments, RleString *reference
  * the alignment is just the reference sequence of the poa.
  */
 stList *poa_getAnchorAlignments(Poa *poa, const int64_t *poaToConsensusMap, int64_t noOfReads,
-                                PolishParams *polishParams);
+								PolishParams *polishParams);
 
 /*
  * Generates a set of maximal expected alignments for the reads aligned to the the POA reference sequence.
@@ -665,8 +670,8 @@ stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, Polish
  * Prints representation of the POA.
  */
 void poa_print(Poa *poa, FILE *fH,
-			  stList *bamChunkReads,
-			  float indelSignificanceThreshold);
+			   stList *bamChunkReads,
+			   float indelSignificanceThreshold);
 
 /*
  * Prints a tab separated version of the POA graph.
@@ -702,8 +707,8 @@ void poa_printDOT(Poa *poa, FILE *fH, stList *bamChunkReads);
  * FRACTION_POS_STRAND: (float between 0 and 1) The fraction of read weight from positive strand reads.
  */
 void poa_printCSV(Poa *poa, FILE *fH,
-                  stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix,
-                  float indelSignificanceThreshold);
+				  stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix,
+				  float indelSignificanceThreshold);
 
 /*
  * Similar to poa_printCSV, but for a phased poa, giving weights for the two haplotypes separately.
@@ -749,9 +754,9 @@ void poa_printCSV(Poa *poa, FILE *fH,
  * FRACTION_POS_STRAND_HAP2: (float between 0 and 1) The read weight of second haplotype, positive strand reads as a fraction of all second haplotype read weight.
  */
 void poa_printPhasedCSV(Poa *poa, FILE *fH,
-                        stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
-                        RepeatSubMatrix *repeatSubMatrix,
-                        float indelSignificanceThreshold);
+						stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2,
+						RepeatSubMatrix *repeatSubMatrix,
+						float indelSignificanceThreshold);
 
 /*
  * Print individual repeat count observations.
@@ -772,7 +777,7 @@ void poa_printSummaryStats(Poa *poa, FILE *fH);
 RleString *poa_getConsensus(Poa *poa, int64_t **poaToConsensusMap, PolishParams *polishParams);
 
 RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
-				  int64_t **poaToConsensusMap);
+					  int64_t **poaToConsensusMap);
 
 
 /*
@@ -782,15 +787,15 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
  * Allows the specification of the min and max number of realignment cycles.
  */
 Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
-						   PolishParams *polishParams, bool hmmMNotRealign,
-						   int64_t minIterations, int64_t maxIterations);
+						  PolishParams *polishParams, bool hmmMNotRealign,
+						  int64_t minIterations, int64_t maxIterations);
 
 /*
  * Convenience function that iteratively polishes sequence using poa_getConsensus and then poa_polish for
  * a specified number of iterations.
  */
 Poa *poa_realignAll(stList *bamChunkReads, stList *anchorAlignments, RleString *reference,
-						  PolishParams *polishParams);
+					PolishParams *polishParams);
 
 /*
  * Greedily evaluate the top scoring indels.
@@ -800,7 +805,8 @@ Poa *poa_checkMajorIndelEditsGreedily(Poa *poa, stList *bamChunkReads, PolishPar
 void poa_destruct(Poa *poa);
 
 double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkReads,
-		double *totalWeight, double *totalPositiveWeight, double *totalNegativeWeight, Alphabet *a, stSet *readsToInclude);
+											 double *totalWeight, double *totalPositiveWeight,
+											 double *totalNegativeWeight, Alphabet *a, stSet *readsToInclude);
 
 /*
  * Finds shift, expressed as a reference coordinate, that the given substring str can
@@ -844,13 +850,14 @@ void poa_estimateRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunkReads,
  * As poa_estimateRepeatCountsUsingBayesianModel, but using a phasing.
  */
 void poa_estimatePhasedRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunkReads,
-		RepeatSubMatrix *repeatSubMatrix, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params);
+													  RepeatSubMatrix *repeatSubMatrix, stSet *readsBelongingToHap1,
+													  stSet *readsBelongingToHap2, PolishParams *params);
 
 /*
  * Uses phasing to estimate ML bases.
  */
 void poa_estimatePhasedBasesUsingBayesianModel(Poa *poa, stList *bamChunkReads, stSet *readsBelongingToHap1,
-                                               PolishParams *params);
+											   PolishParams *params);
 
 // Data structure for representing RLE strings
 struct _rleString {
@@ -899,7 +906,8 @@ char *rleString_expand(RleString *rleString);
 /*
  * Gets a symbol sub-string from a given RLE string.
  */
-SymbolString rleString_constructSymbolString(RleString *s, int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts);
+SymbolString
+rleString_constructSymbolString(RleString *s, int64_t start, int64_t length, Alphabet *a, bool includeRepeatCounts);
 
 /*
  * Gets an array giving the position in the rleString of a corresponding position in the expanded string.
@@ -921,7 +929,7 @@ struct _repeatSubMatrix {
 };
 
 int64_t getMax(double *values, int64_t length,
-               double *maxValue);
+			   double *maxValue);
 
 RepeatSubMatrix *repeatSubMatrix_constructEmpty(Alphabet *alphabet);
 
@@ -936,46 +944,54 @@ double repeatSubMatrix_getLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base,
 /*
  * As gets, but returns the address.
  */
-double *repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount, int64_t underlyingRepeatCount);
+double *
+repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount,
+						   int64_t underlyingRepeatCount);
 
 /*
  * Gets the log probability of observing a given set of repeat observations conditioned on an underlying repeat count and base.
  */
 double repeatSubMatrix_getLogProbForGivenRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base,
-        stList *observations, stList *bamChunkReads, int64_t underlyingRepeatCount);
+													 stList *observations, stList *bamChunkReads,
+													 int64_t underlyingRepeatCount);
 
 /*
  * Gets the maximum likelihood underlying repeat count for a given set of observed read repeat counts.
  * Puts the ml log probility in *logProbabilty.
  */
 int64_t repeatSubMatrix_getMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
-        stList *bamChunkReads, double *logProbability);
+										 stList *bamChunkReads, double *logProbability);
 
 /*
  * Get the log probabilities of repeat counts from minRepeatLength (inclusive) to maxRepeatLength (inclusive)
  */
 void repeatSubMatrix_getRepeatCountProbs(RepeatSubMatrix *repeatSubMatrix, Symbol base, stList *observations,
-                                         stList *bamChunkReads, double *logProbabilities, int64_t minRepeatLength, int64_t maxRepeatLength);
+										 stList *bamChunkReads, double *logProbabilities, int64_t minRepeatLength,
+										 int64_t maxRepeatLength);
 
 /*
  * As repeatSubMatrix_getMLRepeatCount, but for a phasing of the reads.
  */
-int64_t repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base, stList *observations,
-		stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, PolishParams *params);
+int64_t
+repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base,
+									   stList *observations,
+									   stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1,
+									   stSet *readsBelongingToHap2, PolishParams *params);
 
 /*
  * Get the minimum and maximum repeat count observations.
  */
 void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeatSubMatrix, stList *observations,
-                                                         stList *bamChunkReads, int64_t *minRepeatLength, int64_t *maxRepeatLength);
+														 stList *bamChunkReads, int64_t *minRepeatLength,
+														 int64_t *maxRepeatLength);
 
 /*
  * Translate a sequence of aligned pairs (as stIntTuples) whose coordinates are monotonically increasing
  * in both underlying sequences (seqX and seqY) into an equivalent run-length encoded space alignment.
  */
 stList *runLengthEncodeAlignment(stList *alignment,
-                                 const uint64_t *seqXNonRleToRleCoordinateMap,
-                                 const uint64_t *seqYNonRleToRleCoordinateMap);
+								 const uint64_t *seqXNonRleToRleCoordinateMap,
+								 const uint64_t *seqYNonRleToRleCoordinateMap);
 
 /*
  * Make edited string with given insert. Edit start is the index of the position to insert the string.
@@ -992,8 +1008,9 @@ char *removeDelete(char *string, int64_t deleteLength, int64_t editStart);
  * to last anchor position.
  */
 void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
-		RleString *read, bool readStrand, stList *anchorPairs,
-		stList **matches, stList **inserts, stList **deletes, PolishParams *polishParams);
+												RleString *read, bool readStrand, stList *anchorPairs,
+												stList **matches, stList **inserts, stList **deletes,
+												PolishParams *polishParams);
 
 /*
  * Functions for processing BAMs
@@ -1002,38 +1019,41 @@ void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
 // TODO: MOVE BAMCHUNKER TO PARSER .c
 
 typedef struct _bamChunker {
-    // file locations
-    char *bamFile;
-    // configuration
-    uint64_t chunkSize;
-    uint64_t chunkBoundary;
-    bool includeSoftClip;
-    PolishParams *params;
-    // internal data
-    stList *chunks;
-    uint64_t chunkCount;
+	// file locations
+	char *bamFile;
+	// configuration
+	uint64_t chunkSize;
+	uint64_t chunkBoundary;
+	bool includeSoftClip;
+	PolishParams *params;
+	// internal data
+	stList *chunks;
+	uint64_t chunkCount;
 } BamChunker;
 
 typedef struct _bamChunk {
-    char *refSeqName;          // name of contig
-    int64_t chunkBoundaryStart;  // the first 'position' where we have an aligned read
-    int64_t chunkStart;        // the actual boundary of the chunk, calculations from chunkMarginStart to chunkStart
-    //  should be used to initialize the probabilities at chunkStart
-    int64_t chunkEnd;          // same for chunk end
-    int64_t chunkBoundaryEnd;    // no reads should start after this position
-    BamChunker *parent;        // reference to parent (may not be needed)
+	char *refSeqName;          // name of contig
+	int64_t chunkBoundaryStart;  // the first 'position' where we have an aligned read
+	int64_t chunkStart;        // the actual boundary of the chunk, calculations from chunkMarginStart to chunkStart
+	//  should be used to initialize the probabilities at chunkStart
+	int64_t chunkEnd;          // same for chunk end
+	int64_t chunkBoundaryEnd;    // no reads should start after this position
+	BamChunker *parent;        // reference to parent (may not be needed)
 } BamChunk;
 
 typedef struct _bamChunkRead {
-	char *readName;          	// read name
-	RleString *rleRead; 		// rle read
-	uint8_t *qualities;			// quality scores. will be NULL if not given, else will be of length rleRead->length
-	bool forwardStrand;			// whether the alignment is matched to the forward strand
+	char *readName;            // read name
+	RleString *rleRead;        // rle read
+	uint8_t *qualities;            // quality scores. will be NULL if not given, else will be of length rleRead->length
+	bool forwardStrand;            // whether the alignment is matched to the forward strand
 } BamChunkRead;
 
 
-BamChunkRead *bamChunkRead_construct2(char *readName, char *nucleotides, uint8_t *qualities, bool forwardStrand, bool useRunLengthEncoding);
+BamChunkRead *bamChunkRead_construct2(char *readName, char *nucleotides, uint8_t *qualities, bool forwardStrand,
+									  bool useRunLengthEncoding);
+
 BamChunkRead *bamChunkRead_constructCopy(BamChunkRead *copy);
+
 void bamChunkRead_destruct(BamChunkRead *bamChunkRead);
 
 /*
@@ -1057,14 +1077,14 @@ RleString *bamChunkReadSubstring_getRleString(BamChunkReadSubstring *readSubstri
  * Remove overlap between two overlapping strings. Returns max weight of split point.
  */
 int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suffixString, int64_t suffixStringLength,
-                      int64_t approxOverlap, PolishParams *polishParams,
-                      int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
+					  int64_t approxOverlap, PolishParams *polishParams,
+					  int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
 
 char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-                                int64_t overlap, Params *params, char *missingChunkSpacer, char *referenceSequenceName);
+								int64_t overlap, Params *params, char *missingChunkSpacer, char *referenceSequenceName);
 
 char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive,
-                        int64_t overlap, Params *params, char *missingChunkSpacer);
+						int64_t overlap, Params *params, char *missingChunkSpacer);
 
 /*
  * View functions
@@ -1116,7 +1136,8 @@ int64_t msaView_getPrecedingCoverageDepth(MsaView *view, int64_t rightRefCoordin
 /*
  * Get the maximum length of an insertion at a given position with a minimum of reads supporting it.
  */
-int64_t msaView_getMaxPrecedingInsertLengthWithGivenCoverage(MsaView *view, int64_t rightRefCoordinate, int64_t minCoverage);
+int64_t
+msaView_getMaxPrecedingInsertLengthWithGivenCoverage(MsaView *view, int64_t rightRefCoordinate, int64_t minCoverage);
 
 /*
  * Builds an MSA view for the given reference and aligned sequences.
@@ -1125,7 +1146,7 @@ int64_t msaView_getMaxPrecedingInsertLengthWithGivenCoverage(MsaView *view, int6
 MsaView *msaView_construct(char *refSeq, char *refName,
 						   stList *refToSeqAlignments, stList *seqs, stList *seqNames);
 
-void msaView_destruct(MsaView * view);
+void msaView_destruct(MsaView *view);
 
 /*
  * Prints a quick view of the MSA for debugging/browsing.
@@ -1175,7 +1196,8 @@ uint64_t *bubbleGraph_getConsensusPath(BubbleGraph *bg, PolishParams *polishPara
  * Get a consensus sequences from the bubble graph by picking the highest
  * likelihood allele at each bubble.
  */
-RleString *bubbleGraph_getConsensusString(BubbleGraph *bg, uint64_t *consensusPath, int64_t **poaToConsensusMap, PolishParams *polishParams);
+RleString *bubbleGraph_getConsensusString(BubbleGraph *bg, uint64_t *consensusPath, int64_t **poaToConsensusMap,
+										  PolishParams *polishParams);
 
 /*
  * Create a bubble graph from a POA.
@@ -1209,7 +1231,8 @@ stReference *bubbleGraph_getReference(BubbleGraph *bg, char *refName, Params *pa
 /*
  * Phase bubble graph.
  */
-stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, Params *params, stHash **readsToPSeqs);
+stGenomeFragment *
+bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, Params *params, stHash **readsToPSeqs);
 
 /*
  * Get Poa from bubble graph.
@@ -1253,19 +1276,19 @@ Emissions *rleNucleotideEmissions_construct(Emissions *emissions, RepeatSubMatri
  */
 
 OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *params,
-        char *outputSequenceFile, char *outputPoaFile,
-        char *outputReadPartitionFile, char *outputRepeatCountFile,
-        char *hap1Suffix, char *hap2Suffix);
+										 char *outputSequenceFile, char *outputPoaFile,
+										 char *outputReadPartitionFile, char *outputRepeatCountFile,
+										 char *hap1Suffix, char *hap2Suffix);
 
 void
 outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
-                                    char *sequenceName, Poa *poa,
-                                    stList *reads);
+									char *sequenceName, Poa *poa,
+									stList *reads);
 
 void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
-                                               char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
-                                               stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
-                                               stGenomeFragment *gF);
+											   char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
+											   stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
+											   stGenomeFragment *gF);
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased);
 
@@ -1276,10 +1299,10 @@ void outputChunkers_destruct(OutputChunkers *outputChunkers);
  */
 
 typedef enum {
-	HFEAT_NONE=0,
-	HFEAT_SIMPLE_WEIGHT=1,
-	HFEAT_SPLIT_RLE_WEIGHT=2,
-	HFEAT_CHANNEL_RLE_WEIGHT=3,
+	HFEAT_NONE = 0,
+	HFEAT_SIMPLE_WEIGHT = 1,
+	HFEAT_SPLIT_RLE_WEIGHT = 2,
+	HFEAT_CHANNEL_RLE_WEIGHT = 3,
 } HelenFeatureType;
 
 #define POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT 10

@@ -43,74 +43,81 @@ void usage() {
     fprintf(stderr, "    -r --region            : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                               Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -o --output            : Base name to use for output files [default = 'output']\n");
-    fprintf(stderr, "    -i --outputRepeatCounts        : Write repeat count observations, in base_repeat_counts.csv, where 'base' is specified by --output\n");
-    fprintf(stderr, "    -j --outputPoaCsv              : Write poa graph in base_poa.csv, where 'base' is specified by --output\n");
-    fprintf(stderr, "                               If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
-    fprintf(stderr, "    -k --outputReadPhasingCsv      : Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
+    fprintf(stderr,
+            "    -i --outputRepeatCounts        : Write repeat count observations, in base_repeat_counts.csv, where 'base' is specified by --output\n");
+    fprintf(stderr,
+            "    -j --outputPoaCsv              : Write poa graph in base_poa.csv, where 'base' is specified by --output\n");
+    fprintf(stderr,
+            "                               If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
+    fprintf(stderr,
+            "    -k --outputReadPhasingCsv      : Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
     fprintf(stderr, "                               Requires --diploid to be specified\n");
 }
 
 stHash *parseReferenceSequences(char *referenceFastaFile) {
-	/*
-	 * Get hash of reference sequence names in fasta to their sequences, doing some munging on the sequence names.
-	 */
-	st_logInfo("> Parsing reference sequences from file: %s\n", referenceFastaFile);
-	FILE *fh = fopen(referenceFastaFile, "r");
-	stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
-	fclose(fh);
-	// log names and transform (if necessary)
-	stList *refSeqNames = stHash_getKeys(referenceSequences);
-	int64_t origRefSeqLen = stList_length(refSeqNames);
-	st_logDebug("\tReference contigs: \n");
-	for (int64_t i = 0; i < origRefSeqLen; ++i) {
-		char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
-		st_logDebug("\t\t%s\n", fullRefSeqName);
-		char refSeqName[128] = "";
-		if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
-			// this transformation is necessary for cases where the reference has metadata after the contig name:
-			// >contig001 length=1000 date=1999-12-31
-			char *newKey = stString_copy(refSeqName);
-			char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
-			stHash_insert(referenceSequences, newKey, refSeq);
-			stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
-			st_logDebug("\t\t\t-> %s\n", newKey);
-		}
-	}
-	stList_destruct(refSeqNames);
+    /*
+     * Get hash of reference sequence names in fasta to their sequences, doing some munging on the sequence names.
+     */
+    st_logInfo("> Parsing reference sequences from file: %s\n", referenceFastaFile);
+    FILE *fh = fopen(referenceFastaFile, "r");
+    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
+    fclose(fh);
+    // log names and transform (if necessary)
+    stList *refSeqNames = stHash_getKeys(referenceSequences);
+    int64_t origRefSeqLen = stList_length(refSeqNames);
+    st_logDebug("\tReference contigs: \n");
+    for (int64_t i = 0; i < origRefSeqLen; ++i) {
+        char *fullRefSeqName = (char *) stList_get(refSeqNames, i);
+        st_logDebug("\t\t%s\n", fullRefSeqName);
+        char refSeqName[128] = "";
+        if (sscanf(fullRefSeqName, "%s", refSeqName) == 1 && !stString_eq(fullRefSeqName, refSeqName)) {
+            // this transformation is necessary for cases where the reference has metadata after the contig name:
+            // >contig001 length=1000 date=1999-12-31
+            char *newKey = stString_copy(refSeqName);
+            char *refSeq = stHash_search(referenceSequences, fullRefSeqName);
+            stHash_insert(referenceSequences, newKey, refSeq);
+            stHash_removeAndFreeKey(referenceSequences, fullRefSeqName);
+            st_logDebug("\t\t\t-> %s\n", newKey);
+        }
+    }
+    stList_destruct(refSeqNames);
 
-	return referenceSequences;
+    return referenceSequences;
 }
 
 RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params) {
-	/*
-	 * Get corresponding substring of the reference for a given bamChunk.
-	 */
-	char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
-	if (fullReferenceString == NULL) {
-		st_logCritical("> ERROR: Reference sequence missing from reference map: %s \n", bamChunk->refSeqName);
-		return NULL;
-	}
-	int64_t refLen = strlen(fullReferenceString);
-	char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
-		(refLen < bamChunk->chunkBoundaryEnd ? refLen : bamChunk->chunkBoundaryEnd) - bamChunk->chunkBoundaryStart);
+    /*
+     * Get corresponding substring of the reference for a given bamChunk.
+     */
+    char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
+    if (fullReferenceString == NULL) {
+        st_logCritical("> ERROR: Reference sequence missing from reference map: %s \n", bamChunk->refSeqName);
+        return NULL;
+    }
+    int64_t refLen = strlen(fullReferenceString);
+    char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
+                                                  (refLen < bamChunk->chunkBoundaryEnd ? refLen
+                                                                                       : bamChunk->chunkBoundaryEnd) -
+                                                  bamChunk->chunkBoundaryStart);
 
-	RleString *rleRef = params->polishParams->useRunLengthEncoding ? rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
-	free(referenceString);
+    RleString *rleRef = params->polishParams->useRunLengthEncoding ? rleString_construct(referenceString)
+                                                                   : rleString_construct_no_rle(referenceString);
+    free(referenceString);
 
-	return rleRef;
+    return rleRef;
 }
 
 uint64_t *getPaddedHaplotypeString(const uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params) {
-	/*
-	 * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
-	 */
-	uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
+    /*
+     * Pads a haplotype string from the genome fragment to account for any missing prefix or suffix.
+     */
+    uint64_t *paddedHap = bubbleGraph_getConsensusPath(bg, params->polishParams);
 
-	for(uint64_t i=0; i<gf->length; i++) {
-		paddedHap[i+gf->refStart] = hap[i];
-	}
+    for (uint64_t i = 0; i < gf->length; i++) {
+        paddedHap[i + gf->refStart] = hap[i];
+    }
 
-	return paddedHap;
+    return paddedHap;
 }
 
 int main(int argc, char *argv[]) {
@@ -129,7 +136,7 @@ int main(int argc, char *argv[]) {
 
     // TODO: When done testing, optionally set random seed using st_randomSeed();
 
-    if(argc < 4) {
+    if (argc < 4) {
         usage();
         return 0;
     }
@@ -141,57 +148,57 @@ int main(int argc, char *argv[]) {
     // Parse the options
     while (1) {
         static struct option long_options[] = {
-                { "logLevel", required_argument, 0, 'a' },
-                { "help", no_argument, 0, 'h' },
-				{ "diploid", no_argument, 0, 'd'},
-                { "output", required_argument, 0, 'o'},
-                { "region", required_argument, 0, 'r'},
-                { "verbose", required_argument, 0, 'v'},
-				{ "outputRepeatCounts", no_argument, 0, 'i'},
-				{ "outputPoaCsv", no_argument, 0, 'j'},
-                { "outputReadPhasingCsv", no_argument, 0, 'k'},
-                { 0, 0, 0, 0 } };
+                {"logLevel",             required_argument, 0, 'a'},
+                {"help",                 no_argument,       0, 'h'},
+                {"diploid",              no_argument,       0, 'd'},
+                {"output",               required_argument, 0, 'o'},
+                {"region",               required_argument, 0, 'r'},
+                {"verbose",              required_argument, 0, 'v'},
+                {"outputRepeatCounts",   no_argument,       0, 'i'},
+                {"outputPoaCsv",         no_argument,       0, 'j'},
+                {"outputReadPhasingCsv", no_argument,       0, 'k'},
+                {0, 0,                                      0, 0}};
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:", long_options, &option_index);
+        int key = getopt_long(argc - 2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:", long_options, &option_index);
 
         if (key == -1) {
             break;
         }
 
         switch (key) {
-        case 'a':
-            free(logLevelString);
-            logLevelString = stString_copy(optarg);
-            break;
-        case 'h':
-            usage();
-            return 0;
-        case 'd':
-            diploid = 1;
-            break;
-        case 'o':
-            free(outputBase);
-            outputBase = stString_copy(optarg);
-            break;
-        case 'r':
-            regionStr = stString_copy(optarg);
-            break;
-        case 'v':
-            verboseBitstring = strtol(optarg, NULL, 10);
-            break;
-        case 'i':
-            outputRepeatCounts = !outputRepeatCounts;
-        	break;
-        case 'j':
-            outputPoaCsv = !outputPoaCsv;
-        	break;
-        case 'k':
-            outputReadPhasing = !outputReadPhasing;
-            break;
-        default:
-            usage();
-            return 0;
+            case 'a':
+                free(logLevelString);
+                logLevelString = stString_copy(optarg);
+                break;
+            case 'h':
+                usage();
+                return 0;
+            case 'd':
+                diploid = 1;
+                break;
+            case 'o':
+                free(outputBase);
+                outputBase = stString_copy(optarg);
+                break;
+            case 'r':
+                regionStr = stString_copy(optarg);
+                break;
+            case 'v':
+                verboseBitstring = strtol(optarg, NULL, 10);
+                break;
+            case 'i':
+                outputRepeatCounts = !outputRepeatCounts;
+                break;
+            case 'j':
+                outputPoaCsv = !outputPoaCsv;
+                break;
+            case 'k':
+                outputReadPhasing = !outputReadPhasing;
+                break;
+            default:
+                usage();
+                return 0;
         }
     }
 
@@ -205,8 +212,8 @@ int main(int argc, char *argv[]) {
     Params *params = params_readParams(paramsFile);
 
     // Print a report of the parsed parameters
-    if(st_getLogLevel() == debug) {
-    	params_printParameters(params, stderr);
+    if (st_getLogLevel() == debug) {
+        params_printParameters(params, stderr);
     }
 
     // Parse reference as map of header string to nucleotide sequences
@@ -227,77 +234,81 @@ int main(int argc, char *argv[]) {
     // if regionStr is NULL, it will be ignored in construct2
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
     st_logInfo("> Set up bam chunker with chunk size: %i and overlap %i (for region=%s)\n",
-    		   (int)bamChunker->chunkSize, (int)bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr);
+               (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr);
 
     // For each chunk of the BAM
-	for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
-		BamChunk *bamChunk = bamChunker_getChunk(bamChunker, chunkIdx);
+    for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
+        BamChunk *bamChunk = bamChunker_getChunk(bamChunker, chunkIdx);
 
-		// Get substring of the reference
-		RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
+        // Get substring of the reference
+        RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
 
         st_logInfo("> Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
-        		   bamChunk->refSeqName, (int)bamChunk->chunkBoundaryStart,
-				   (int)bamChunk->chunkBoundaryEnd);
+                   bamChunk->refSeqName, (int) bamChunk->chunkBoundaryStart,
+                   (int) bamChunk->chunkBoundaryEnd);
 
-		// Convert bam lines into corresponding reads and alignments
-		st_logInfo("> Parsing input reads from file: %s\n", bamInFile);
-		stList *reads = stList_construct3(0, (void (*)(void *))bamChunkRead_destruct);
-        stList *alignments = stList_construct3(0, (void (*)(void *))stList_destruct);
+        // Convert bam lines into corresponding reads and alignments
+        st_logInfo("> Parsing input reads from file: %s\n", bamInFile);
+        stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
         convertToReadsAndAlignments(bamChunk, reference, reads, alignments);
 
-		// Now run the polishing method
+        // Now run the polishing method
 
-		// Generate the haploid, polished partial order alignment (POA)
-		Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
+        // Generate the haploid, polished partial order alignment (POA)
+        Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
 
-		// If diploid
-		if(diploid) {
-			// Get the bubble graph representation
-			bool useReadAlleles = params->polishParams->useReadAlleles;
-			params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
-			BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
-			params->polishParams->useReadAlleles = useReadAlleles;
+        // If diploid
+        if (diploid) {
+            // Get the bubble graph representation
+            bool useReadAlleles = params->polishParams->useReadAlleles;
+            params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
+            BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
+            params->polishParams->useReadAlleles = useReadAlleles;
 
-			// Now make a POA for each of the haplotypes
-			stHash *readsToPSeqs;
-			stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
+            // Now make a POA for each of the haplotypes
+            stHash *readsToPSeqs;
+            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
 
-			stSet *readsBelongingToHap1, *readsBelongingToHap2;
-			stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
-			st_logInfo("After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned into hap2 (%i unphased)\n",
-			(int)stList_length(reads), (int)stSet_size(readsBelongingToHap1), (int)stSet_size(readsBelongingToHap2), 
-			(int)(stList_length(reads) - stSet_size(readsBelongingToHap1)- stSet_size(readsBelongingToHap2)));
+            stSet *readsBelongingToHap1, *readsBelongingToHap2;
+            stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
+            st_logInfo(
+                    "After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned into hap2 (%i unphased)\n",
+                    (int) stList_length(reads), (int) stSet_size(readsBelongingToHap1),
+                    (int) stSet_size(readsBelongingToHap2),
+                    (int) (stList_length(reads) - stSet_size(readsBelongingToHap1) - stSet_size(readsBelongingToHap2)));
 
-			// Debug report of hets
-			uint64_t totalHets = 0;
-			for(uint64_t i=0; i<gf->length; i++) {
-				Bubble *b = &bg->bubbles[i+gf->refStart];
-				if(gf->haplotypeString1[i] != gf->haplotypeString2[i]) {
-					st_logDebug("Got predicted het at bubble %i %s %s\n", (int)i+gf->refStart, b->alleles[gf->haplotypeString1[i]]->rleString,
-							b->alleles[gf->haplotypeString2[i]]->rleString);
-					totalHets++;
-				}
-				else if(!rleString_eq(b->alleles[gf->haplotypeString1[i]], b->refAllele)) {
-					st_logDebug("Got predicted hom alt at bubble %i %i\n", (int)i+gf->refStart, (int)gf->haplotypeString1[i]);
-				}
-			}
-			st_logInfo("In phasing chunk, got: %i hets from: %i total sites (fraction: %f)\n", (int)totalHets, (int)gf->length, (float)totalHets/gf->length);
+            // Debug report of hets
+            uint64_t totalHets = 0;
+            for (uint64_t i = 0; i < gf->length; i++) {
+                Bubble *b = &bg->bubbles[i + gf->refStart];
+                if (gf->haplotypeString1[i] != gf->haplotypeString2[i]) {
+                    st_logDebug("Got predicted het at bubble %i %s %s\n", (int) i + gf->refStart,
+                                b->alleles[gf->haplotypeString1[i]]->rleString,
+                                b->alleles[gf->haplotypeString2[i]]->rleString);
+                    totalHets++;
+                } else if (!rleString_eq(b->alleles[gf->haplotypeString1[i]], b->refAllele)) {
+                    st_logDebug("Got predicted hom alt at bubble %i %i\n", (int) i + gf->refStart,
+                                (int) gf->haplotypeString1[i]);
+                }
+            }
+            st_logInfo("In phasing chunk, got: %i hets from: %i total sites (fraction: %f)\n", (int) totalHets,
+                       (int) gf->length, (float) totalHets / gf->length);
 
-			st_logInfo("Building POA for each haplotype\n");
-			uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
-			uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
+            st_logInfo("Building POA for each haplotype\n");
+            uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
+            uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
 
-			Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
-			Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
+            Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
+            Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
-			// This does not help, so commenting out - may remove
-			/*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
-			poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
-					readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
+            // This does not help, so commenting out - may remove
+            /*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
+            poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
+                    readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
 
-			poa_estimatePhasedBasesUsingBayesianModel(poa_hap2, reads,
-								readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
+            poa_estimatePhasedBasesUsingBayesianModel(poa_hap2, reads,
+                                readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
 
             if (params->polishParams->useRunLengthEncoding) {
                 st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
@@ -327,35 +338,34 @@ int main(int argc, char *argv[]) {
             stSet_destruct(readsBelongingToHap2);
             stHash_destruct(readsToPSeqs);
             stGenomeFragment_destruct(gf);
-		}
-		else {
+        } else {
             outputChunkers_processChunkSequence(outputChunkers, 0, chunkIdx, bamChunk->refSeqName, poa, reads);
-		}
+        }
 
-		// Cleanup
-		poa_destruct(poa);
-		stList_destruct(reads);
+        // Cleanup
+        poa_destruct(poa);
+        stList_destruct(reads);
         stList_destruct(alignments);
         rleString_destruct(reference);
     }
 
-	// Now stitch together the chunks
-	outputChunkers_stitch(outputChunkers, diploid);
+    // Now stitch together the chunks
+    outputChunkers_stitch(outputChunkers, diploid);
 
     // Cleanup
     outputChunkers_destruct(outputChunkers);
     bamChunker_destruct(bamChunker);
     stHash_destruct(referenceSequences);
     params_destruct(params);
-	free(bamInFile);
-	free(referenceFastaFile);
-	free(paramsFile);
+    free(bamInFile);
+    free(referenceFastaFile);
+    free(paramsFile);
     free(outputSequenceFile);
     free(outputPoaFile);
     free(outputReadPartitionFile);
     free(outputRepeatCountFile);
-	free(outputBase);
-	if (regionStr != NULL) free(regionStr);
+    free(outputBase);
+    if (regionStr != NULL) free(regionStr);
 
     st_logInfo("> Finished polishing.\n");
 

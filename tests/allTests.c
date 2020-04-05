@@ -8,13 +8,21 @@
 #include "margin.h"
 
 CuSuite *stRPHmmTestSuite(void);
-CuSuite* polisherTestSuite(void);
-CuSuite* parserTestSuite(void);
-CuSuite* viewTestSuite(void);
-CuSuite* chunkingTestSuite(void);
-CuSuite* callConsensusTestSuite(void);
-CuSuite* featureTestSuite(void);
-CuSuite* marginIntegrationTestSuite(void);
+
+CuSuite *polisherTestSuite(void);
+
+CuSuite *parserTestSuite(void);
+
+CuSuite *viewTestSuite(void);
+
+CuSuite *chunkingTestSuite(void);
+
+CuSuite *callConsensusTestSuite(void);
+
+CuSuite *featureTestSuite(void);
+
+CuSuite *marginIntegrationTestSuite(void);
+
 CuSuite *pairwiseAlignmentTestSuite(void);
 
 CuSuite *stitchingTestSuite(void);
@@ -35,7 +43,7 @@ int marginPhaseTests(void) {
     CuSuiteAddSuite(suite, pairwiseAlignmentTestSuite());
     CuSuiteAddSuite(suite, chunkingTestSuite());
     CuSuiteAddSuite(suite, stitchingTestSuite());
-    #ifdef _HDF5
+#ifdef _HDF5
     CuSuiteAddSuite(suite, featureTestSuite()); //todo fails
 #endif
 
@@ -50,12 +58,12 @@ int marginPhaseTests(void) {
 }
 
 int main(int argc, char *argv[]) {
-    if(argc == 2) {
+    if (argc == 2) {
         st_setLogLevelFromString(argv[1]);
     }
-	int i = marginPhaseTests();
+    int i = marginPhaseTests();
 
-	//while(1);
+    //while(1);
 
-	return i;
+    return i;
 }

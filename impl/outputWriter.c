@@ -8,7 +8,6 @@
 #include "htsIntegration.h"
 
 
-
 void writeParamFile(char *outputFilename, stRPHmmParameters *params) {
     // get file
     FILE *fd = fopen(outputFilename, "w");
@@ -54,7 +53,8 @@ void writeParamFile(char *outputFilename, stRPHmmParameters *params) {
     fprintf(fd, "\n");
     fprintf(fd, "  \"maxCoverageDepth\" : %" PRIi64 ",\n", params->maxCoverageDepth);
     fprintf(fd, "\n");
-    fprintf(fd, "  \"minReadCoverageToSupportPhasingBetweenHeterozygousSites\" : %" PRIi64 ",\n", params->minReadCoverageToSupportPhasingBetweenHeterozygousSites);
+    fprintf(fd, "  \"minReadCoverageToSupportPhasingBetweenHeterozygousSites\" : %" PRIi64 ",\n",
+            params->minReadCoverageToSupportPhasingBetweenHeterozygousSites);
     fprintf(fd, "  \n");
     fprintf(fd, "  \"onDiagonalReadErrorPseudoCount\" : %f,\n", params->onDiagonalReadErrorPseudoCount);
     fprintf(fd, "  \n");
@@ -63,7 +63,7 @@ void writeParamFile(char *outputFilename, stRPHmmParameters *params) {
     fprintf(fd, "  \"trainingIterations\" : %" PRIi64 ",\n", params->trainingIterations);
     fprintf(fd, "  \n");
     int64_t verbosityBitstring = 0
-        | (params->verboseTruePositives ? LOG_TRUE_POSITIVES : 0);
+                                 | (params->verboseTruePositives ? LOG_TRUE_POSITIVES : 0);
     fprintf(fd, "  \"verbose\" : %" PRIi64 ",\n", verbosityBitstring);
     fprintf(fd, "}");
 
@@ -87,7 +87,7 @@ stReadHaplotypeSequence *stReadHaplotypeSequence_construct(
 
 char *stReadHaplotypeSequence_toString(stReadHaplotypeSequence *rhs) {
     char *curr = stString_print("h%"PRIi8",p%"PRIi64",r%"PRIi64",l%"PRIi64, rhs->haplotype, rhs->phaseBlock,
-                                   rhs->readStart, rhs->length);
+                                rhs->readStart, rhs->length);
     if (rhs->next != NULL) {
         char *next = stReadHaplotypeSequence_toString(rhs->next);
         char *tmp = curr;
@@ -119,8 +119,9 @@ void stReadHaplotypeSequence_destruct(stReadHaplotypeSequence *rhs) {
 //todo destroy keys (char*)
 stReadHaplotypePartitionTable *stReadHaplotypePartitionTable_construct(int64_t initialSize) {
     return create_hashtable((uint64_t) initialSize, stHash_stringKey, stHash_stringEqualKey,
-                            NULL, (void *)stReadHaplotypeSequence_destruct);
+                            NULL, (void *) stReadHaplotypeSequence_destruct);
 }
+
 void stReadHaplotypePartitionTable_add(stReadHaplotypePartitionTable *hpt, char *readName, int64_t readStart,
                                        int64_t phaseBlock, int64_t length, int8_t haplotype) {
 
@@ -134,7 +135,8 @@ void stReadHaplotypePartitionTable_add(stReadHaplotypePartitionTable *hpt, char 
             prev = curr;
             if (curr->phaseBlock == phaseBlock) {
                 if (haplotype != curr->haplotype) {
-                    st_logCritical("\tRead %s found in both haplotypes in phase block %"PRIi64"\n", readName, phaseBlock);
+                    st_logCritical("\tRead %s found in both haplotypes in phase block %"PRIi64"\n", readName,
+                                   phaseBlock);
                 }
 
                 // don't need to record
@@ -146,6 +148,7 @@ void stReadHaplotypePartitionTable_add(stReadHaplotypePartitionTable *hpt, char 
         prev->next = new;
     }
 }
+
 void stReadHaplotypePartitionTable_destruct(stReadHaplotypePartitionTable *hpt) {
     hashtable_destroy(hpt, true, false);
 }
@@ -170,11 +173,11 @@ void populateReadHaplotypePartitionTable(stReadHaplotypePartitionTable *hpt, stG
 
     // For each cell/column pair
     stRPColumn *column = hmm->firstColumn;
-    for(int64_t i=0; i<stList_length(path); i++) {
+    for (int64_t i = 0; i < stList_length(path); i++) {
         stRPCell *cell = stList_get(path, i);
 
         // Get reads in partitions
-        for(int64_t j=0; j<column->depth; j++) {
+        for (int64_t j = 0; j < column->depth; j++) {
             stProfileSeq *read = column->seqHeaders[j];
             readName = read->readId;
             readStart = (read->refStart < phaseBlock ? phaseBlock - read->refStart : 0);
@@ -194,7 +197,7 @@ void populateReadHaplotypePartitionTable(stReadHaplotypePartitionTable *hpt, stG
         }
 
         // iterate
-        if(column->nColumn != NULL) {
+        if (column->nColumn != NULL) {
             column = column->nColumn->nColumn;
         }
     }

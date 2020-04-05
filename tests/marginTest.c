@@ -53,10 +53,10 @@ static stSet *getReadNamesFromPartitionFile(CuTest *testCase, char *readPartitio
 }
 
 void test_marginIntegration(CuTest *testCase) {
-    char *referenceFile = "../tests/shasta_diploid/shasta_phasing_test.ref.fasta";
+    char *referenceFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.fasta";
     bool verbose = false;
-    char *bamFile = "../tests/shasta_diploid/shasta_phasing_test.align.bam";
-    char *region = NULL; //"92:22763600-22768500";
+    char *bamFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.bam ";
+    char *region = NULL;
     char *base = "temp_output";
 
     //TODO: Edit params and then save them
@@ -78,7 +78,7 @@ void test_marginIntegration(CuTest *testCase) {
     char *outputHap2ReadPhasingFile = "temp_output_reads.csv.hap2";
 
     // Parse the sequences
-    char *sequenceName = "92:22763500-22869500";
+    char *sequenceName = "122:10980000-11086000";
     char *seq1 = getSequence(testCase, outputHap1File, sequenceName);
     char *seq2 = getSequence(testCase, outputHap2File, sequenceName);
     RleString *seq1Rle = rleString_construct(seq1);
@@ -107,7 +107,7 @@ void test_marginIntegration(CuTest *testCase) {
     stFile_rmrf(outputHap2ReadPhasingFile);
 }
 
-CuSuite* marginIntegrationTestSuite(void) {
+CuSuite *marginIntegrationTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
     SUITE_ADD_TEST(suite, test_marginIntegration);
 

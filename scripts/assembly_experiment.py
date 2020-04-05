@@ -1,17 +1,18 @@
 #!/usr/bin/env python2
 from __future__ import print_function
+
 import argparse
+import datetime
+import os
 import subprocess
 import sys
-import os
-import numpy as np
+
 import pysam
-import datetime
 
 percent = lambda small, big: int(100.0 * small / big) if big != 0 else 0.0
 
 
-def parse_args(args = None): 
+def parse_args(args=None):
     parser = argparse.ArgumentParser("Runs marginPolish on assembly, compares polished assembly to true reference")
     parser.add_argument('--true_reference', '-t', dest='true_reference', default=None, required=True, type=str,
                         help='True reference, polished assembly will be compared to')
@@ -26,13 +27,15 @@ def parse_args(args = None):
                         help='Name to use for output from marginPolish. ')
     parser.add_argument('--read_size', '-r', dest='read_size', default=10000, required=False, type=int,
                         help='Size to chunk reads into for post-polishing alignment')
-    parser.add_argument('--force_realign', '-R', dest='force_realign', default=False, required=False, action='store_true',
+    parser.add_argument('--force_realign', '-R', dest='force_realign', default=False, required=False,
+                        action='store_true',
                         help='Will force overwrite the post-polishing reads and alignment')
 
     parser.add_argument('--marginPolish_invocation', '-P', dest='marginPolish_invocation', default="./marginPolish",
                         required=False, type=str,
                         help='Invocation for marginPolish.  Default: ./marginPolish (ie: assumes in cwd)')
-    parser.add_argument('--minimap2_invocation', '-M', dest='minimap2_invocation', default="minimap2", required=False, type=str,
+    parser.add_argument('--minimap2_invocation', '-M', dest='minimap2_invocation', default="minimap2", required=False,
+                        type=str,
                         help='Invocation for minimap2.  Default: minimap2 (ie: assumes in path)')
 
     # parser.add_argument('--verbose', '-v', dest='verbose', action='store_true', default=False,
@@ -44,8 +47,10 @@ def parse_args(args = None):
 def log(msg):
     print(msg, file=sys.stderr)
 
+
 # I'm a bastard
 global_outfiles = None
+
 
 def log_result(msg, outfile=None):
     print(msg)
@@ -60,7 +65,6 @@ def log_result(msg, outfile=None):
 
 
 def run_command(command, out_file=None, log_prefix=None, include_pmp=True):
-
     # include poor man's profiler?
     if include_pmp:
         cmd = ["/usr/bin/time", "-f", "\nDEBUG_MAX_MEM:%M\nDEBUG_RUNTIME:%E\n"]
@@ -113,6 +117,7 @@ def run_polished_output_to_reads(polished_reference, polished_reads, read_size, 
             output.write("+\n")
             output.write("{}\n".format(quality_char * read_len))
             return read_len
+
         contig_count = 0
         read_count = 0
 
@@ -176,9 +181,11 @@ def run_alignment_analysis(true_reference, polished_alignment, args, outfile=Non
     reference = dict()
     reference_lengths = dict()
     reference_lines = 0
+
     def save_contig(name, lines):
         reference[name] = "".join(lines)
         reference_lengths[name] = len(reference[name])
+
     log("Reading true reference: {}".format(true_reference))
     with open(true_reference, 'r') as input:
         current_contig = None
@@ -204,7 +211,7 @@ def run_alignment_analysis(true_reference, polished_alignment, args, outfile=Non
     # read reads
     log("Reading reads from {}".format(polished_alignment))
     alignments = dict()
-    all_alignment_summaries = {'=':0,'X':0,'I':0,'D':0,'S':0}
+    all_alignment_summaries = {'=': 0, 'X': 0, 'I': 0, 'D': 0, 'S': 0}
     untracked_alignment_operations = 0
     total_reads = 0
     unaligned_reads = 0
@@ -226,8 +233,8 @@ def run_alignment_analysis(true_reference, polished_alignment, args, outfile=Non
             alignments[contig].append([aln_start, aln_end])
 
             cigar_summary, _ = read.get_cigar_stats()
-            cigar_total = sum(map(lambda x: cigar_summary[x], range(10))) # no nm
-            considered_total = sum(map(lambda x: cigar_summary[x], [1,2,4,7,8]))
+            cigar_total = sum(map(lambda x: cigar_summary[x], range(10)))  # no nm
+            considered_total = sum(map(lambda x: cigar_summary[x], [1, 2, 4, 7, 8]))
             untracked_alignment_operations += (cigar_total - considered_total)
             all_alignment_summaries['='] += cigar_summary[7]
             all_alignment_summaries['X'] += cigar_summary[8]
@@ -252,21 +259,33 @@ def run_alignment_analysis(true_reference, polished_alignment, args, outfile=Non
     log_result("############################")
     log_result("Results {}: read_size {}, time {}".format(type_identifier, args.read_size, datetime.datetime.now()))
     log_result("  Total reads:              {:12d}".format(total_reads))
-    log_result("  Total unaligned reads:    {:12d}  {:.5f} of total reads".format(unaligned_reads, 1.0 * unaligned_reads / total_reads))
+    log_result("  Total unaligned reads:    {:12d}  {:.5f} of total reads".format(unaligned_reads,
+                                                                                  1.0 * unaligned_reads / total_reads))
     log_result("")
     log_result("  Total reference bases:    {:12d}".format(total_reference_bases))
-    log_result("  Total aligned bases:      {:12d}  {:.5f} of ref bases".format(total_summaries, 1.0 * total_summaries / total_reference_bases))
-    log_result("  Total softclip:           {:12d}  {:.5f} of aln bases".format(total_softclip, 1.0 * total_softclip / total_summaries))
-    log_result("  Total non-softclip aln:   {:12d}  {:.5f} of ref bases".format(total_aln_nonsc, 1.0 * total_aln_nonsc / total_reference_bases))
+    log_result("  Total aligned bases:      {:12d}  {:.5f} of ref bases".format(total_summaries,
+                                                                                1.0 * total_summaries / total_reference_bases))
+    log_result("  Total softclip:           {:12d}  {:.5f} of aln bases".format(total_softclip,
+                                                                                1.0 * total_softclip / total_summaries))
+    log_result("  Total non-softclip aln:   {:12d}  {:.5f} of ref bases".format(total_aln_nonsc,
+                                                                                1.0 * total_aln_nonsc / total_reference_bases))
     log_result("")
-    log_result("  Total exact match:        {:12d}  {:.5f} of non-softclip aln bases".format(total_match, 1.0 * total_match / total_aln_nonsc))
-    log_result("                                          {:.5f} of reference bases".format(1.0 * total_match / total_reference_bases))
-    log_result("  Total mismatch:           {:12d}  {:.5f} of non-softclip aln bases".format(total_mismatch, 1.0 * total_mismatch / total_aln_nonsc))
-    log_result("                                          {:.5f} of reference bases".format(1.0 * total_mismatch / total_reference_bases))
-    log_result("  Total insert:             {:12d}  {:.5f} of non-softclip aln bases".format(total_insert, 1.0 * total_insert / total_aln_nonsc))
-    log_result("                                          {:.5f} of reference bases".format(1.0 * total_insert / total_reference_bases))
-    log_result("  Total delete:             {:12d}  {:.5f} of non-softclip aln bases".format(total_delete, 1.0 * total_delete / total_aln_nonsc))
-    log_result("                                          {:.5f} of reference bases".format(1.0 * total_delete / total_reference_bases))
+    log_result("  Total exact match:        {:12d}  {:.5f} of non-softclip aln bases".format(total_match,
+                                                                                             1.0 * total_match / total_aln_nonsc))
+    log_result("                                          {:.5f} of reference bases".format(
+        1.0 * total_match / total_reference_bases))
+    log_result("  Total mismatch:           {:12d}  {:.5f} of non-softclip aln bases".format(total_mismatch,
+                                                                                             1.0 * total_mismatch / total_aln_nonsc))
+    log_result("                                          {:.5f} of reference bases".format(
+        1.0 * total_mismatch / total_reference_bases))
+    log_result("  Total insert:             {:12d}  {:.5f} of non-softclip aln bases".format(total_insert,
+                                                                                             1.0 * total_insert / total_aln_nonsc))
+    log_result("                                          {:.5f} of reference bases".format(
+        1.0 * total_insert / total_reference_bases))
+    log_result("  Total delete:             {:12d}  {:.5f} of non-softclip aln bases".format(total_delete,
+                                                                                             1.0 * total_delete / total_aln_nonsc))
+    log_result("                                          {:.5f} of reference bases".format(
+        1.0 * total_delete / total_reference_bases))
     if untracked_alignment_operations > 0:
         log_result("  Total unconsidered cigop: {:12d}".format(untracked_alignment_operations))
     log_result("")
@@ -275,8 +294,7 @@ def run_alignment_analysis(true_reference, polished_alignment, args, outfile=Non
     return 1.0 * total_match / total_aln_nonsc, 1.0 * total_match / total_reference_bases
 
 
-
-def main(args = None):
+def main(args=None):
     # get our arguments
     args = parse_args() if args is None else parse_args(args)
 
@@ -354,7 +372,6 @@ def main(args = None):
             log("  Will overwrite (--force_realign set)")
             orig_assmebly_bam_exists = False
 
-
     ### running process ###
 
     # the main process
@@ -401,7 +418,8 @@ def main(args = None):
     log("Analyzing polishing alignment")
     polished_assembly_final_results = "{}.polished_assembly_results.txt".format(args.output_name)
     polish_exact_match_nonscaln, polish_exact_match_ref = run_alignment_analysis(
-        true_reference, polished_bam, args, outfile=polished_assembly_final_results, type_identifier="polished assembly")
+        true_reference, polished_bam, args, outfile=polished_assembly_final_results,
+        type_identifier="polished assembly")
 
     ### original assembly alignments ###
 
@@ -432,7 +450,8 @@ def main(args = None):
     log("Analyzing original assembly alignment")
     orig_assembly_final_results = "{}.original_assembly_results.txt".format(args.output_name)
     orig_assembly_exact_match_nonscaln, orig_assembly_exact_match_ref = run_alignment_analysis(
-        true_reference, orig_assmebly_bam, args, outfile=orig_assembly_final_results, type_identifier="original assembly")
+        true_reference, orig_assmebly_bam, args, outfile=orig_assembly_final_results,
+        type_identifier="original assembly")
 
     global global_outfiles
     global_outfiles = [orig_assembly_final_results, polished_assembly_final_results]
@@ -449,7 +468,6 @@ def main(args = None):
 
     ### fin ###
     log("Fin.")
-
 
 
 if __name__ == "__main__":

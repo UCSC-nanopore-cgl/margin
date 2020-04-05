@@ -10,10 +10,10 @@
 
 static char *polishParamsFile = "../params/allParams.np.json";
 
-
-void getCallConsensusDataFromReads(char *rawReads[], int readCount, char**rleReads[], uint8_t**rleCounts[], uint8_t *strands[]) {
-    *rleReads = st_calloc(readCount, sizeof(char*));
-    *rleCounts = st_calloc(readCount, sizeof(uint8_t*));
+void getCallConsensusDataFromReads(char *rawReads[], int readCount, char **rleReads[], uint8_t **rleCounts[],
+                                   uint8_t *strands[]) {
+    *rleReads = st_calloc(readCount, sizeof(char *));
+    *rleCounts = st_calloc(readCount, sizeof(uint8_t *));
     *strands = st_calloc(readCount, sizeof(uint8_t));
 
     for (int i = 0; i < readCount; i++) {
@@ -31,9 +31,8 @@ void getCallConsensusDataFromReads(char *rawReads[], int readCount, char**rleRea
     }
 }
 
-
 void test_readSet1(CuTest *testCase) {
-	char *rawReads[] = {
+    char *rawReads[] = {
             "CATTTTTCTCCTCCACCTGCAACAGAAGATAAAAACGCGCATCACAAACTACTTTATTG",
             "CATTTTTCTCTCCGTCACGTAATAGGAAAACAGATGAAAATGTGCACCATAAAACGCATTTTTATTT",
             "CATTTTCTCTCTCCGTCACGACAGGAAACAGATGAAAATGGGCACAAGACCACAAACGCATTTTGAT",
@@ -108,7 +107,7 @@ void test_readSet1(CuTest *testCase) {
 
 
 void test_readSet2(CuTest *testCase) {
-	char *rawReads[] = {
+    char *rawReads[] = {
             "GATGTAAAAATGACTGAGTTAGAACAGGCATAAATACATCTGT",
             "GATGTAAAAAAAAATGACAGAGAATAAAACTATCCTTATCTATT",
             "GATGTAAAAAGAAGCGGAAGTTAGAACAGGCATAAATACATCTGT",
@@ -179,8 +178,8 @@ void test_readSet2(CuTest *testCase) {
 }
 
 
-CuSuite* callConsensusTestSuite(void) {
-    CuSuite* suite = CuSuiteNew();
+CuSuite *callConsensusTestSuite(void) {
+    CuSuite *suite = CuSuiteNew();
 
     SUITE_ADD_TEST(suite, test_readSet1);
     SUITE_ADD_TEST(suite, test_readSet2);

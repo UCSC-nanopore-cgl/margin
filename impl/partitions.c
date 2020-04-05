@@ -19,7 +19,7 @@ inline uint64_t makeAcceptMask(uint64_t depth) {
 }
 
 inline uint64_t mergePartitionsOrMasks(uint64_t partition1, uint64_t partition2,
-        uint64_t depthOfPartition1, uint64_t depthOfPartition2) {
+                                       uint64_t depthOfPartition1, uint64_t depthOfPartition2) {
     /*
      * Take two read partitions or masks and merge them together
      */
@@ -50,19 +50,19 @@ inline bool seqInHap1(uint64_t partition, int64_t seqIndex) {
     return (partition >> seqIndex) & 1;
 }
 
-char * intToBinaryString(uint64_t i) {
+char *intToBinaryString(uint64_t i) {
     /*
      * Converts the unsigned int to a binary string.
      */
-    int64_t bits = sizeof(uint64_t)*8;
-    char * str = st_malloc((bits + 1) * sizeof(char));
+    int64_t bits = sizeof(uint64_t) * 8;
+    char *str = st_malloc((bits + 1) * sizeof(char));
     str[bits] = '\0'; //terminate the string
 
     // Decode the bits in from low to high in order
     // so that 14 will end up as 1110 and 15 will end up as
     // 1111 (plus some prefix bits)
-    for(int64_t bit=0; bit < bits; i >>= 1) {
-        str[(sizeof(uint64_t)*8)-++bit] = i & 1 ? '1' : '0';
+    for (int64_t bit = 0; bit < bits; i >>= 1) {
+        str[(sizeof(uint64_t) * 8) - ++bit] = i & 1 ? '1' : '0';
     }
 
     return str;
@@ -72,5 +72,5 @@ uint64_t flipAReadsPartition(uint64_t partition, uint64_t readIndex) {
     /*
      * Switches which the partition of a given read whose index in the partition vector is readIndex.
      */
-    return partition ^ ((uint64_t)1 << readIndex);
+    return partition ^ ((uint64_t) 1 << readIndex);
 }

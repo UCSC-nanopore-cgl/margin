@@ -93,7 +93,7 @@ stList *readChunk(FILE *fh, char **seqName, int64_t *chunkOrdinal) {
      * Newlines characters are omitted from the ends of each line string.
      */
     char *headerLine = stFile_getLineFromFile(fh);
-    if(headerLine == NULL) {
+    if (headerLine == NULL) {
         *chunkOrdinal = -1;
         *seqName = NULL; // Seq seqName to NULL;
         return NULL;
@@ -101,7 +101,7 @@ stList *readChunk(FILE *fh, char **seqName, int64_t *chunkOrdinal) {
 
     stList *tokens = stString_splitByString(headerLine, ",");
 
-    if(stList_length(tokens) != 3) {
+    if (stList_length(tokens) != 3) {
         st_errAbort("Expected three tokens in header line, got %" PRIi64 "\n", stList_length(tokens));
     }
 
@@ -112,9 +112,9 @@ stList *readChunk(FILE *fh, char **seqName, int64_t *chunkOrdinal) {
     int64_t lineNo = strtol(stList_peek(tokens), NULL, 10); // Get line number
 
     stList *lines = stList_construct3(0, free);
-    for(int64_t i=0; i<lineNo; i++) {
+    for (int64_t i = 0; i < lineNo; i++) {
         char *bodyLine = stFile_getLineFromFile(fh);
-        if(bodyLine == NULL) {
+        if (bodyLine == NULL) {
             st_errAbort("Failed to read body line from chunk, line %" PRIi64 " of %" PRIi64 " lines\n", i, lineNo);
         }
         stList_append(lines, bodyLine);
@@ -134,14 +134,16 @@ stList *readChunk2(FILE *fh, char *expectedSequenceName, int64_t expectedChunkOr
     char *seqName;
     int64_t chunkOrdinal;
     stList *lines = readChunk(fh, &seqName, &chunkOrdinal);
-    if(lines == NULL) {
+    if (lines == NULL) {
         st_errAbort("Got no chunk when one was expected\n");
     }
-    if(!stString_eq(seqName, expectedSequenceName)) {
-        st_errAbort("Got an unexpected sequence name: %s in reading chunk (expected: %s)\n", seqName, expectedSequenceName);
+    if (!stString_eq(seqName, expectedSequenceName)) {
+        st_errAbort("Got an unexpected sequence name: %s in reading chunk (expected: %s)\n", seqName,
+                    expectedSequenceName);
     }
-    if(expectedChunkOrdinal != chunkOrdinal) {
-        st_errAbort("Got an unexpected chunk ordinal (%" PRIi64 ") in reading chunk (expected: %" PRIi64 ")\n", chunkOrdinal, expectedChunkOrdinal);
+    if (expectedChunkOrdinal != chunkOrdinal) {
+        st_errAbort("Got an unexpected chunk ordinal (%" PRIi64 ") in reading chunk (expected: %" PRIi64 ")\n",
+                    chunkOrdinal, expectedChunkOrdinal);
     }
     free(seqName);
     return lines;
@@ -156,14 +158,14 @@ bool chunkToStitch_readSequenceChunk(FILE *fh, ChunkToStitch *chunk, bool phased
     stList *lines = readChunk(fh, &chunk->seqName, &chunk->chunkOrdinal);
 
     // If we get nothing we have exhausted the file
-    if(lines == NULL) {
+    if (lines == NULL) {
         return 0;
     }
 
     chunk->seqHap1 = stString_join2("", lines);   // Concatenate the lines to make the sequence
     stList_destruct(lines); // Cleanup
 
-    if(phased) {
+    if (phased) {
         int64_t i;
         char *name;
         lines = readChunk(fh, &name, &i);
@@ -192,7 +194,7 @@ void chunkToStitch_readPoaChunk(FILE *fh, ChunkToStitch *chunk, bool phased) {
      * Reads a chunk from a POA containing file.
      */
     chunk->poaHap1StringsLines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
-    if(phased) {
+    if (phased) {
         chunk->poaHap2StringsLines = readChunk2(fh, chunk->seqName, chunk->chunkOrdinal);
     }
 }
@@ -562,8 +564,9 @@ outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOr
 
     // Poa
     if (outputChunker->outputPoaFileHandle != NULL) {
-        fprintf(outputChunker->outputPoaFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poa->nodes)+1);
-        poa_printCSV(poa, outputChunker->outputPoaFileHandle, reads, outputChunker->params->polishParams->repeatSubMatrix, 5);
+        fprintf(outputChunker->outputPoaFileHandle, "%s%" PRIi64 "\n", headerLinePrefix, stList_length(poa->nodes) + 1);
+        poa_printCSV(poa, outputChunker->outputPoaFileHandle, reads,
+                     outputChunker->params->polishParams->repeatSubMatrix, 5);
     }
 
     // Now repeat counts
@@ -580,7 +583,8 @@ outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOr
 
 void
 outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *headerLinePrefix,
-                                          Poa *poa, stList *reads, stSet *readsBelongingToHap1, stSet *readsBelongingToHap2) {
+                                          Poa *poa, stList *reads, stSet *readsBelongingToHap1,
+                                          stSet *readsBelongingToHap2) {
     // Output the sequence
     char *outputSequence = rleString_expand(poa->refString);  // Do run-length decoding
     fprintf(outputChunker->outputSequenceFileHandle, "%s1\n%s\n", headerLinePrefix, outputSequence);
@@ -881,7 +885,7 @@ void outputChunkers_close(OutputChunkers *outputChunkers) {
         outputChunker_close(stList_get(outputChunkers->tempFileChunkers, i));
     }
     outputChunker_close(outputChunkers->outputChunkerHap1);
-    if(outputChunkers->outputChunkerHap2 != NULL) {
+    if (outputChunkers->outputChunkerHap2 != NULL) {
         outputChunker_close(outputChunkers->outputChunkerHap2);
     }
 }
@@ -895,7 +899,7 @@ void outputChunkers_openForStitching(OutputChunkers *outputChunkers) {
         outputChunker_open(stList_get(outputChunkers->tempFileChunkers, i), "r");
     }
     outputChunker_open(outputChunkers->outputChunkerHap1, "w");
-    if(outputChunkers->outputChunkerHap2 != NULL) {
+    if (outputChunkers->outputChunkerHap2 != NULL) {
         outputChunker_open(outputChunkers->outputChunkerHap2, "w");
     }
 }
@@ -903,8 +907,9 @@ void outputChunkers_openForStitching(OutputChunkers *outputChunkers) {
 static ChunkToStitch *outputChunkers_readChunk(OutputChunkers *outputChunkers, bool phased) {
     for (int64_t i = 0; i < stList_length(outputChunkers->tempFileChunkers); i++) {
         ChunkToStitch *chunk = outputChunker_readChunk(stList_get(outputChunkers->tempFileChunkers,
-                                                                   outputChunkers->tempFileChunkerCounter++ %
-                                                                   stList_length(outputChunkers->tempFileChunkers)), phased);
+                                                                  outputChunkers->tempFileChunkerCounter++ %
+                                                                  stList_length(outputChunkers->tempFileChunkers)),
+                                                       phased);
         if (chunk != NULL) {
             return chunk;
         }
@@ -913,7 +918,7 @@ static ChunkToStitch *outputChunkers_readChunk(OutputChunkers *outputChunkers, b
 }
 
 static ChunkToStitch *outputChunkers_getNextChunkInSequence(OutputChunkers *outputChunkers,
-                                                     stSortedSet *orderedChunks, bool phased) {
+                                                            stSortedSet *orderedChunks, bool phased) {
     ChunkToStitch *chunk;
     while (1) {
         chunk = outputChunkers_readChunk(outputChunkers, phased);
@@ -945,7 +950,7 @@ void outputChunkers_writeChunk(OutputChunkers *outputChunkers, ChunkToStitch *ch
     outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap1,
                                           chunk->seqName, chunk->seqHap1, chunk->poaHap1StringsLines,
                                           chunk->repeatCountLinesHap1, chunk->readsHap1Lines, chunk->startOfSequence);
-    if(outputChunkers->outputChunkerHap2 != NULL) {
+    if (outputChunkers->outputChunkerHap2 != NULL) {
         outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap2,
                                               chunk->seqName, chunk->seqHap2, chunk->poaHap2StringsLines,
                                               chunk->repeatCountLinesHap2, chunk->readsHap2Lines,
@@ -1019,7 +1024,7 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased) {
     }
 
     // Cleanup
-    if(stSortedSet_size(orderedChunks) != 0) {
+    if (stSortedSet_size(orderedChunks) != 0) {
         st_errAbort("Got chunks left over after writing out chunks");
     }
     stSortedSet_destruct(orderedChunks);

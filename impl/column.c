@@ -10,7 +10,7 @@
  * Read partitioning hmm column (stRPColumn) functions
  */
 stRPColumn *stRPColumn_construct(int64_t refStart, int64_t length, int64_t depth,
-        stProfileSeq **seqHeaders, uint8_t **seqs) {
+                                 stProfileSeq **seqHeaders, uint8_t **seqs) {
 
     stRPColumn *column = st_calloc(1, sizeof(stRPColumn));
 
@@ -33,7 +33,7 @@ void stRPColumn_destruct(stRPColumn *column) {
 
     // Clean up the contained cells
     stRPCell *cell = column->head;
-    while(cell != NULL) {
+    while (cell != NULL) {
         stRPCell *pCell = cell;
         cell = cell->nCell;
         stRPCell_destruct(pCell);
@@ -51,19 +51,19 @@ void stRPColumn_print(stRPColumn *column, FILE *fileHandle, bool includeCells) {
      * state of the cells too.
      */
     fprintf(fileHandle, "\tCOLUMN: REF_START: %" PRIi64
-            " REF_LENGTH: %" PRIi64 " DEPTH: %" PRIi64
-            " TOTAL_PROB: %f\n",
+                        " REF_LENGTH: %" PRIi64 " DEPTH: %" PRIi64
+                        " TOTAL_PROB: %f\n",
             column->refStart, column->length, column->depth,
-            (float)column->totalLogProb);
-    for(int64_t i=0; i<column->depth; i++) {
+            (float) column->totalLogProb);
+    for (int64_t i = 0; i < column->depth; i++) {
         stProfileSeq_print(column->seqHeaders[i], fileHandle);
     }
-    if(includeCells) {
+    if (includeCells) {
         stRPCell *cell = column->head;
         do {
             fprintf(fileHandle, "\t\t");
             stRPCell_print(cell, fileHandle);
-        } while((cell = cell->nCell) != NULL);
+        } while ((cell = cell->nCell) != NULL);
     }
 }
 
@@ -79,13 +79,13 @@ void stRPColumn_split(stRPColumn *column, int64_t firstHalfLength, stRPHmm *hmm)
     // Update the pointers to the seqs
     uint64_t firstAllele = hmm->ref->sites[column->refStart].alleleOffset;
     uint64_t lastAllele = hmm->ref->sites[column->refStart + firstHalfLength].alleleOffset;
-    for(int64_t i=0; i<column->depth; i++) {
+    for (int64_t i = 0; i < column->depth; i++) {
         seqs[i] = &(column->seqs[i][lastAllele - firstAllele]);
     }
     assert(firstHalfLength > 0); // Non-zero length for first half
-    assert(column->length-firstHalfLength > 0); // Non-zero length for second half
-    stRPColumn *rColumn = stRPColumn_construct(column->refStart+firstHalfLength,
-            column->length-firstHalfLength, column->depth, seqHeaders, seqs);
+    assert(column->length - firstHalfLength > 0); // Non-zero length for second half
+    stRPColumn *rColumn = stRPColumn_construct(column->refStart + firstHalfLength,
+                                               column->length - firstHalfLength, column->depth, seqHeaders, seqs);
 
     // Create merge column
     uint64_t acceptMask = makeAcceptMask(column->depth);
@@ -98,19 +98,18 @@ void stRPColumn_split(stRPColumn *column, int64_t firstHalfLength, stRPHmm *hmm)
         *pCell = stRPCell_construct(cell->partition);
         stRPMergeCell_construct(cell->partition, cell->partition, mColumn);
         pCell = &((*pCell)->nCell);
-    } while((cell = cell->nCell) != NULL);
+    } while ((cell = cell->nCell) != NULL);
 
     // Create links
     rColumn->pColumn = mColumn;
     mColumn->nColumn = rColumn;
 
     // If is the last column
-    if(column->nColumn == NULL) {
-       assert(hmm->lastColumn == column);
-       hmm->lastColumn = rColumn;
-       assert(rColumn->nColumn == NULL);
-    }
-    else {
+    if (column->nColumn == NULL) {
+        assert(hmm->lastColumn == column);
+        hmm->lastColumn = rColumn;
+        assert(rColumn->nColumn == NULL);
+    } else {
         column->nColumn->pColumn = rColumn;
         rColumn->nColumn = column->nColumn;
     }
@@ -129,7 +128,7 @@ stSet *stRPColumn_getColumnSequencesAsSet(stRPColumn *column) {
      * Get profile sequences in the column as a set.
      */
     stSet *seqSet = stSet_construct();
-    for(int64_t i=0; i<column->depth; i++) {
+    for (int64_t i = 0; i < column->depth; i++) {
         stSet_insert(seqSet, column->seqHeaders[i]);
     }
     return seqSet;
@@ -171,7 +170,7 @@ void stRPCell_print(stRPCell *cell, FILE *fileHandle) {
      */
     char *partitionString = intToBinaryString(cell->partition);
     fprintf(fileHandle, "CELL PARTITION: %s FORWARD_PROB: %f BACKWARD_PROB: %f\n",
-            partitionString, (float)cell->forwardLogProb, (float)cell->backwardLogProb);
+            partitionString, (float) cell->forwardLogProb, (float) cell->backwardLogProb);
     free(partitionString);
 }
 

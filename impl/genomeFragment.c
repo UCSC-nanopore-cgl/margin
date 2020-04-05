@@ -6,34 +6,35 @@
 
 #include "margin.h"
 
-stGenomeFragment *stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2) {
-	stGenomeFragment *gF = st_calloc(1, sizeof(stGenomeFragment));
+stGenomeFragment *
+stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2) {
+    stGenomeFragment *gF = st_calloc(1, sizeof(stGenomeFragment));
 
-	// Set coordinates
-	gF->reference = ref;
-	gF->refStart = refStart;
-	gF->length = length;
+    // Set coordinates
+    gF->reference = ref;
+    gF->refStart = refStart;
+    gF->length = length;
 
-	// Get the reads which map to each path
-	gF->reads1 = reads1;
-	gF->reads2 = reads2;
+    // Get the reads which map to each path
+    gF->reads1 = reads1;
+    gF->reads2 = reads2;
 
-	// Allocate genotype arrays
-	gF->genotypeString = st_calloc(gF->length, sizeof(uint64_t));
-	gF->genotypeProbs = st_calloc(gF->length, sizeof(float));
-	gF->haplotypeProbs1 = st_calloc(gF->length, sizeof(float));
-	gF->haplotypeProbs2 = st_calloc(gF->length, sizeof(float));
+    // Allocate genotype arrays
+    gF->genotypeString = st_calloc(gF->length, sizeof(uint64_t));
+    gF->genotypeProbs = st_calloc(gF->length, sizeof(float));
+    gF->haplotypeProbs1 = st_calloc(gF->length, sizeof(float));
+    gF->haplotypeProbs2 = st_calloc(gF->length, sizeof(float));
 
-	// Allocate haplotype arrays
-	gF->haplotypeString1 = st_calloc(gF->length, sizeof(uint64_t));
-	gF->haplotypeString2 = st_calloc(gF->length, sizeof(uint64_t));
-	gF->ancestorString = st_calloc(gF->length, sizeof(uint64_t));
+    // Allocate haplotype arrays
+    gF->haplotypeString1 = st_calloc(gF->length, sizeof(uint64_t));
+    gF->haplotypeString2 = st_calloc(gF->length, sizeof(uint64_t));
+    gF->ancestorString = st_calloc(gF->length, sizeof(uint64_t));
 
-	// Allocate haplotype read coverage arrays
-	gF->readsSupportingHaplotype1 = st_calloc(gF->length, sizeof(uint64_t));
-	gF->readsSupportingHaplotype2 = st_calloc(gF->length, sizeof(uint64_t));
+    // Allocate haplotype read coverage arrays
+    gF->readsSupportingHaplotype1 = st_calloc(gF->length, sizeof(uint64_t));
+    gF->readsSupportingHaplotype2 = st_calloc(gF->length, sizeof(uint64_t));
 
-	return gF;
+    return gF;
 }
 
 stGenomeFragment *stGenomeFragment_construct(stRPHmm *hmm, stList *path) {
@@ -42,18 +43,18 @@ stGenomeFragment *stGenomeFragment_construct(stRPHmm *hmm, stList *path) {
      */
 
     stGenomeFragment *gF = stGenomeFragment_constructEmpty(hmm->ref,
-    		hmm->refStart, hmm->refLength,
-			stRPHmm_partitionSequencesByStatePath(hmm, path, 1),
-			stRPHmm_partitionSequencesByStatePath(hmm, path, 0));
+                                                           hmm->refStart, hmm->refLength,
+                                                           stRPHmm_partitionSequencesByStatePath(hmm, path, 1),
+                                                           stRPHmm_partitionSequencesByStatePath(hmm, path, 0));
 
     // For each cell in the hmm
     stRPColumn *column = hmm->firstColumn;
-    for(uint64_t i=0; i<stList_length(path)-1; i++) {
+    for (uint64_t i = 0; i < stList_length(path) - 1; i++) {
         stRPCell *cell = stList_get(path, i);
         assert(cell != NULL);
 
         // Calculate the predicted genotype/haplotypes for the given cell
-        fillInPredictedGenome(gF, cell->partition, column, (stRPHmmParameters *)hmm->parameters);
+        fillInPredictedGenome(gF, cell->partition, column, (stRPHmmParameters *) hmm->parameters);
 
         column = column->nColumn->nColumn;
     }
@@ -61,8 +62,8 @@ stGenomeFragment *stGenomeFragment_construct(stRPHmm *hmm, stList *path) {
     // Get predictions for the last column
     assert(column != NULL);
     assert(column->nColumn == NULL);
-    fillInPredictedGenome(gF, ((stRPCell *)stList_peek(path))->partition, column,
-    						(stRPHmmParameters *)hmm->parameters);
+    fillInPredictedGenome(gF, ((stRPCell *) stList_peek(path))->partition, column,
+                          (stRPHmmParameters *) hmm->parameters);
 
     return gF;
 }
@@ -80,15 +81,15 @@ double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString,
         int64_t j = i + profileSeq->refStart - start;
         if (j >= 0 && j < length) {
             uint64_t allele = haplotypeString[j];
-            stSite *site = &(ref->sites[i+profileSeq->refStart]);
-            totalProb -= profileSeq->profileProbs[site->alleleOffset-firstAllele + allele];
+            stSite *site = &(ref->sites[i + profileSeq->refStart]);
+            totalProb -= profileSeq->profileProbs[site->alleleOffset - firstAllele + allele];
         }
     }
     return totalProb;
 }
 
 double getProbabilityOfBeingInPartition(stProfileSeq *pSeq, uint64_t *haplotypeString1, uint64_t *haplotypeString2,
-                                                int64_t start, int64_t length, stReference *ref) {
+                                        int64_t start, int64_t length, stReference *ref) {
     /*
      * Returns the probability of aread being generated by the first haplotype  of the two haplotype strings.
      */
@@ -116,7 +117,8 @@ void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool h
 }
 
 stSet *findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(uint64_t *haplotypeString1, uint64_t *haplotypeString2,
-        int64_t start, int64_t length, stSet *profileSeqs, stReference *ref) {
+                                                                 int64_t start, int64_t length, stSet *profileSeqs,
+                                                                 stReference *ref) {
     /*
      * Returns the subset of profileSeqs that were more probably generated by the second haplotype string
      * than the first.
@@ -124,13 +126,13 @@ stSet *findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(uint64_t *haplo
     stSet *subset = stSet_construct();
     stSetIterator *it = stSet_getIterator(profileSeqs);
     stProfileSeq *pSeq;
-    while((pSeq = stSet_getNext(it)) != NULL) {
+    while ((pSeq = stSet_getNext(it)) != NULL) {
 
         // Calculate probability that the read was generated from haplotype1 and haplotype2
         double i = getLogProbOfReadGivenHaplotype(haplotypeString1, start, length, pSeq, ref);
         double j = getLogProbOfReadGivenHaplotype(haplotypeString2, start, length, pSeq, ref);
 
-        if(i < j) {
+        if (i < j) {
             // Read is more likely to have been generated by the second haplotype rather than the first
             stSet_insert(subset, pSeq);
         }
@@ -142,10 +144,10 @@ stSet *findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(uint64_t *haplo
 
 static uint64_t flipReadsBetweenPartitions(uint64_t partition, stRPColumn *column, stSet *flippingReads) {
 
-    for(uint64_t i=0; i<column->depth; i++) {
+    for (uint64_t i = 0; i < column->depth; i++) {
         stProfileSeq *pSeq = column->seqHeaders[i];
 
-        if(stSet_search(flippingReads, pSeq) != NULL) {
+        if (stSet_search(flippingReads, pSeq) != NULL) {
             partition = flipAReadsPartition(partition, i);
         }
     }
@@ -153,7 +155,7 @@ static uint64_t flipReadsBetweenPartitions(uint64_t partition, stRPColumn *colum
     return partition;
 }
 
-void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,stRPHmm *hmm, stList *path, int64_t maxIterations) {
+void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF, stRPHmm *hmm, stList *path, int64_t maxIterations) {
     /*
      * Refines the genome fragment and read partitions by greedily and iteratively
      * moving reads between the two partitions according to which haplotype they best match.
@@ -162,25 +164,31 @@ void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,stRPHmm *hmm, st
     // Copy the path as a sequence of unsigned integers, one for each cell on the path
     int64_t pathLength = stList_length(path);
     uint64_t p[pathLength];
-    for(int64_t i=0; i<pathLength; i++) {
-        p[i] = ((stRPCell *)stList_get(path, i))->partition;
+    for (int64_t i = 0; i < pathLength; i++) {
+        p[i] = ((stRPCell *) stList_get(path, i))->partition;
     }
 
     int64_t iteration = 0;
-    while(iteration++ < maxIterations) {
+    while (iteration++ < maxIterations) {
         // Get the subset of reads in each partition that want to switch to the other partition
-        stSet *reads1To2 = findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(gF->haplotypeString1, gF->haplotypeString2,
-                gF->refStart, gF->length, gF->reads1, gF->reference);
-        stSet *reads2To1 = findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(gF->haplotypeString2, gF->haplotypeString1,
-                gF->refStart, gF->length, gF->reads2, gF->reference);
+        stSet *reads1To2 = findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(gF->haplotypeString1,
+                                                                                     gF->haplotypeString2,
+                                                                                     gF->refStart, gF->length,
+                                                                                     gF->reads1, gF->reference);
+        stSet *reads2To1 = findReadsThatWereMoreProbablyGeneratedByTheOtherHaplotype(gF->haplotypeString2,
+                                                                                     gF->haplotypeString1,
+                                                                                     gF->refStart, gF->length,
+                                                                                     gF->reads2, gF->reference);
 
         // If there are no reads wanting to switch then break
-        st_logDebug("\tAt iteration %" PRIi64 " of %" PRIi64 " reads, in partition found %" PRIi64 " reads from partition 1 switching to 2 "
-                            "and %" PRIi64 " reads from partition 2 switching to 1\n",
-                    iteration, stSet_size(gF->reads1) + stSet_size(gF->reads2), stSet_size(reads1To2), stSet_size(reads2To1));
-        if(stSet_size(reads1To2) + stSet_size(reads2To1) == 0) {
-        	stSet_destruct(reads1To2);
-        	stSet_destruct(reads2To1);
+        st_logDebug(
+                "\tAt iteration %" PRIi64 " of %" PRIi64 " reads, in partition found %" PRIi64 " reads from partition 1 switching to 2 "
+                "and %" PRIi64 " reads from partition 2 switching to 1\n",
+                iteration, stSet_size(gF->reads1) + stSet_size(gF->reads2), stSet_size(reads1To2),
+                stSet_size(reads2To1));
+        if (stSet_size(reads1To2) + stSet_size(reads2To1) == 0) {
+            stSet_destruct(reads1To2);
+            stSet_destruct(reads2To1);
             break;
         }
 
@@ -196,16 +204,16 @@ void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,stRPHmm *hmm, st
 
         // Update the path and update the genome fragment
         stRPColumn *column = hmm->firstColumn;
-        for(int64_t i=0; i<pathLength; i++) {
+        for (int64_t i = 0; i < pathLength; i++) {
             // Update the partition for the column by shifting the reads accordingly
             p[i] = flipReadsBetweenPartitions(p[i], column, reads1To2);
             p[i] = flipReadsBetweenPartitions(p[i], column, reads2To1);
 
             // Update the genome fragment
-            fillInPredictedGenome(gF, p[i], column, (stRPHmmParameters *)hmm->parameters);
+            fillInPredictedGenome(gF, p[i], column, (stRPHmmParameters *) hmm->parameters);
 
             // Get the next column
-            if(i+1<pathLength) {
+            if (i + 1 < pathLength) {
                 column = column->nColumn->nColumn;
             }
         }
@@ -216,23 +224,25 @@ void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,stRPHmm *hmm, st
     }
 }
 
-void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads, stSet **readsBelongingToHap1, stSet **readsBelongingToHap2) {
-	*readsBelongingToHap1 = stSet_construct();
-	*readsBelongingToHap2 = stSet_construct();
+void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads,
+                                         stSet **readsBelongingToHap1, stSet **readsBelongingToHap2) {
+    *readsBelongingToHap1 = stSet_construct();
+    *readsBelongingToHap2 = stSet_construct();
 
-	for(int64_t i=0; i<stList_length(reads); i++) {
-		BamChunkRead *read = stList_get(reads, i);
-		stProfileSeq *pSeq = stHash_search(readsToPSeqs, read);
-		if(pSeq != NULL) { // Some reads do not get converted to pSeqs because they are too low quality at every aligned site they
-			// overlap
+    for (int64_t i = 0; i < stList_length(reads); i++) {
+        BamChunkRead *read = stList_get(reads, i);
+        stProfileSeq *pSeq = stHash_search(readsToPSeqs, read);
+        if (pSeq !=
+            NULL) { // Some reads do not get converted to pSeqs because they are too low quality at every aligned site they
+            // overlap
 
-			// Checks
-			assert(stSet_search(gf->reads1, pSeq) != NULL || stSet_search(gf->reads2, pSeq) != NULL);
-			assert(stSet_search(gf->reads1, pSeq) == NULL || stSet_search(gf->reads2, pSeq) == NULL);
+            // Checks
+            assert(stSet_search(gf->reads1, pSeq) != NULL || stSet_search(gf->reads2, pSeq) != NULL);
+            assert(stSet_search(gf->reads1, pSeq) == NULL || stSet_search(gf->reads2, pSeq) == NULL);
 
-			stSet_insert(stSet_search(gf->reads1, pSeq) != NULL ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
-		}
-	}
+            stSet_insert(stSet_search(gf->reads1, pSeq) != NULL ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
+        }
+    }
 }
 
 void stGenomeFragment_destruct(stGenomeFragment *genomeFragment) {

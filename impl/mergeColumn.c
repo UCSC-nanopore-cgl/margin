@@ -11,11 +11,11 @@
  */
 
 static uint64_t intHashFn(const void *a) {
-    return *(uint64_t *)a;
+    return *(uint64_t *) a;
 }
 
 static int intEqualsFn(const void *key1, const void *key2) {
-    return *(uint64_t *)key1 == *(uint64_t *)key2;
+    return *(uint64_t *) key1 == *(uint64_t *) key2;
 }
 
 stRPMergeColumn *stRPMergeColumn_construct(uint64_t maskFrom, uint64_t maskTo) {
@@ -24,7 +24,8 @@ stRPMergeColumn *stRPMergeColumn_construct(uint64_t maskFrom, uint64_t maskTo) {
     mColumn->maskTo = maskTo;
 
     // Maps between partitions and cells
-    mColumn->mergeCellsFrom = stHash_construct3(intHashFn, intEqualsFn, NULL, (void (*)(void *))stRPMergeCell_destruct);
+    mColumn->mergeCellsFrom = stHash_construct3(intHashFn, intEqualsFn, NULL,
+                                                (void (*)(void *)) stRPMergeCell_destruct);
     mColumn->mergeCellsTo = stHash_construct3(intHashFn, intEqualsFn, NULL, NULL);
 
     return mColumn;
@@ -43,15 +44,15 @@ void stRPMergeColumn_print(stRPMergeColumn *mColumn, FILE *fileHandle, bool incl
     char *maskFromString = intToBinaryString(mColumn->maskFrom);
     char *maskToString = intToBinaryString(mColumn->maskTo);
     fprintf(fileHandle, "\tMERGE_COLUMN MASK_FROM: %s MASK_TO: %s"
-            " DEPTH: %" PRIi64 "\n", maskFromString, maskToString,
+                        " DEPTH: %" PRIi64 "\n", maskFromString, maskToString,
             stHash_size(mColumn->mergeCellsFrom));
     assert(stHash_size(mColumn->mergeCellsFrom) == stHash_size(mColumn->mergeCellsTo));
     free(maskFromString);
     free(maskToString);
-    if(includeCells) {
+    if (includeCells) {
         stHashIterator *it = stHash_getIterator(mColumn->mergeCellsFrom);
         stRPMergeCell *mCell;
-        while((mCell = stHash_getNext(it)) != NULL) {
+        while ((mCell = stHash_getNext(it)) != NULL) {
             fprintf(fileHandle, "\t\t");
             stRPMergeCell_print(mCell, fileHandle);
         }
@@ -72,7 +73,7 @@ stRPMergeCell *stRPMergeColumn_getPreviousMergeCell(stRPCell *cell, stRPMergeCol
     /*
      * Get the merge cell that this cell feeds from.
      */
-    uint64_t i = maskPartition(cell->partition,  mergeColumn->maskTo);
+    uint64_t i = maskPartition(cell->partition, mergeColumn->maskTo);
     stRPMergeCell *mCell = stHash_search(mergeColumn->mergeCellsTo, &i);
     return mCell;
 }
@@ -89,7 +90,7 @@ int64_t stRPMergeColumn_numberOfPartitions(stRPMergeColumn *mColumn) {
  */
 
 stRPMergeCell *stRPMergeCell_construct(uint64_t fromPartition, uint64_t toPartition,
-        stRPMergeColumn *mColumn) {
+                                       stRPMergeColumn *mColumn) {
     /*
      * Create a merge cell, adding it to the merge column mColumn.
      */
@@ -118,9 +119,9 @@ void stRPMergeCell_print(stRPMergeCell *mCell, FILE *fileHandle) {
     char *fromPartitionString = intToBinaryString(mCell->fromPartition);
     char *toPartitionString = intToBinaryString(mCell->toPartition);
     fprintf(fileHandle, "MERGE_CELL FROM_PARTITION: %s TO_PARTITION: %s "
-            "FORWARD_PROB: %f BACKWARD_PROB: %f\n",
+                        "FORWARD_PROB: %f BACKWARD_PROB: %f\n",
             fromPartitionString, toPartitionString,
-            (float)mCell->forwardLogProb, (float)mCell->backwardLogProb);
+            (float) mCell->forwardLogProb, (float) mCell->backwardLogProb);
     free(fromPartitionString);
     free(toPartitionString);
 }
@@ -131,7 +132,7 @@ double stRPMergeCell_posteriorProb(stRPMergeCell *mCell, stRPMergeColumn *mColum
      * forward and backward algorithms have been run.
      */
     double p = exp(mCell->forwardLogProb + mCell->backwardLogProb -
-           mColumn->nColumn->totalLogProb);
+                   mColumn->nColumn->totalLogProb);
 
     // for debugging/breakpointing purposes
     if (p > 1.001)
