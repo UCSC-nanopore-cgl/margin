@@ -17,9 +17,11 @@ int64_t getAlignedReadLength(bam1_t *aln) {
     int64_t end_softclip = 0;
     return getAlignedReadLength3(aln, &start_softclip, &end_softclip, TRUE);
 }
+
 int64_t getAlignedReadLength2(bam1_t *aln, int64_t *start_softclip, int64_t *end_softclip) {
     return getAlignedReadLength3(aln, start_softclip, end_softclip, TRUE);
 }
+
 int64_t getAlignedReadLength3(bam1_t *aln, int64_t *start_softclip, int64_t *end_softclip, bool boundaryAtMatch) {
     // start read needs to be init'd to 0 (mostly this is to avoid misuse)
     if (*start_softclip != 0) st_errAbort("getAlignedReadLength2 invoked with improper start_softclip parameter");
@@ -146,6 +148,7 @@ int64_t saveContigChunks(stList *dest, BamChunker *parent, char *contig, int64_t
 BamChunker *bamChunker_construct(char *bamFile, PolishParams *params) {
     return bamChunker_construct2(bamFile, NULL, params);
 }
+
 BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *params) {
 
     // are we doing region filtering?
@@ -175,7 +178,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
     chunker->chunkBoundary = chunkBoundary;
     chunker->includeSoftClip = includeSoftClip;
     chunker->params = params;
-    chunker->chunks = stList_construct3(0,(void*)bamChunk_destruct);
+    chunker->chunks = stList_construct3(0, (void *) bamChunk_destruct);
     chunker->chunkCount = 0;
 
     // open bamfile
@@ -196,7 +199,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
 
     // get all reads
     // there is probably a better way (bai?) to find min and max aligned positions (which we need for chunk divisions)
-    while(sam_read1(in,bamHdr,aln) > 0) {
+    while (sam_read1(in, bamHdr, aln) > 0) {
 
         // basic filtering (no read length, no cigar)
         if (aln->core.l_qseq <= 0) continue;
@@ -279,7 +282,7 @@ BamChunker *bamChunker_copyConstruct(BamChunker *toCopy) {
     chunker->chunkBoundary = toCopy->chunkBoundary;
     chunker->includeSoftClip = toCopy->includeSoftClip;
     chunker->params = toCopy->params;
-    chunker->chunks = stList_construct3(0,(void*)bamChunk_destruct);
+    chunker->chunks = stList_construct3(0, (void *) bamChunk_destruct);
     chunker->chunkCount = 0;
     return chunker;
 }
@@ -333,7 +336,7 @@ void bamChunk_destruct(BamChunk *bamChunk) {
 // This structure holds the bed information
 // TODO rewrite the code to just use a void*
 typedef struct samview_settings {
-    void* bed;
+    void *bed;
 } samview_settings_t;
 
 
@@ -346,13 +349,14 @@ typedef struct samview_settings {
  * softclipped portions of the reads should be included.
  */
 
-uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  stList *reads, stList *alignments) {
+uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments) {
 
     // sanity check
     assert(stList_length(reads) == 0);
     assert(stList_length(alignments) == 0);
 
-    uint64_t *ref_nonRleToRleCoordinateMap = reference == NULL ? NULL : rleString_getNonRleToRleCoordinateMap(reference);
+    uint64_t *ref_nonRleToRleCoordinateMap =
+            reference == NULL ? NULL : rleString_getNonRleToRleCoordinateMap(reference);
 
     // prep
     int64_t chunkStart = bamChunk->chunkBoundaryStart;
@@ -365,14 +369,16 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
     // prep for index (not entirely sure what all this does.  see samtools/sam_view.c
     int filter_state = ALL, filter_op = 0;
     int result;
-    samview_settings_t settings = { .bed = NULL };
-    char* region[1] = {};
-    region[0] = stString_print("%s:%d-%d", bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-    settings.bed = bed_hash_regions(settings.bed, region, 0, 1, &filter_op); //insert(1) or filter out(0) the regions from the command line in the same hash table as the bed file
+    samview_settings_t settings = {.bed = NULL};
+    char *region[1] = {};
+    region[0] = stString_print("%s:%d-%d", bamChunk->refSeqName, bamChunk->chunkBoundaryStart,
+                               bamChunk->chunkBoundaryEnd);
+    settings.bed = bed_hash_regions(settings.bed, region, 0, 1,
+                                    &filter_op); //insert(1) or filter out(0) the regions from the command line in the same hash table as the bed file
     if (!filter_op) filter_state = FILTERED;
     int regcount = 0;
     hts_reglist_t *reglist = bed_reglist(settings.bed, filter_state, &regcount);
-    if(!reglist) {
+    if (!reglist) {
         st_errAbort("ERROR: Could not create list of regions for read conversion");
     }
 
@@ -408,8 +414,8 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
             continue; //secondary
         if (!bamChunk->parent->params->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
             continue; //supplementary
-        if(aln->core.qual < bamChunk->parent->params->filterAlignmentsWithMapQBelowThisThreshold)
-        	continue; //low mapping quality
+        if (aln->core.qual < bamChunk->parent->params->filterAlignmentsWithMapQBelowThisThreshold)
+            continue; //low mapping quality
 
         //data
         char *chr = bamHdr->target_name[aln->core.tid];
@@ -427,7 +433,7 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
 
         // get cigar and rep
         uint32_t *cigar = bam_get_cigar(aln);
-        stList *cigRepr = stList_construct3(0, (void (*)(void *))stIntTuple_destruct);
+        stList *cigRepr = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
 
         // Variables to keep track of position in sequence / cigar operations
         int64_t cig_idx = 0;
@@ -615,7 +621,7 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
         }
 
         // sanity check
-        assert(stIntTuple_get((stIntTuple *)stList_peek(cigRepr), 1) < strlen(seq));
+        assert(stIntTuple_get((stIntTuple *) stList_peek(cigRepr), 1) < strlen(seq));
 
         // save to read
         bool forwardStrand = !bam_is_rev(aln);
@@ -624,17 +630,17 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
         stList_append(reads, chunkRead);
 
         // save alignment
-        if(bamChunk->parent->params->useRunLengthEncoding) {
+        if (bamChunk->parent->params->useRunLengthEncoding) {
             // ref_nonRleToRleCoordinateMap should only be null w/ RLE in tests
             if (ref_nonRleToRleCoordinateMap != NULL) {
                 // rle the alignment and save it
                 uint64_t *read_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(chunkRead->rleRead);
-                stList_append(alignments, runLengthEncodeAlignment(cigRepr, ref_nonRleToRleCoordinateMap, read_nonRleToRleCoordinateMap));
+                stList_append(alignments, runLengthEncodeAlignment(cigRepr, ref_nonRleToRleCoordinateMap,
+                                                                   read_nonRleToRleCoordinateMap));
                 stList_destruct(cigRepr);
                 free(read_nonRleToRleCoordinateMap);
             }
-        }
-        else {
+        } else {
             stList_append(alignments, cigRepr);
         }
         savedAlignments++;
@@ -646,7 +652,8 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
     }
     // the status from "get reads from iterator"
     if (result < -1) {
-        st_errAbort("ERROR: Retrieval of region %d failed due to truncated file or corrupt BAM index file\n", iter->curr_tid);
+        st_errAbort("ERROR: Retrieval of region %d failed due to truncated file or corrupt BAM index file\n",
+                    iter->curr_tid);
     }
 
     // close it all down
@@ -665,12 +672,13 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
 }
 
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
-        stList *filteredReads, stList *filteredAlignments, stList *discardedReads, stList *discardedAlignments) {
+                        stList *filteredReads, stList *filteredAlignments, stList *discardedReads,
+                        stList *discardedAlignments) {
 
     // calculate depth
     int64_t totalNucleotides = 0;
     for (int64_t i = 0; i < stList_length(reads); i++) {
-        BamChunkRead *bcr = stList_get(reads,i);
+        BamChunkRead *bcr = stList_get(reads, i);
         totalNucleotides += bcr->rleRead->length;
     }
     double averageDepth = 1.0 * totalNucleotides / (bamChunk->chunkBoundaryEnd - bamChunk->chunkBoundaryStart);

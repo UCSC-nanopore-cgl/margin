@@ -282,7 +282,7 @@ void test_jsmnParsing(CuTest *testCase) {
 
 CuSuite *parserTestSuite(void) {
     st_setLogLevelFromString("debug");
-    CuSuite* suite = CuSuiteNew();
+    CuSuite *suite = CuSuiteNew();
 
     SUITE_ADD_TEST(suite, test_jsmnParsing);
 

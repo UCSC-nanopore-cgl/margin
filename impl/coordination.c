@@ -30,7 +30,7 @@ stRPHmm *getNextClosestNonoverlappingHmm(stRPHmm *hmm1, stSortedSet *readHmms) {
     assert(hmm2 == hmm1);
 
     // For each hmm in readHmms whose coordinate is >= than hmm1's
-    while((hmm2 = stSortedSet_getNext(it)) != NULL) {
+    while ((hmm2 = stSortedSet_getNext(it)) != NULL) {
         // Compare the hmm coordinates just to check that hmm2 has a coordinate >= to hmm1s
         int i = stRPHmm_cmpFn(hmm1, hmm2);
         assert(i <= 0);
@@ -38,12 +38,12 @@ stRPHmm *getNextClosestNonoverlappingHmm(stRPHmm *hmm1, stSortedSet *readHmms) {
         // If hmm1 and hmm2 are on different references, then hmm2 is the closest non-overlapping
         // hmm to hmm1 in reference space
         i = strcmp(hmm1->ref->referenceName, hmm2->ref->referenceName);
-        if(i != 0) {
+        if (i != 0) {
             break;
         }
 
         // If hmm2 does not overlap hmm1 it must be the closest non-overlapping hmm to hmm1
-        if(hmm1->refStart + hmm1->refLength <= hmm2->refStart) {
+        if (hmm1->refStart + hmm1->refLength <= hmm2->refStart) {
             break;
         }
     }
@@ -81,13 +81,13 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
     stHash *componentsHash = stHash_construct();
 
     // The set of components
-    stSet *components = stSet_construct2((void (*)(void *))stSortedSet_destruct);
+    stSet *components = stSet_construct2((void (*)(void *)) stSortedSet_destruct);
 
     // The "lagging" index of the hmm in tilingPath2 that could possibly overlap hmm1
     int64_t j = 0;
 
     // For each hmm in tilingPath1, in order
-    for(int64_t i=0; i<stList_length(tilingPath1); i++) {
+    for (int64_t i = 0; i < stList_length(tilingPath1); i++) {
         stRPHmm *hmm1 = stList_get(tilingPath1, i);
 
         // Start with the component being undefined
@@ -97,22 +97,22 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
         int64_t k = 0;
 
         // While there exists an hmm in tilingPath2 that precedes or overlaps with hmm1
-        while(j+k<stList_length(tilingPath2)) {
-            stRPHmm *hmm2 = stList_get(tilingPath2, j+k); // Note the j+k
+        while (j + k < stList_length(tilingPath2)) {
+            stRPHmm *hmm2 = stList_get(tilingPath2, j + k); // Note the j+k
 
             // If hmm1 and hmm2 overlap
-            if(stRPHmm_overlapOnReference(hmm1, hmm2)) {
+            if (stRPHmm_overlapOnReference(hmm1, hmm2)) {
                 // The leading index is increased
                 k++;
 
                 // If component is still NULL
-                if(component == NULL) {
+                if (component == NULL) {
 
                     // Look for a component for hmm2
                     component = stHash_search(componentsHash, hmm2);
 
                     // If hmm2 has no component make one
-                    if(component == NULL) {
+                    if (component == NULL) {
                         component = makeComponent(hmm2, components, componentsHash);
                     }
 
@@ -122,7 +122,7 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
                     stSortedSet_insert(component, hmm1);
                     stHash_insert(componentsHash, hmm1, component);
                 }
-                // Otherwise component is defined
+                    // Otherwise component is defined
                 else {
                     // Add hmm2 to the component
                     assert(stSortedSet_search(component, hmm2) == NULL);
@@ -133,25 +133,25 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
                     stHash_insert(componentsHash, hmm2, component);
                 }
             }
-            // Else hmm1 and hmm2 do not overlap
+                // Else hmm1 and hmm2 do not overlap
             else {
                 // If hmm1 occurs before hmm2 in the reference ordering
-                if(stRPHmm_cmpFn(hmm1, hmm2) < 0) {
+                if (stRPHmm_cmpFn(hmm1, hmm2) < 0) {
 
                     // If has no component, make a trivial component containing just hmm1
                     // (it doesn't overlap with any other hmm)
-                    if(component == NULL) {
+                    if (component == NULL) {
                         component = makeComponent(hmm1, components, componentsHash);
                     }
 
                     // Done with hmm1
                     break;
                 }
-                // else hmm2 occurs before hmm1 in the reference ordering
+                    // else hmm2 occurs before hmm1 in the reference ordering
                 else {
 
                     // Add hmm2 to a trivial component if it does not overlap an HMM in tiling path1
-                    if(stHash_search(componentsHash, hmm2) == NULL) {
+                    if (stHash_search(componentsHash, hmm2) == NULL) {
                         makeComponent(hmm2, components, componentsHash);
                     }
 
@@ -161,7 +161,7 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
             }
         }
 
-        if(component == NULL) {
+        if (component == NULL) {
             //
             assert(stHash_search(componentsHash, hmm1) == NULL);
             makeComponent(hmm1, components, componentsHash);
@@ -170,9 +170,9 @@ stSet *getOverlappingComponents(stList *tilingPath1, stList *tilingPath2) {
 
     // For any remaining hmms in tilingPath2 that have not been placed in a component
     // put them in a component
-    while(j < stList_length(tilingPath2)) {
+    while (j < stList_length(tilingPath2)) {
         stRPHmm *hmm2 = stList_get(tilingPath2, j++);
-        if(stHash_search(componentsHash, hmm2) == NULL) {
+        if (stHash_search(componentsHash, hmm2) == NULL) {
             makeComponent(hmm2, components, componentsHash);
         }
     }
@@ -190,7 +190,7 @@ stList *getTilingPaths(stSortedSet *hmms) {
      * that do not overlap. Destroys sortedSet in the process.
      */
     stList *tilingPaths = stList_construct();
-    while(stSortedSet_size(hmms) > 0) {
+    while (stSortedSet_size(hmms) > 0) {
 
         // Make an empty tiling path and add to set of tiling paths built so far
         stList *tilingPath = stList_construct();
@@ -206,7 +206,7 @@ stList *getTilingPaths(stSortedSet *hmms) {
         // and add to the tiling path progressively, removing the chain of hmms from the
         // set of hmms left to tile
         stRPHmm *hmm2;
-        while((hmm2 = getNextClosestNonoverlappingHmm(hmm, hmms)) != NULL) {
+        while ((hmm2 = getNextClosestNonoverlappingHmm(hmm, hmms)) != NULL) {
             stSortedSet_remove(hmms, hmm);
             stList_append(tilingPath, hmm2);
             hmm = hmm2;
@@ -229,8 +229,8 @@ stList *getTilingPaths2(stList *profileSeqs, stRPHmmParameters *params) {
      */
 
     // Create a read partitioning HMM for every sequence and put in ordered set, ordered by reference coordinate
-    stSortedSet *readHmms = stSortedSet_construct3(stRPHmm_cmpFn, (void (*)(void *))stRPHmm_destruct2);
-    for(int64_t i=0; i<stList_length(profileSeqs); i++) {
+    stSortedSet *readHmms = stSortedSet_construct3(stRPHmm_cmpFn, (void (*)(void *)) stRPHmm_destruct2);
+    for (int64_t i = 0; i < stList_length(profileSeqs); i++) {
         stProfileSeq *pSeq = stList_get(profileSeqs, i);
         stRPHmm *hmm = stRPHmm_construct(pSeq, params);
         stSortedSet_insert(readHmms, hmm);
@@ -249,7 +249,7 @@ stRPHmm *fuseTilingPath(stList *tilingPath) {
     stRPHmm *rightHmm = stList_pop(tilingPath);
 
     // While there remain other hmms in the list fuse them together
-    while(stList_length(tilingPath) > 0) {
+    while (stList_length(tilingPath) > 0) {
         stRPHmm *leftHmm = stList_pop(tilingPath);
         rightHmm = stRPHmm_fuse(leftHmm, rightHmm);
     }
@@ -283,7 +283,7 @@ stList *mergeTwoTilingPaths(stList *tilingPath1, stList *tilingPath2) {
 
     // For each component of overlapping hmms
     stList *componentsList = stSet_getList(components);
-    for(int64_t i=0; i<stList_length(componentsList); i++) {
+    for (int64_t i = 0; i < stList_length(componentsList); i++) {
         stSortedSet *component = stList_get(componentsList, i);
         stSet_remove(components, component);
 
@@ -292,7 +292,7 @@ stList *mergeTwoTilingPaths(stList *tilingPath1, stList *tilingPath2) {
 
         stRPHmm *hmm = NULL;
 
-        if(stList_length(tilingPaths) == 2) {
+        if (stList_length(tilingPaths) == 2) {
             stList *subTilingPath1 = stList_get(tilingPaths, 0);
             stList *subTilingPath2 = stList_get(tilingPaths, 1);
 
@@ -311,8 +311,7 @@ stList *mergeTwoTilingPaths(stList *tilingPath1, stList *tilingPath2) {
             // Prune
             stRPHmm_forwardBackward(hmm);
             stRPHmm_prune(hmm);
-        }
-        else { // Case that component is just one hmm that does not
+        } else { // Case that component is just one hmm that does not
             // overlap anything else
             assert(stList_length(tilingPaths) == 1);
             stList *subTilingPath1 = stList_get(tilingPaths, 0);
@@ -346,14 +345,14 @@ stList *mergeTilingPaths(stList *tilingPaths) {
      */
 
     // If no tiling paths in input warn and return an empty tiling path
-    if(stList_length(tilingPaths) == 0) {
+    if (stList_length(tilingPaths) == 0) {
         st_logCritical("WARNING: Zero tiling paths to merge\n");
         stList_destruct(tilingPaths);
         return stList_construct();
     }
 
     // If only one tiling path in the input, the output is just the single input tiling path
-    if(stList_length(tilingPaths) == 1) {
+    if (stList_length(tilingPaths) == 1) {
         stList *tilingPath = stList_get(tilingPaths, 0);
         stList_destruct(tilingPaths);
         return tilingPath;
@@ -365,39 +364,39 @@ stList *mergeTilingPaths(stList *tilingPaths) {
     // If there are more than two tiling paths
     // split the problem into two recursively until there are just two remaining
     // tiling paths
-    if(stList_length(tilingPaths) > 2) {
+    if (stList_length(tilingPaths) > 2) {
 
         // Recursively turn the first half of the tiling paths into one tiling path
         stList *tilingPaths1 = stList_construct();
-        for(int64_t i=0; i<stList_length(tilingPaths)/2; i++) {
+        for (int64_t i = 0; i < stList_length(tilingPaths) / 2; i++) {
             stList_append(tilingPaths1, stList_get(tilingPaths, i));
         }
 
         // Recursively turn the other half of the tiling paths into the other tiling path
         stList *tilingPaths2 = stList_construct();
-        for(int64_t i=stList_length(tilingPaths)/2; i < stList_length(tilingPaths); i++) {
+        for (int64_t i = stList_length(tilingPaths) / 2; i < stList_length(tilingPaths); i++) {
             stList_append(tilingPaths2, stList_get(tilingPaths, i));
         }
 
 #if defined(_OPENMP)
 #pragma omp parallel
-{
+        {
 #pragma omp sections nowait
-{
+        {
 #pragma omp section
-        tilingPath1 = mergeTilingPaths(tilingPaths1);
+                tilingPath1 = mergeTilingPaths(tilingPaths1);
 
 #pragma omp section
-        tilingPath2 = mergeTilingPaths(tilingPaths2);
+                tilingPath2 = mergeTilingPaths(tilingPaths2);
 
-}
-}
+        }
+        }
 #else
         tilingPath1 = mergeTilingPaths(tilingPaths1);
         tilingPath2 = mergeTilingPaths(tilingPaths2);
 #endif
     }
-    // Otherwise the number of tiling paths is two
+        // Otherwise the number of tiling paths is two
     else {
         tilingPath1 = stList_get(tilingPaths, 0);
         tilingPath2 = stList_get(tilingPaths, 1);
@@ -411,7 +410,7 @@ stList *mergeTilingPaths(stList *tilingPaths) {
 }
 
 static void getProfileSeqs(stList *tilingPath, stList *pSeqs) {
-    while(stList_length(tilingPath) > 0) {
+    while (stList_length(tilingPath) > 0) {
         stRPHmm *hmm = stList_pop(tilingPath);
         assert(stList_length(hmm->profileSeqs) == 1);
         stProfileSeq *pSeq = stList_peek(hmm->profileSeqs);
@@ -422,11 +421,11 @@ static void getProfileSeqs(stList *tilingPath, stList *pSeqs) {
 }
 
 static int64_t tilingPathSize(stList *tilingPath) {
-	/*
-	 * Returns the sum of the length of the profile sequences the tiling path contains
-	 */
-	int64_t totalLength = 0;
-	for(int64_t i=0; i<stList_length(tilingPath); i++) {
+    /*
+     * Returns the sum of the length of the profile sequences the tiling path contains
+     */
+    int64_t totalLength = 0;
+    for (int64_t i = 0; i < stList_length(tilingPath); i++) {
         stRPHmm *hmm = stList_get(tilingPath, i);
         assert(stList_length(hmm->profileSeqs) == 1);
         stProfileSeq *pSeq = stList_peek(hmm->profileSeqs);
@@ -436,14 +435,14 @@ static int64_t tilingPathSize(stList *tilingPath) {
 }
 
 int tilingPathsCmpFn(stList *tilingPath1, stList *tilingPath2, stHash *tilingPathLengths) {
-	int64_t length1 = *(int64_t *)stHash_search(tilingPathLengths, tilingPath1);
-	int64_t length2 = *(int64_t *)stHash_search(tilingPathLengths, tilingPath2);
+    int64_t length1 = *(int64_t *) stHash_search(tilingPathLengths, tilingPath1);
+    int64_t length2 = *(int64_t *) stHash_search(tilingPathLengths, tilingPath2);
 
-	return length1 < length2 ? 1 : (length1 > length2 ? -1 : 0);
+    return length1 < length2 ? 1 : (length1 > length2 ? -1 : 0);
 }
 
 stList *filterReadsByCoverageDepth(stList *profileSeqs, stRPHmmParameters *params,
-        stList *filteredProfileSeqs, stList *discardedProfileSeqs) {
+                                   stList *filteredProfileSeqs, stList *discardedProfileSeqs) {
     /*
      * Takes a set of profile sequences and returns a subset such that maximum coverage depth of the subset is
      * less than or equal to params->maxCoverageDepth. The discarded sequences are placed in the list
@@ -452,27 +451,28 @@ stList *filterReadsByCoverageDepth(stList *profileSeqs, stRPHmmParameters *param
 
     // Create a set of tiling paths
     stList *tilingPaths = getTilingPaths2(profileSeqs, params);
-    st_logDebug("Got maximum tiling depth of: %i\n", (int)stList_length(tilingPaths));
+    st_logDebug("Got maximum tiling depth of: %i\n", (int) stList_length(tilingPaths));
 
     // Sort tiling paths my numbers of reads included
     stHash *tilingPathLengths = stHash_construct2(NULL, free);
-    for(int64_t i=0; i<stList_length(tilingPaths); i++) {
-    	stList *tilingPath = stList_get(tilingPaths, i);
-    	int64_t *length = st_calloc(1, sizeof(int64_t));
-    	*length = tilingPathSize(tilingPath);
-    	stHash_insert(tilingPathLengths, tilingPath, length);
+    for (int64_t i = 0; i < stList_length(tilingPaths); i++) {
+        stList *tilingPath = stList_get(tilingPaths, i);
+        int64_t *length = st_calloc(1, sizeof(int64_t));
+        *length = tilingPathSize(tilingPath);
+        stHash_insert(tilingPathLengths, tilingPath, length);
     }
-    stList_sort2(tilingPaths, (int (*)(const void *, const void *, const void *))tilingPathsCmpFn, tilingPathLengths);
+    stList_sort2(tilingPaths, (int (*)(const void *, const void *, const void *)) tilingPathsCmpFn, tilingPathLengths);
     stHash_destruct(tilingPathLengths);
 
     // Eliminate reads until the maximum coverage depth to less than the give threshold
-    while(stList_length(tilingPaths) > params->maxCoverageDepth) {
-    	stList *tilingPath = stList_pop(tilingPaths);
-    	st_logDebug("Discarding %i profiling sequences of total length: %i\n", (int)stList_length(tilingPath), (int)tilingPathSize(tilingPath));
-    	getProfileSeqs(tilingPath, discardedProfileSeqs);
+    while (stList_length(tilingPaths) > params->maxCoverageDepth) {
+        stList *tilingPath = stList_pop(tilingPaths);
+        st_logDebug("Discarding %i profiling sequences of total length: %i\n", (int) stList_length(tilingPath),
+                    (int) tilingPathSize(tilingPath));
+        getProfileSeqs(tilingPath, discardedProfileSeqs);
     }
 
-    while(stList_length(tilingPaths) > 0) {
+    while (stList_length(tilingPaths) > 0) {
         getProfileSeqs(stList_pop(tilingPaths), filteredProfileSeqs);
     }
 
@@ -480,9 +480,9 @@ stList *filterReadsByCoverageDepth(stList *profileSeqs, stRPHmmParameters *param
     stList_destruct(tilingPaths);
 
     st_logInfo("\tFiltered %" PRIi64 " reads of %" PRIi64
-    			" to achieve maximum coverage depth of %" PRIi64 "\n",
-    			stList_length(discardedProfileSeqs), stList_length(profileSeqs),
-    			params->maxCoverageDepth);
+               " to achieve maximum coverage depth of %" PRIi64 "\n",
+               stList_length(discardedProfileSeqs), stList_length(profileSeqs),
+               params->maxCoverageDepth);
 
     return filteredProfileSeqs;
 }
@@ -497,20 +497,20 @@ stList *getRPHmms(stList *profileSeqs, stRPHmmParameters *params) {
     // Create a read partitioning HMM for every sequence and put in ordered set, ordered by reference coordinate
     stList *tilingPaths = getTilingPaths2(profileSeqs, params);
 
-    if(stList_length(tilingPaths) > MAX_READ_PARTITIONING_DEPTH
-       || stList_length(tilingPaths) > params->maxCoverageDepth) {
+    if (stList_length(tilingPaths) > MAX_READ_PARTITIONING_DEPTH
+        || stList_length(tilingPaths) > params->maxCoverageDepth) {
         st_errAbort("\nCoverage depth: read depth of %" PRIi64 " exceeds hard maximum of %" PRIi64
-                            " with configured maximum of %" PRIi64 "\n",
-                stList_length(tilingPaths), MAX_READ_PARTITIONING_DEPTH, params->maxCoverageDepth);
-    }
-    else {
-    	st_logDebug("Got %i tiling paths from which to build hmms for max coverage depth of: %i\n", (int)stList_length(tilingPaths), (int)params->maxCoverageDepth);
+                    " with configured maximum of %" PRIi64 "\n",
+                    stList_length(tilingPaths), MAX_READ_PARTITIONING_DEPTH, params->maxCoverageDepth);
+    } else {
+        st_logDebug("Got %i tiling paths from which to build hmms for max coverage depth of: %i\n",
+                    (int) stList_length(tilingPaths), (int) params->maxCoverageDepth);
     }
 
     // Merge together the tiling paths into one merged tiling path, merging the individual hmms when
     // they overlap on the reference
     stList *finalTilingPath = mergeTilingPaths(tilingPaths);
-    stList_setDestructor(finalTilingPath, (void (*)(void *))stRPHmm_destruct2);
+    stList_setDestructor(finalTilingPath, (void (*)(void *)) stRPHmm_destruct2);
 
     return finalTilingPath;
 }

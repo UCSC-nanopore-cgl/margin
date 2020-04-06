@@ -16,7 +16,6 @@ int64_t
 marginIntegrationTest(char *bamFile, char *referenceFile, char *paramsFile, char *region, char *base, bool verbose,
                       bool diploid,
                       bool outputRepeatCounts, bool outputPoaCsv, bool outputReadPhasingCsv) {
-
     // Run margin phase
     char *logString = verbose ? "--logLevel DEBUG" : "--logLevel INFO";
     char *regionStr = region == NULL ? stString_print("") : stString_print("--region %s", region);
@@ -45,7 +44,6 @@ static stSet *getReadNamesFromPartitionFile(CuTest *testCase, char *readPartitio
     for (int64_t i = 1; i < stList_length(readLines); i++) { // Start from first line after the CSV header line
         char *line = stList_get(readLines, i);
         stList *tokens = stString_splitByString(line, ",");
-        st_uglyf("Boo %s\n", line);
         CuAssertTrue(testCase, stSet_search(readNames, stList_get(tokens, 0)) ==
                                NULL); // Sanity check that read name is not present twice
         stSet_insert(readNames, stList_removeFirst(tokens)); // First field is the read name
@@ -55,11 +53,13 @@ static stSet *getReadNamesFromPartitionFile(CuTest *testCase, char *readPartitio
 }
 
 void test_marginIntegration(CuTest *testCase) {
-    char *referenceFile = "../tests/shasta_diploid/shasta_phasing_test.ref.fasta";
+    char *referenceFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.fasta";
     bool verbose = false;
-    char *bamFile = "../tests/shasta_diploid/shasta_phasing_test.align.bam";
-    char *region = NULL; //"92:22763600-22768500";
+    char *bamFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.bam ";
+    char *region = NULL;
     char *base = "temp_output";
+
+    //TODO: Edit params and then save them
 
     // Run in diploid mode and get all the file outputs
     st_logInfo("\tTesting diploid polishing on %s\n", bamFile);
@@ -78,7 +78,7 @@ void test_marginIntegration(CuTest *testCase) {
     char *outputHap2ReadPhasingFile = "temp_output_reads.csv.hap2";
 
     // Parse the sequences
-    char *sequenceName = "92:22763500-22869500";
+    char *sequenceName = "122:10980000-11086000";
     char *seq1 = getSequence(testCase, outputHap1File, sequenceName);
     char *seq2 = getSequence(testCase, outputHap2File, sequenceName);
     RleString *seq1Rle = rleString_construct(seq1);
@@ -98,20 +98,18 @@ void test_marginIntegration(CuTest *testCase) {
     CuAssertIntEquals(testCase, 0, stSet_sizeOfIntersection(readsHap1, readsHap2));
 
     // Cleanup
-    /*stFile_rmrf(outputHap1File);
+    stFile_rmrf(outputHap1File);
     stFile_rmrf(outputHap2File);
     stFile_rmrf(outputHap1PoaFile);
     stFile_rmrf(outputHap2PoaFile);
     stFile_rmrf(outputHap1RepeatCountFile);
     stFile_rmrf(outputHap1ReadPhasingFile);
-    stFile_rmrf(outputHap2ReadPhasingFile);*/
+    stFile_rmrf(outputHap2ReadPhasingFile);
 }
 
-CuSuite* marginIntegrationTestSuite(void) {
+CuSuite *marginIntegrationTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
-
     SUITE_ADD_TEST(suite, test_marginIntegration);
-
 
     return suite;
 }

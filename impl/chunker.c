@@ -20,12 +20,13 @@ BamChunkRead *bamChunkRead_construct2(char *readName, char *nucleotides,
     r->forwardStrand = forwardStrand;
     assert(nucleotides != NULL);
     r->rleRead = useRunLengthEncoding ? rleString_construct(nucleotides) : rleString_construct_no_rle(nucleotides);
-    if(qualities != NULL) {
+    if (qualities != NULL) {
         r->qualities = rleString_rleQualities(r->rleRead, qualities);
     }
 
     return r;
 }
+
 BamChunkRead *bamChunkRead_constructCopy(BamChunkRead *copy) {
     BamChunkRead *r = calloc(1, sizeof(BamChunkRead));
     r->readName = stString_copy(copy->readName);
@@ -115,7 +116,7 @@ char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive
 
     for (int64_t chunkIdx = startIdx; chunkIdx < endIdxExclusive; chunkIdx++) {
         // Get chunk and polished
-        char* currentChunk = chunks[chunkIdx];
+        char *currentChunk = chunks[chunkIdx];
 
         if (stList_length(polishedReferenceStrings) == 0) {
             // we must copy the first one because the original and merged strings are freed separately
@@ -150,7 +151,8 @@ char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive
             } else {
                 if (strlen(currentChunk) == 0) {
                     // missing chunk
-                    st_logInfo("    No overlap found for empty chunk at %"PRId64". Filling empty chunk with Ns.\n", chunkIdx);
+                    st_logInfo("    No overlap found for empty chunk at %"PRId64". Filling empty chunk with Ns.\n",
+                               chunkIdx);
                     currentChunk = stString_copy(missingChunkSpacer);
                 } else if (overlap == 0) {
                     // poorly configured but could be done (freaky)
@@ -183,13 +185,14 @@ char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxE
     // divide into chunks
     int64_t totalChunks = endIdxExclusive - startIdx;
     int64_t chunksPerThread = (int64_t) ceil(1.0 * totalChunks / numThreads);
-    while (startIdx + chunksPerThread * (numThreads - 1) >= endIdxExclusive) {numThreads--;}
-    char **outputChunks = st_calloc(numThreads, sizeof(char*));
+    while (startIdx + chunksPerThread * (numThreads - 1) >= endIdxExclusive) { numThreads--; }
+    char **outputChunks = st_calloc(numThreads, sizeof(char *));
 
     // multithread loop
-    st_logInfo("  Merging chunks for %s from (%"PRId64", %"PRId64"] with %"PRId64" chunks per thread on %"PRId64" threads \n",
-               referenceSequenceName, startIdx, endIdxExclusive, chunksPerThread, numThreads);
-#pragma omp parallel for schedule(static,1)
+    st_logInfo(
+            "  Merging chunks for %s from (%"PRId64", %"PRId64"] with %"PRId64" chunks per thread on %"PRId64" threads \n",
+            referenceSequenceName, startIdx, endIdxExclusive, chunksPerThread, numThreads);
+#pragma omp parallel for schedule(static, 1)
     for (int64_t thread = 0; thread < numThreads; thread++) {
         int64_t threadedStartIdx = startIdx + chunksPerThread * thread;
         int64_t threadedEndIdxExclusive = threadedStartIdx + chunksPerThread;

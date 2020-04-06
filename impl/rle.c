@@ -10,25 +10,24 @@ RleString *rleString_construct(char *str) {
     rleString->nonRleLength = strlen(str);
 
     // Calc length of rle'd str
-    for(uint64_t i=0; i<rleString->nonRleLength; i++) {
-        if(i+1 == rleString->nonRleLength || str[i] != str[i+1]) {
+    for (uint64_t i = 0; i < rleString->nonRleLength; i++) {
+        if (i + 1 == rleString->nonRleLength || str[i] != str[i + 1]) {
             rleString->length++;
         }
     }
 
     // Allocate
-    rleString->rleString = st_calloc(rleString->length+1, sizeof(char));
+    rleString->rleString = st_calloc(rleString->length + 1, sizeof(char));
     rleString->repeatCounts = st_calloc(rleString->length, sizeof(uint64_t));
 
     // Fill out
-    uint64_t j=0, k=1;
-    for(uint64_t i=0; i<rleString->nonRleLength; i++) {
-        if(i+1 == rleString->nonRleLength || str[i] != str[i+1]) {
+    uint64_t j = 0, k = 1;
+    for (uint64_t i = 0; i < rleString->nonRleLength; i++) {
+        if (i + 1 == rleString->nonRleLength || str[i] != str[i + 1]) {
             rleString->rleString[j] = str[i];
             rleString->repeatCounts[j++] = k;
-            k=1;
-        }
-        else {
+            k = 1;
+        } else {
             k++;
         }
     }
@@ -54,7 +53,7 @@ RleString *rleString_constructPreComputed(char *rleChars, const uint8_t *rleCoun
     rleString->repeatCounts = st_calloc(rleString->length, sizeof(int64_t));
 
     // Fill out
-    for(int64_t r=0; r<rleString->length; r++) {
+    for (int64_t r = 0; r < rleString->length; r++) {
         // counts
         rleString->repeatCounts[r] = rleCounts[r];
     }
@@ -73,7 +72,7 @@ RleString *rleString_construct_no_rle(char *string) {
     rleString->repeatCounts = st_calloc(rleString->length, sizeof(uint64_t));
 
     // Fill out repeat counts
-    for(uint64_t i=0; i<rleString->length; i++) {
+    for (uint64_t i = 0; i < rleString->length; i++) {
         rleString->repeatCounts[i] = 1;
     }
 
@@ -94,8 +93,8 @@ RleString *rleString_copySubstring(RleString *rleString, uint64_t start, uint64_
     // Copy repeat count substring and calculate non-rle length
     rleSubstring->nonRleLength = 0;
     rleSubstring->repeatCounts = st_calloc(length, sizeof(uint64_t));
-    for(uint64_t i=0; i<rleSubstring->length; i++) {
-        rleSubstring->repeatCounts[i] = rleString->repeatCounts[i+start];
+    for (uint64_t i = 0; i < rleSubstring->length; i++) {
+        rleSubstring->repeatCounts[i] = rleString->repeatCounts[i + start];
         rleSubstring->nonRleLength += rleSubstring->repeatCounts[i];
     }
 
@@ -104,7 +103,7 @@ RleString *rleString_copySubstring(RleString *rleString, uint64_t start, uint64_
 
 void rleString_print(RleString *rleString, FILE *f) {
     fprintf(f, "%s -- ", rleString->rleString);
-    for(int64_t i=0; i<rleString->length; i++) {
+    for (int64_t i = 0; i < rleString->length; i++) {
         fprintf(f, "%" PRIi64 " ", rleString->repeatCounts[i]);
     }
 }
@@ -115,13 +114,13 @@ RleString *rleString_copy(RleString *rleString) {
 
 bool rleString_eq(RleString *r1, RleString *r2) {
     // If rle length or expanded lengths are not the same, then return false.
-    if(r1->length != r2->length || r1->nonRleLength != r2->nonRleLength) {
+    if (r1->length != r2->length || r1->nonRleLength != r2->nonRleLength) {
         return 0;
     }
     // Check bases and repeat counts for equality
-    for(int64_t i=0; i<r1->length; i++) {
-        if(r1->rleString[i] != r2->rleString[i] ||
-           r1->repeatCounts[i] != r2->repeatCounts[i]) {
+    for (int64_t i = 0; i < r1->length; i++) {
+        if (r1->rleString[i] != r2->rleString[i] ||
+            r1->repeatCounts[i] != r2->repeatCounts[i]) {
             return 0;
         }
     }
@@ -135,8 +134,8 @@ void rleString_destruct(RleString *rleString) {
 }
 
 char *expandChar(char c, uint64_t repeatCount) {
-    char *s = st_malloc(sizeof(char) * (repeatCount+1));
-    for(int64_t j=0; j<repeatCount; j++) {
+    char *s = st_malloc(sizeof(char) * (repeatCount + 1));
+    for (int64_t j = 0; j < repeatCount; j++) {
         s[j] = c;
     }
     s[repeatCount] = '\0';
@@ -144,10 +143,10 @@ char *expandChar(char c, uint64_t repeatCount) {
 }
 
 char *rleString_expand(RleString *rleString) {
-    char *s = st_calloc(rleString->nonRleLength+1, sizeof(char));
-    int64_t j=0;
-    for(int64_t i=0; i<rleString->length; i++) {
-        for(int64_t k=0; k<rleString->repeatCounts[i]; k++) {
+    char *s = st_calloc(rleString->nonRleLength + 1, sizeof(char));
+    int64_t j = 0;
+    for (int64_t i = 0; i < rleString->length; i++) {
+        for (int64_t k = 0; k < rleString->repeatCounts[i]; k++) {
             s[j++] = rleString->rleString[i];
         }
     }
@@ -158,11 +157,11 @@ char *rleString_expand(RleString *rleString) {
 void rleString_rotateString(RleString *str, int64_t rotationLength) {
     char rotatedString[str->length];
     uint64_t rotatedRepeatCounts[str->length];
-    for(int64_t i=0; i<str->length; i++) {
-        rotatedString[(i+rotationLength)%str->length] = str->rleString[i];
-        rotatedRepeatCounts[(i+rotationLength)%str->length] = str->repeatCounts[i];
+    for (int64_t i = 0; i < str->length; i++) {
+        rotatedString[(i + rotationLength) % str->length] = str->rleString[i];
+        rotatedRepeatCounts[(i + rotationLength) % str->length] = str->repeatCounts[i];
     }
-    for(int64_t i=0; i<str->length; i++) {
+    for (int64_t i = 0; i < str->length; i++) {
         str->rleString[i] = rotatedString[i];
         str->repeatCounts[i] = rotatedRepeatCounts[i];
     }
@@ -197,9 +196,9 @@ uint8_t *rleString_rleQualities(RleString *rleString, const uint8_t *qualities) 
 uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString) {
     uint64_t *nonRleToRleCoordinateMap = st_malloc(sizeof(uint64_t) * rleString->nonRleLength);
 
-    uint64_t j=0;
-    for(uint64_t i=0; i<rleString->length; i++) {
-        for(uint64_t k=0; k<rleString->repeatCounts[i]; k++) {
+    uint64_t j = 0;
+    for (uint64_t i = 0; i < rleString->length; i++) {
+        for (uint64_t k = 0; k < rleString->repeatCounts[i]; k++) {
             nonRleToRleCoordinateMap[j++] = i;
         }
     }
@@ -222,7 +221,8 @@ stList *runLengthEncodeAlignment(stList *alignment,
 
         if (x2 > x && y2 > y) {
             stList_append(rleAlignment, stIntTuple_construct3(x2, y2, stIntTuple_get(alignedPair, 2)));
-            x = x2; y = y2;
+            x = x2;
+            y = y2;
         }
     }
 

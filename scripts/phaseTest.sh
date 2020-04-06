@@ -9,24 +9,25 @@ set -o xtrace
 
 # Run margin
 echo Running Margin
-time ./margin ../tests/shasta_phasing_data.100kb_5x/${region}/*.bam ../tests/shasta_phasing_data.100kb_5x/${region}/HG002.shasta.*.fasta ../params/allParams.np.json ${options}  --logLevel DEBUG
+time ./margin ../tests/data/diploidTestExamples/${region}/*.bam ../tests/data/diploidTestExamples/${region}/HG002.shasta.*.fasta ../params/allParams.np.json ${options} --logLevel DEBUG --diploid
 
 # Calculate identity
-echo Comparing to haplotype1
-time python3 ../scripts/dirty_assembly_compare.py ../tests/shasta_phasing_data.100kb_5x/${region}/HG002_h1*.fa output.fa
+echo Comparing predicated haplotype1 to true haplotype1
+time python3 ../scripts/dirty_assembly_compare.py ../tests/data/diploidTestExamples/${region}/HG002_h1*.fa output.fa.hap1
 
-echo Comparing to haplotype2
-time python3 ../scripts/dirty_assembly_compare.py ../tests/shasta_phasing_data.100kb_5x/${region}/HG002_h2*.fa output.fa
+echo Comparing predicated haplotype2 to true haplotype1
+time python3 ../scripts/dirty_assembly_compare.py ../tests/data/diploidTestExamples/${region}/HG002_h1*.fa output.fa.hap2
 
-# Fasta split the phased output
-python3 ../scripts/fasta_split.py output.fa
+echo Comparing predicated haplotype1 to true haplotype2
+time python3 ../scripts/dirty_assembly_compare.py ../tests/data/diploidTestExamples/${region}/HG002_h2*.fa output.fa.hap1
+
+echo Comparing predicated haplotype2 to true haplotype2
+time python3 ../scripts/dirty_assembly_compare.py ../tests/data/diploidTestExamples/${region}/HG002_h2*.fa output.fa.hap2
 
 # Build collection of differences
-time python3 ../scripts/dirty_assembly_compare.py output.fa_0 output.fa_1 verbose > predictedMismatches.txt
-time python3 ../scripts/dirty_assembly_compare.py ../tests/shasta_phasing_data.100kb_5x/${region}/HG002_h1*.fa ../tests/shasta_phasing_data.100kb_5x/${region}/HG002_h2*.fa verbose > trueMismatches.txt
+time python3 ../scripts/dirty_assembly_compare.py output.fa.hap1 output.fa.hap2 verbose >predictedMismatches.txt
+time python3 ../scripts/dirty_assembly_compare.py ../tests/data/diploidTestExamples/${region}/HG002_h1*.fa ../tests/data/diploidTestExamples/${region}/HG002_h2*.fa verbose >trueMismatches.txt
 
 # Compare differences
 echo Comparing predicted hets
 time python3 ../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt
-
-

@@ -4,9 +4,6 @@
  * Released under the MIT license, see LICENSE.txt
  *
  * Plan:
- * ***> Add parallelism
-
- * ***> memory leaks
  * ***> Sort out data and tests dir
  * ***> Cleanup / delete crufty code
  * ***> Investigate indel bias
@@ -72,7 +69,7 @@ int main(int argc, char *argv[]) {
 
     // TODO: When done testing, optionally set random seed using st_randomSeed();
 
-    if(argc < 4) {
+    if (argc < 4) {
         usage();
         return 0;
     }
@@ -84,66 +81,64 @@ int main(int argc, char *argv[]) {
     // Parse the options
     while (1) {
         static struct option long_options[] = {
-                { "logLevel", required_argument, 0, 'a' },
-                { "help", no_argument, 0, 'h' },
-                # ifdef _OPENMP
-                { "threads", required_argument, 0, 't'},
-                #endif
-				{ "diploid", no_argument, 0, 'd'},
-                { "output", required_argument, 0, 'o'},
-                { "region", required_argument, 0, 'r'},
-                { "verbose", required_argument, 0, 'v'},
-				{ "outputRepeatCounts", no_argument, 0, 'i'},
-				{ "outputPoaCsv", no_argument, 0, 'j'},
-                { "outputReadPhasingCsv", no_argument, 0, 'k'},
-                { 0, 0, 0, 0 } };
+                {"logLevel",             required_argument, 0, 'a'},
+                {"help",                 no_argument,       0, 'h'},
+                {"threads",              required_argument, 0, 't'},
+                {"diploid",              no_argument,       0, 'd'},
+                {"output",               required_argument, 0, 'o'},
+                {"region",               required_argument, 0, 'r'},
+                {"verbose",              required_argument, 0, 'v'},
+                {"outputRepeatCounts",   no_argument,       0, 'i'},
+                {"outputPoaCsv",         no_argument,       0, 'j'},
+                {"outputReadPhasingCsv", no_argument,       0, 'k'},
+                {0, 0,                                      0, 0}};
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:t:", long_options, &option_index);
+        int key = getopt_long(argc - 2, &argv[2], "a:o:v:r:hdi:j:k:l:m:n:t:", long_options, &option_index);
 
         if (key == -1) {
             break;
         }
 
         switch (key) {
-        case 'a':
-            free(logLevelString);
-            logLevelString = stString_copy(optarg);
-            break;
-        case 'h':
-            usage();
-            return 0;
-        case 'd':
-            diploid = 1;
-            break;
-        case 'o':
-            free(outputBase);
-            outputBase = stString_copy(optarg);
-            break;
-        case 'r':
-            regionStr = stString_copy(optarg);
-            break;
-        case 'v':
-            verboseBitstring = strtol(optarg, NULL, 10);
-            break;
-        case 'i':
-            outputRepeatCounts = !outputRepeatCounts;
-        	break;
-        case 'j':
-            outputPoaCsv = !outputPoaCsv;
-        	break;
-        case 'k':
-            outputReadPhasing = !outputReadPhasing;
-            break;
-        case 't':
-            numThreads = atoi(optarg);
-            if (numThreads <= 0) {
-                st_errAbort("Invalid thread count: %d", numThreads);
-            }
-            break;
-        default:
-            usage();
-            return 0;
+            case 'a':
+                free(logLevelString);
+                logLevelString = stString_copy(optarg);
+                break;
+            case 'h':
+                usage();
+                return 0;
+            case 'd':
+                diploid = 1;
+                break;
+            case 'o':
+                free(outputBase);
+                outputBase = stString_copy(optarg);
+                break;
+            case 'r':
+                regionStr = stString_copy(optarg);
+                break;
+            case 'v':
+                verboseBitstring = strtol(optarg, NULL, 10);
+                break;
+            case 'i':
+                outputRepeatCounts = !outputRepeatCounts;
+                break;
+            case 'j':
+                outputPoaCsv = !outputPoaCsv;
+                break;
+            case 'k':
+                outputReadPhasing = !outputReadPhasing;
+                break;
+            case 't':
+                numThreads = atoi(optarg);
+                if (numThreads <= 0) {
+                    st_errAbort("Invalid thread count: %d", numThreads);
+                }
+                break;
+            default:
+                usage();
+                return 0;
         }
     }
 
@@ -164,8 +159,8 @@ int main(int argc, char *argv[]) {
     Params *params = params_readParams(paramsFile);
 
     // Print a report of the parsed parameters
-    if(st_getLogLevel() == debug) {
-    	params_printParameters(params, stderr);
+    if (st_getLogLevel() == debug) {
+        params_printParameters(params, stderr);
     }
 
     // Parse reference as map of header string to nucleotide sequences
@@ -186,7 +181,7 @@ int main(int argc, char *argv[]) {
     // if regionStr is NULL, it will be ignored in construct2
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
     st_logInfo("> Set up bam chunker with chunk size: %i and overlap %i (for region=%s)\n",
-    		   (int)bamChunker->chunkSize, (int)bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr);
+               (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr);
 
     // For each chunk of the BAM
     # ifdef _OPENMP
@@ -200,68 +195,75 @@ int main(int argc, char *argv[]) {
         # endif
 		BamChunk *bamChunk = bamChunker_getChunk(bamChunker, chunkIdx);
 
-		// Get substring of the reference
-		RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
+        // Get substring of the reference
+        RleString *reference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
 
         st_logInfo("> Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
-        		   bamChunk->refSeqName, (int)bamChunk->chunkBoundaryStart,
-				   (int)bamChunk->chunkBoundaryEnd);
+                   bamChunk->refSeqName, (int) bamChunk->chunkBoundaryStart,
+                   (int) bamChunk->chunkBoundaryEnd);
 
-		// Convert bam lines into corresponding reads and alignments
-		st_logInfo("> Parsing input reads from file: %s\n", bamInFile);
-		stList *reads = stList_construct3(0, (void (*)(void *))bamChunkRead_destruct);
-        stList *alignments = stList_construct3(0, (void (*)(void *))stList_destruct);
+        // Convert bam lines into corresponding reads and alignments
+        st_logInfo("> Parsing input reads from file: %s\n", bamInFile);
+        stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
         convertToReadsAndAlignments(bamChunk, reference, reads, alignments);
 
-		// Now run the polishing method
+        // Now run the polishing method
 
-		// Generate the haploid, polished partial order alignment (POA)
-		Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
+        // Generate the haploid, polished partial order alignment (POA)
+        Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
 
-		// If diploid
-		if(diploid) {
-			// Get the bubble graph representation
-            BubbleGraph *bg = bubbleGraph_constructFromPoa2(poa, reads, params->polishParams, TRUE);
+        // If diploid
+        if (diploid) {
+            // Get the bubble graph representation
+            bool useReadAlleles = params->polishParams->useReadAlleles;
+            params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
+            BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
+            params->polishParams->useReadAlleles = useReadAlleles;
 
-			// Now make a POA for each of the haplotypes
-			stHash *readsToPSeqs;
-			stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
+            // Now make a POA for each of the haplotypes
+            stHash *readsToPSeqs;
+            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
 
-			stSet *readsBelongingToHap1, *readsBelongingToHap2;
-			stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
-			st_logInfo("After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned into hap2 (%i unphased)\n",
-			(int)stList_length(reads), (int)stSet_size(readsBelongingToHap1), (int)stSet_size(readsBelongingToHap2), 
-			(int)(stList_length(reads) - stSet_size(readsBelongingToHap1)- stSet_size(readsBelongingToHap2)));
+            stSet *readsBelongingToHap1, *readsBelongingToHap2;
+            stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
+            st_logInfo(
+                    "After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned into hap2 (%i unphased)\n",
+                    (int) stList_length(reads), (int) stSet_size(readsBelongingToHap1),
+                    (int) stSet_size(readsBelongingToHap2),
+                    (int) (stList_length(reads) - stSet_size(readsBelongingToHap1) - stSet_size(readsBelongingToHap2)));
 
-			// Debug report of hets
-			uint64_t totalHets = 0;
-			for(uint64_t i=0; i<gf->length; i++) {
-				Bubble *b = &bg->bubbles[i+gf->refStart];
-				if(gf->haplotypeString1[i] != gf->haplotypeString2[i]) {
-					st_logDebug("Got predicted het at bubble %i %s %s\n", (int)i+gf->refStart, b->alleles[gf->haplotypeString1[i]]->rleString,
-							b->alleles[gf->haplotypeString2[i]]->rleString);
-					totalHets++;
-				}
-				else if(!rleString_eq(b->alleles[gf->haplotypeString1[i]], b->refAllele)) {
-					st_logDebug("Got predicted hom alt at bubble %i %i\n", (int)i+gf->refStart, (int)gf->haplotypeString1[i]);
-				}
-			}
-			st_logInfo("In phasing chunk, got: %i hets from: %i total sites (fraction: %f)\n", (int)totalHets, (int)gf->length, (float)totalHets/gf->length);
+            // Debug report of hets
+            uint64_t totalHets = 0;
+            for (uint64_t i = 0; i < gf->length; i++) {
+                Bubble *b = &bg->bubbles[i + gf->refStart];
+                if (gf->haplotypeString1[i] != gf->haplotypeString2[i]) {
+                    st_logDebug("Got predicted het at bubble %i %s %s\n", (int) i + gf->refStart,
+                                b->alleles[gf->haplotypeString1[i]]->rleString,
+                                b->alleles[gf->haplotypeString2[i]]->rleString);
+                    totalHets++;
+                } else if (!rleString_eq(b->alleles[gf->haplotypeString1[i]], b->refAllele)) {
+                    st_logDebug("Got predicted hom alt at bubble %i %i\n", (int) i + gf->refStart,
+                                (int) gf->haplotypeString1[i]);
+                }
+            }
+            st_logInfo("In phasing chunk, got: %i hets from: %i total sites (fraction: %f)\n", (int) totalHets,
+                       (int) gf->length, (float) totalHets / gf->length);
 
-			st_logInfo("Building POA for each haplotype\n");
-			uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
-			uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
+            st_logInfo("Building POA for each haplotype\n");
+            uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
+            uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
 
-			Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
-			Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
+            Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
+            Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
-			// This does not help, so commenting out - may remove
-			/*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
-			poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
-					readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
+            // This does not help, so commenting out - may remove
+            /*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
+            poa_estimatePhasedBasesUsingBayesianModel(poa_hap1, reads,
+                    readsBelongingToHap1, readsBelongingToHap2, params->polishParams);
 
-			poa_estimatePhasedBasesUsingBayesianModel(poa_hap2, reads,
-								readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
+            poa_estimatePhasedBasesUsingBayesianModel(poa_hap2, reads,
+                                readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
 
             if (params->polishParams->useRunLengthEncoding) {
                 st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
@@ -291,14 +293,13 @@ int main(int argc, char *argv[]) {
             stSet_destruct(readsBelongingToHap2);
             stHash_destruct(readsToPSeqs);
             stGenomeFragment_destruct(gf);
-		}
-		else {
+		} else {
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 		}
 
-		// Cleanup
-		poa_destruct(poa);
-		stList_destruct(reads);
+        // Cleanup
+        poa_destruct(poa);
+        stList_destruct(reads);
         stList_destruct(alignments);
         rleString_destruct(reference);
     }
@@ -311,15 +312,15 @@ int main(int argc, char *argv[]) {
     bamChunker_destruct(bamChunker);
     stHash_destruct(referenceSequences);
     params_destruct(params);
-	free(bamInFile);
-	free(referenceFastaFile);
-	free(paramsFile);
+    free(bamInFile);
+    free(referenceFastaFile);
+    free(paramsFile);
     free(outputSequenceFile);
     free(outputPoaFile);
     free(outputReadPartitionFile);
     free(outputRepeatCountFile);
-	free(outputBase);
-	if (regionStr != NULL) free(regionStr);
+    free(outputBase);
+    if (regionStr != NULL) free(regionStr);
 
     st_logInfo("> Finished polishing.\n");
 

@@ -9,15 +9,15 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_XOPEN_SOURCE=500 
 project(marginPhase LANGUAGES C)
 
 # configure a header file to pass some of the CMake settings
-set (POLISH_VERSION_MAJOR 1)
-set (POLISH_VERSION_MINOR 3)
+set(POLISH_VERSION_MAJOR 1)
+set(POLISH_VERSION_MINOR 3)
 execute_process(
         COMMAND git log -1 --format=%h
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_COMMIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-configure_file (
+configure_file(
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h.in"
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h"
 )
@@ -266,18 +266,18 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif ()
 
 find_package(HDF5)
-if(HDF5_FOUND)
+if (HDF5_FOUND)
     include_directories(${HDF5_INCLUDE_DIR})
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_HDF5 ")
-else()
+else ()
     message(WARNING "Couldn't find HDF5 library")
-endif()
+endif ()
 
 # MISC
 add_library(son ${SONLIB_SOURCES})
@@ -301,7 +301,7 @@ add_library(marginLib ${SOURCE_FILES} ${CORE_SOURCE_FILES} ${SSW_SOURCES})
 target_link_libraries(marginLib son hts)
 if (HDF5_FOUND)
     target_link_libraries(marginLib ${HDF5_C_LIBRARIES})
-endif()
+endif ()
 
 ###############################
 ######### EXECUTABLES #########
@@ -310,7 +310,7 @@ endif()
 add_executable(marginPolish marginPolish.c ${SOURCE_FILES} ${CORE_SOURCE_FILES})
 target_link_libraries(marginPolish marginLib)
 
-add_executable(margin margin.c )
+add_executable(margin margin.c)
 target_link_libraries(margin marginLib)
 
 enable_testing()
@@ -319,7 +319,6 @@ if (HDF5_FOUND)
     add_executable(allTests
             tests/allTests.c
             tests/pairwiseAlignerTest.c
-            tests/marginPhaseTest.c
             tests/stRPHmmTest.c
             tests/parserTest.c
             tests/chunkingTest.c
@@ -329,11 +328,10 @@ if (HDF5_FOUND)
             tests/featureTest.c
             tests/stitchingTest.c
             )
-else()
+else ()
     add_executable(allTests
             tests/allTests.c
             tests/chunkingTest.c
-            tests/marginPhaseTest.c
             tests/marginTest.c
             tests/pairwiseAlignerTest.c
             tests/stRPHmmTest.c
@@ -342,5 +340,5 @@ else()
             tests/stRPHmmTest.c
             tests/viewTest.c
             tests/stitchingTest.c)
-endif()
+endif ()
 target_link_libraries(allTests marginLib)

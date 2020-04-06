@@ -24,54 +24,54 @@ static void state_check(StateMachine *sM, State s) {
 
 static Symbol convertNucleotideCharToSymbol(char i) {
     switch (i) {
-		case 'A':
-		case 'a':
-			return 0;
-		case 'C':
-		case 'c':
-			return 1;
-		case 'G':
-		case 'g':
-			return 2;
-		case 'T':
-		case 't':
-			return 3;
-		default:
-			return 4;
+        case 'A':
+        case 'a':
+            return 0;
+        case 'C':
+        case 'c':
+            return 1;
+        case 'G':
+        case 'g':
+            return 2;
+        case 'T':
+        case 't':
+            return 3;
+        default:
+            return 4;
     }
 }
 
 static char convertNucleotideSymbolToChar(Symbol i) {
     switch (i) {
-		case 0:
-			return 'A';
-		case 1:
-			return 'C';
-		case 2:
-			return 'G';
-		case 3:
-			return 'T';
-		default:
-			return 'N';
+        case 0:
+            return 'A';
+        case 1:
+            return 'C';
+        case 2:
+            return 'G';
+        case 3:
+            return 'T';
+        default:
+            return 'N';
     }
 }
 
 bool nucleotidesEqual(Symbol x, Symbol y) {
-	return x == y;
+    return x == y;
 }
 
 Alphabet *alphabet_constructNucleotide() {
-	Alphabet *a = st_calloc(1, sizeof(Alphabet));
-	a->alphabetSize = 5; // Fifth character represents "N"
-	a->convertCharToSymbol = convertNucleotideCharToSymbol;
-	a->convertSymbolToChar = convertNucleotideSymbolToChar;
-	a->symbolsEqual = nucleotidesEqual;
+    Alphabet *a = st_calloc(1, sizeof(Alphabet));
+    a->alphabetSize = 5; // Fifth character represents "N"
+    a->convertCharToSymbol = convertNucleotideCharToSymbol;
+    a->convertSymbolToChar = convertNucleotideSymbolToChar;
+    a->symbolsEqual = nucleotidesEqual;
 
-	return a;
+    return a;
 }
 
 void alphabet_destruct(Alphabet *a) {
-	free(a);
+    free(a);
 }
 
 ///////////////////////////////////
@@ -83,10 +83,10 @@ void alphabet_destruct(Alphabet *a) {
 
 Symbol *symbol_convertStringToSymbols(const char *s, int64_t start, int64_t length, Alphabet *a) {
     assert(length >= 0 && start >= 0);
-    assert(strlen(s) >= start+length);
+    assert(strlen(s) >= start + length);
     Symbol *cS = st_malloc(length * sizeof(Symbol));
     for (int64_t i = 0; i < length; i++) {
-        cS[i] = a->convertCharToSymbol(s[i+start]);
+        cS[i] = a->convertCharToSymbol(s[i + start]);
     }
     return cS;
 }
@@ -100,13 +100,13 @@ SymbolString symbolString_construct(const char *sequence, int64_t start, int64_t
 }
 
 SymbolString symbolString_getSubString(SymbolString s, uint64_t start, uint64_t length) {
-	SymbolString s2 = s;
-	s2.sequence = st_calloc(length, sizeof(Symbol));
-	assert(start+length <= s.length); // Check bounds
-	for(int64_t i=0; i<length; i++) {
-		s2.sequence[i] = s.sequence[start+i];
-	}
-	return s2;
+    SymbolString s2 = s;
+    s2.sequence = st_calloc(length, sizeof(Symbol));
+    assert(start + length <= s.length); // Check bounds
+    for (int64_t i = 0; i < length; i++) {
+        s2.sequence[i] = s.sequence[start + i];
+    }
+    return s2;
 }
 
 void symbolString_destruct(SymbolString s) {
@@ -114,11 +114,11 @@ void symbolString_destruct(SymbolString s) {
 }
 
 Symbol symbol_getRepeatLength(Symbol s) {
-	return s >> 8;  // Last 13 bits are length
+    return s >> 8;  // Last 13 bits are length
 }
 
 Symbol symbol_stripRepeatCount(Symbol s) {
-	return s & 255; // First eight bits encode symbol
+    return s & 255; // First eight bits encode symbol
 }
 
 Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength, uint64_t maxRepeatCountExclusive) {
@@ -155,12 +155,12 @@ Hmm *hmm_constructEmpty(double pseudoExpectation, StateMachineType type, Emissio
     Hmm *hmm = st_calloc(1, sizeof(Hmm));
     hmm->type = type;
     switch (type) {
-    case threeState:
-    case threeStateAsymmetric:
-        hmm->stateNumber = 3;
-        break;
-    default:
-        st_errAbort("Unrecognised state type: %i\n", type);
+        case threeState:
+        case threeStateAsymmetric:
+            hmm->stateNumber = 3;
+            break;
+        default:
+            st_errAbort("Unrecognised state type: %i\n", type);
     }
     hmm->transitions = st_malloc(hmm->stateNumber * hmm->stateNumber * sizeof(double));
     for (int64_t i = 0; i < hmm->stateNumber * hmm->stateNumber; i++) {
@@ -172,18 +172,18 @@ Hmm *hmm_constructEmpty(double pseudoExpectation, StateMachineType type, Emissio
     hmm->emissionOffsetPerState = st_calloc(hmm->stateNumber, sizeof(int64_t));
 
     switch (emissionType) {
-    case nucleotideEmissions:
-    	for(int64_t i=0; i<hmm->stateNumber; i++) {
-    		hmm->emissionNoPerState[i] = 4;
-    	}
-    	hmm->emissionNoPerState[match] = 16;
-    	break;
-    default:
-         st_errAbort("Unrecognised emission type: %i\n", type);
+        case nucleotideEmissions:
+            for (int64_t i = 0; i < hmm->stateNumber; i++) {
+                hmm->emissionNoPerState[i] = 4;
+            }
+            hmm->emissionNoPerState[match] = 16;
+            break;
+        default:
+            st_errAbort("Unrecognised emission type: %i\n", type);
     }
-    int64_t j=0;
-    for(int64_t i=0; i<hmm->stateNumber; i++) {
-    	hmm->emissionOffsetPerState[i] = j;
+    int64_t j = 0;
+    for (int64_t i = 0; i < hmm->stateNumber; i++) {
+        hmm->emissionOffsetPerState[i] = j;
         j += hmm->emissionNoPerState[i];
     }
     hmm->totalEmissions = j;
@@ -204,57 +204,59 @@ void hmm_destruct(Hmm *hmm) {
 }
 
 Hmm *hmm_jsonParse(char *buf, size_t r) {
-	// Setup parser
-	jsmntok_t *tokens;
-	char *js;
-	int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
-	if(tokenNumber < 4) {
-		st_errAbort("ERROR: too few tokens to parse in hmm json: %i\n", (int)tokenNumber);
-	}
+    // Setup parser
+    jsmntok_t *tokens;
+    char *js;
+    int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
+    if (tokenNumber < 4) {
+        st_errAbort("ERROR: too few tokens to parse in hmm json: %i\n", (int) tokenNumber);
+    }
 
-	// Find out type of hmm
-	char *keyString = stJson_token_tostr(js, &(tokens[1]));
-	if(strcmp(keyString, "type") != 0) {
-		st_errAbort("ERROR: Unrecognised or unordered ('type', 'emissionsType', 'transitions', 'emissions') key in polish params json: %s\n", keyString);
-	}
-	int64_t stateMachineType = stJson_parseInt(js, tokens, 2);
+    // Find out type of hmm
+    char *keyString = stJson_token_tostr(js, &(tokens[1]));
+    if (strcmp(keyString, "type") != 0) {
+        st_errAbort(
+                "ERROR: Unrecognised or unordered ('type', 'emissionsType', 'transitions', 'emissions') key in polish params json: %s\n",
+                keyString);
+    }
+    int64_t stateMachineType = stJson_parseInt(js, tokens, 2);
 
-	// Find out emission type of hmm
-	keyString = stJson_token_tostr(js, &(tokens[3]));
-	if(strcmp(keyString, "emissionsType") != 0) {
-		st_errAbort("ERROR: Unrecognised or unordered ('type', 'emissionsType', 'transitions', 'emissions') key in polish params json: %s\n", keyString);
-	}
-	int64_t emissionsType = stJson_parseInt(js, tokens, 4);
+    // Find out emission type of hmm
+    keyString = stJson_token_tostr(js, &(tokens[3]));
+    if (strcmp(keyString, "emissionsType") != 0) {
+        st_errAbort(
+                "ERROR: Unrecognised or unordered ('type', 'emissionsType', 'transitions', 'emissions') key in polish params json: %s\n",
+                keyString);
+    }
+    int64_t emissionsType = stJson_parseInt(js, tokens, 4);
 
-	// Make empty hmm object
-	Hmm *hmm = hmm_constructEmpty(0, stateMachineType, emissionsType);
+    // Make empty hmm object
+    Hmm *hmm = hmm_constructEmpty(0, stateMachineType, emissionsType);
 
-	// Parse tokens, starting at token 1
+    // Parse tokens, starting at token 1
     // (token 0 is entire object)
-	bool gotEmissions = 0, gotTransitions = 0;
-    for (int64_t tokenIndex=5; tokenIndex < tokenNumber; tokenIndex++) {
+    bool gotEmissions = 0, gotTransitions = 0;
+    for (int64_t tokenIndex = 5; tokenIndex < tokenNumber; tokenIndex++) {
         keyString = stJson_token_tostr(js, &(tokens[tokenIndex]));
-        if(strcmp(keyString, "transitions") == 0) {
-        	tokenIndex = stJson_parseFloatArray(hmm->transitions, hmm->stateNumber * hmm->stateNumber, js, tokens, ++tokenIndex);
-        	gotTransitions = 1;
-        }
-        else if(strcmp(keyString, "emissions") == 0) {
-        	tokenIndex = stJson_parseFloatArray(hmm->emissions, hmm->totalEmissions,
-        			js, tokens, ++tokenIndex);
-        	gotEmissions = 1;
-        }
-        else if(strcmp(keyString, "likelihood") == 0) {
-        	hmm->likelihood = stJson_parseFloat(js, tokens, ++tokenIndex);
-        }
-        else {
-        	st_errAbort("ERROR: Unrecognised key in hmm json: %s\n", keyString);
+        if (strcmp(keyString, "transitions") == 0) {
+            tokenIndex = stJson_parseFloatArray(hmm->transitions, hmm->stateNumber * hmm->stateNumber, js, tokens,
+                                                ++tokenIndex);
+            gotTransitions = 1;
+        } else if (strcmp(keyString, "emissions") == 0) {
+            tokenIndex = stJson_parseFloatArray(hmm->emissions, hmm->totalEmissions,
+                                                js, tokens, ++tokenIndex);
+            gotEmissions = 1;
+        } else if (strcmp(keyString, "likelihood") == 0) {
+            hmm->likelihood = stJson_parseFloat(js, tokens, ++tokenIndex);
+        } else {
+            st_errAbort("ERROR: Unrecognised key in hmm json: %s\n", keyString);
         }
     }
 
-    if(!gotEmissions) {
-    	st_errAbort("ERROR: Did not find emissions specified in json HMM\n");
+    if (!gotEmissions) {
+        st_errAbort("ERROR: Did not find emissions specified in json HMM\n");
     }
-    if(!gotTransitions) {
+    if (!gotTransitions) {
         st_errAbort("ERROR: Did not find transitions specified in json HMM\n");
     }
 
@@ -289,7 +291,7 @@ static inline double *hmm_getEmissionsExpectation2(Hmm *hmm, int64_t state, int6
     assert(state >= 0 && state < hmm->stateNumber);
     assert(emissionNo >= 0 && emissionNo < hmm->emissionNoPerState[state]);
     assert(hmm->emissionOffsetPerState[state] + emissionNo < hmm->totalEmissions);
-	return &(hmm->emissions[hmm->emissionOffsetPerState[state] + emissionNo]);
+    return &(hmm->emissions[hmm->emissionOffsetPerState[state] + emissionNo]);
 }
 
 double hmm_getEmissionsExpectation(Hmm *hmm, int64_t state, int64_t emissionNo) {
@@ -304,9 +306,10 @@ void hmm_setEmissionsExpectation(Hmm *hmm, int64_t state, int64_t emissionNo, do
     *hmm_getEmissionsExpectation2(hmm, state, emissionNo) = p;
 }
 
-static void hmm_emissions_loadProbs(Hmm *hmm, double *emissionProbs, int64_t state, int64_t start, int64_t emissionNumber) {
-    for(int64_t x=0; x<emissionNumber; x++) {
-    	emissionProbs[x] = log(hmm_getEmissionsExpectation(hmm, state, start+x));
+static void
+hmm_emissions_loadProbs(Hmm *hmm, double *emissionProbs, int64_t state, int64_t start, int64_t emissionNumber) {
+    for (int64_t x = 0; x < emissionNumber; x++) {
+        emissionProbs[x] = log(hmm_getEmissionsExpectation(hmm, state, start + x));
     }
 }
 
@@ -326,10 +329,10 @@ void hmm_normalise(Hmm *hmm) {
     for (int64_t state = 0; state < hmm->stateNumber; state++) {
         double total = 0.0;
         for (int64_t x = 0; x < hmm->emissionNoPerState[state]; x++) {
-        	total += hmm_getEmissionsExpectation(hmm, state, x);
+            total += hmm_getEmissionsExpectation(hmm, state, x);
         }
         for (int64_t x = 0; x < hmm->emissionNoPerState[state]; x++) {
-        	hmm_setEmissionsExpectation(hmm, state, x, hmm_getEmissionsExpectation(hmm, state, x) / total);
+            hmm_setEmissionsExpectation(hmm, state, x, hmm_getEmissionsExpectation(hmm, state, x) / total);
         }
     }
 }
@@ -344,7 +347,7 @@ void hmm_randomise(Hmm *hmm) {
     //Emissions
     for (int64_t state = 0; state < hmm->stateNumber; state++) {
         for (int64_t x = 0; x < hmm->emissionNoPerState[state]; x++) {
-        	hmm_setEmissionsExpectation(hmm, state, x, st_random());
+            hmm_setEmissionsExpectation(hmm, state, x, st_random());
         }
     }
 
@@ -358,7 +361,7 @@ void hmm_randomise(Hmm *hmm) {
 ///////////////////////////////////
 
 static inline double getNucleotideGapProb(const double *emissionGapProbs, Symbol i) {
-    if(i >= 4) {
+    if (i >= 4) {
         return -1.386294361; // log(0.25) ambiguous character
     }
     return emissionGapProbs[i];
@@ -373,50 +376,50 @@ static inline double getNucleotideGapProbY(NucleotideEmissions *ne, Symbol i) {
 }
 
 static inline double getNucleotideMatchProb(NucleotideEmissions *e, Symbol x, Symbol y) {
-    if(x >= 4 || y >= 4) {
+    if (x >= 4 || y >= 4) {
         return -2.772588722; //log(0.25**2)
     }
     return e->EMISSION_MATCH_PROBS[x * 4 + y];
 }
 
 void nucleotideEmissions_print(NucleotideEmissions *ne, FILE *f) {
-	// Matches
-	fprintf(f, "\tSubstitution matrix: \n");
-	for(int64_t i=0; i<4; i++) {
-		fprintf(f, "\t\t");
-		for(int64_t j=0; j<4; j++) {
-			fprintf(f, " %.5f", exp(ne->EMISSION_MATCH_PROBS[i*4 + j]));
-		}
-		fprintf(f, "\n");
-	}
-	//x-gaps
-	fprintf(f, "\tX gaps: \n");
-	for(int64_t i=0; i<4; i++) {
-		fprintf(f, " %.5f", exp(ne->EMISSION_GAP_X_PROBS[i]));
-	}
-	fprintf(f, "\n");
-	//y-gaps
-	fprintf(f, "\tY gaps: \n");
-	for(int64_t i=0; i<4; i++) {
-		fprintf(f, " %.5f", exp(ne->EMISSION_GAP_Y_PROBS[i]));
-	}
-	fprintf(f, "\n");
+    // Matches
+    fprintf(f, "\tSubstitution matrix: \n");
+    for (int64_t i = 0; i < 4; i++) {
+        fprintf(f, "\t\t");
+        for (int64_t j = 0; j < 4; j++) {
+            fprintf(f, " %.5f", exp(ne->EMISSION_MATCH_PROBS[i * 4 + j]));
+        }
+        fprintf(f, "\n");
+    }
+    //x-gaps
+    fprintf(f, "\tX gaps: \n");
+    for (int64_t i = 0; i < 4; i++) {
+        fprintf(f, " %.5f", exp(ne->EMISSION_GAP_X_PROBS[i]));
+    }
+    fprintf(f, "\n");
+    //y-gaps
+    fprintf(f, "\tY gaps: \n");
+    for (int64_t i = 0; i < 4; i++) {
+        fprintf(f, " %.5f", exp(ne->EMISSION_GAP_Y_PROBS[i]));
+    }
+    fprintf(f, "\n");
 }
 
 static void setNucleotideEmissionMatchProbsToDefaults(double *emissionMatchProbs) {
     /*
      * This is used to set the emissions to reasonable values.
      */
-    const double EMISSION_MATCH=-1.8917761142; //ln(0.1508037262);
-    const double EMISSION_TRANSVERSION=-4.3459578861; //ln(0.01295908897);
-    const double EMISSION_TRANSITION=-3.760242452; //ln(0.02327809587);
+    const double EMISSION_MATCH = -1.8917761142; //ln(0.1508037262);
+    const double EMISSION_TRANSVERSION = -4.3459578861; //ln(0.01295908897);
+    const double EMISSION_TRANSITION = -3.760242452; //ln(0.02327809587);
     //Symmetric matrix of transition probabilities.
     const double i[16] = {
             EMISSION_MATCH, EMISSION_TRANSVERSION, EMISSION_TRANSITION, EMISSION_TRANSVERSION,
             EMISSION_TRANSVERSION, EMISSION_MATCH, EMISSION_TRANSVERSION, EMISSION_TRANSITION,
             EMISSION_TRANSITION, EMISSION_TRANSVERSION, EMISSION_MATCH, EMISSION_TRANSVERSION,
-            EMISSION_TRANSVERSION, EMISSION_TRANSITION, EMISSION_TRANSVERSION, EMISSION_MATCH };
-    memcpy(emissionMatchProbs, i, sizeof(double)*16);
+            EMISSION_TRANSVERSION, EMISSION_TRANSITION, EMISSION_TRANSVERSION, EMISSION_MATCH};
+    memcpy(emissionMatchProbs, i, sizeof(double) * 16);
 }
 
 static void setNucleotideEmissionGapProbsToDefaults(double *emissionGapProbs) {
@@ -424,49 +427,49 @@ static void setNucleotideEmissionGapProbsToDefaults(double *emissionGapProbs) {
      * This is used to set the emissions to reasonable values.
      */
     const double EMISSION_GAP = -1.3862943611; //log(0.25)
-    const double i[4] = { EMISSION_GAP, EMISSION_GAP, EMISSION_GAP, EMISSION_GAP };
-    memcpy(emissionGapProbs, i, sizeof(double)*4);
+    const double i[4] = {EMISSION_GAP, EMISSION_GAP, EMISSION_GAP, EMISSION_GAP};
+    memcpy(emissionGapProbs, i, sizeof(double) * 4);
 }
 
 Emissions *nucleotideEmissions_construct() {
-	NucleotideEmissions *ne = st_calloc(1, sizeof(NucleotideEmissions));
+    NucleotideEmissions *ne = st_calloc(1, sizeof(NucleotideEmissions));
 
-	ne->e.alphabet = alphabet_constructNucleotide();
-	ne->e.emission = (double (*)(Emissions *, Symbol, Symbol)) getNucleotideMatchProb;
-	ne->e.gapEmissionX = (double (*)(Emissions *, Symbol)) getNucleotideGapProbX;
-	ne->e.gapEmissionY = (double (*)(Emissions *, Symbol)) getNucleotideGapProbY;
-	ne->e.printFn = (void (*)(Emissions *, FILE *))nucleotideEmissions_print;
+    ne->e.alphabet = alphabet_constructNucleotide();
+    ne->e.emission = (double (*)(Emissions *, Symbol, Symbol)) getNucleotideMatchProb;
+    ne->e.gapEmissionX = (double (*)(Emissions *, Symbol)) getNucleotideGapProbX;
+    ne->e.gapEmissionY = (double (*)(Emissions *, Symbol)) getNucleotideGapProbY;
+    ne->e.printFn = (void (*)(Emissions *, FILE *)) nucleotideEmissions_print;
 
 
-	setNucleotideEmissionMatchProbsToDefaults(ne->EMISSION_MATCH_PROBS);
-	setNucleotideEmissionGapProbsToDefaults(ne->EMISSION_GAP_X_PROBS);
-	setNucleotideEmissionGapProbsToDefaults(ne->EMISSION_GAP_Y_PROBS);
+    setNucleotideEmissionMatchProbsToDefaults(ne->EMISSION_MATCH_PROBS);
+    setNucleotideEmissionGapProbsToDefaults(ne->EMISSION_GAP_X_PROBS);
+    setNucleotideEmissionGapProbsToDefaults(ne->EMISSION_GAP_Y_PROBS);
 
-	return (Emissions *)ne;
+    return (Emissions *) ne;
 }
 
 static void swap(double *d, double *e) {
-	double f = d[0];
-	d[0] = e[0];
-	e[0] = f;
+    double f = d[0];
+    d[0] = e[0];
+    e[0] = f;
 }
 
 void nucleotideEmissions_reverseComplement(NucleotideEmissions *ne) {
-	// Matches
-	for(int64_t i=0; i<4; i++) {
-		for(int64_t j=i+1; j<4; j++) {
-			swap(&(ne->EMISSION_MATCH_PROBS[i*4 + j]), &(ne->EMISSION_MATCH_PROBS[(3-i)*4 + (3-j)]));
-		}
-	}
-	swap(&(ne->EMISSION_MATCH_PROBS[0]), &(ne->EMISSION_MATCH_PROBS[15])); // swap A-A and T-T
-	swap(&(ne->EMISSION_MATCH_PROBS[5]), &(ne->EMISSION_MATCH_PROBS[10]));  // swap C-C and G-G
+    // Matches
+    for (int64_t i = 0; i < 4; i++) {
+        for (int64_t j = i + 1; j < 4; j++) {
+            swap(&(ne->EMISSION_MATCH_PROBS[i * 4 + j]), &(ne->EMISSION_MATCH_PROBS[(3 - i) * 4 + (3 - j)]));
+        }
+    }
+    swap(&(ne->EMISSION_MATCH_PROBS[0]), &(ne->EMISSION_MATCH_PROBS[15])); // swap A-A and T-T
+    swap(&(ne->EMISSION_MATCH_PROBS[5]), &(ne->EMISSION_MATCH_PROBS[10]));  // swap C-C and G-G
 
-	for(int64_t i=0; i<2; i++) {
-		// Gap x
-		swap(&(ne->EMISSION_GAP_X_PROBS[i]), &(ne->EMISSION_GAP_X_PROBS[3-i]));
-		// Gap y
-		swap(&(ne->EMISSION_GAP_Y_PROBS[i]), &(ne->EMISSION_GAP_Y_PROBS[3-i]));
-	}
+    for (int64_t i = 0; i < 2; i++) {
+        // Gap x
+        swap(&(ne->EMISSION_GAP_X_PROBS[i]), &(ne->EMISSION_GAP_X_PROBS[3 - i]));
+        // Gap y
+        swap(&(ne->EMISSION_GAP_Y_PROBS[i]), &(ne->EMISSION_GAP_Y_PROBS[3 - i]));
+    }
 }
 
 ///////////////////////////////////
@@ -476,20 +479,20 @@ void nucleotideEmissions_reverseComplement(NucleotideEmissions *ne) {
 ///////////////////////////////////
 
 Emissions *emissions_construct(Hmm *hmm) {
-	if (hmm->emissionsType == nucleotideEmissions) {
-		NucleotideEmissions *ne = (NucleotideEmissions *)nucleotideEmissions_construct();
-		hmm_emissions_loadProbs(hmm, ne->EMISSION_MATCH_PROBS, 0, 0, 16);
-		hmm_emissions_loadProbs(hmm, ne->EMISSION_GAP_X_PROBS, 1, 0, 4);
-		hmm_emissions_loadProbs(hmm, ne->EMISSION_GAP_Y_PROBS, 2, 0, 4);
-		return (Emissions *)ne;
-	}
-	st_errAbort("Load from hmm: unrecognized emission type");
-	return NULL;
+    if (hmm->emissionsType == nucleotideEmissions) {
+        NucleotideEmissions *ne = (NucleotideEmissions *) nucleotideEmissions_construct();
+        hmm_emissions_loadProbs(hmm, ne->EMISSION_MATCH_PROBS, 0, 0, 16);
+        hmm_emissions_loadProbs(hmm, ne->EMISSION_GAP_X_PROBS, 1, 0, 4);
+        hmm_emissions_loadProbs(hmm, ne->EMISSION_GAP_Y_PROBS, 2, 0, 4);
+        return (Emissions *) ne;
+    }
+    st_errAbort("Load from hmm: unrecognized emission type");
+    return NULL;
 }
 
 void emissions_destruct(Emissions *e) {
-	alphabet_destruct(e->alphabet);
-	free(e);
+    alphabet_destruct(e->alphabet);
+    free(e);
 }
 
 ///////////////////////////////////
@@ -531,12 +534,12 @@ static double stateMachine3_endStateProb(StateMachine *sM, int64_t state) {
     StateMachine3 *sM3 = (StateMachine3 *) sM;
     state_check(sM, state);
     switch (state) {
-    case match:
-        return sM3->TRANSITION_MATCH_CONTINUE;
-    case shortGapX:
-        return sM3->TRANSITION_MATCH_FROM_GAP_X;
-    case shortGapY:
-        return sM3->TRANSITION_MATCH_FROM_GAP_Y;
+        case match:
+            return sM3->TRANSITION_MATCH_CONTINUE;
+        case shortGapX:
+            return sM3->TRANSITION_MATCH_FROM_GAP_X;
+        case shortGapY:
+            return sM3->TRANSITION_MATCH_FROM_GAP_Y;
     }
     return 0.0;
 }
@@ -546,19 +549,21 @@ static double stateMachine3_raggedEndStateProb(StateMachine *sM, int64_t state) 
     StateMachine3 *sM3 = (StateMachine3 *) sM;
     state_check(sM, state);
     switch (state) {
-    case match:
-        return (sM3->TRANSITION_GAP_OPEN_X + sM3->TRANSITION_GAP_OPEN_Y) / 2.0;
-    case shortGapX:
-        return sM3->TRANSITION_GAP_EXTEND_X;
-    case shortGapY:
-        return sM3->TRANSITION_GAP_EXTEND_Y;
+        case match:
+            return (sM3->TRANSITION_GAP_OPEN_X + sM3->TRANSITION_GAP_OPEN_Y) / 2.0;
+        case shortGapX:
+            return sM3->TRANSITION_GAP_EXTEND_X;
+        case shortGapY:
+            return sM3->TRANSITION_GAP_EXTEND_Y;
     }
     return 0.0;
 }
 
 static void stateMachine3_cellCalculate(StateMachine *sM, double *current, double *lower, double *middle, double *upper,
-        Symbol cX, Symbol cY, void (*doTransition)(double *, double *, int64_t, int64_t, double, double, void *),
-        void *extraArgs) {
+                                        Symbol cX, Symbol cY,
+                                        void (*doTransition)(double *, double *, int64_t, int64_t, double, double,
+                                                             void *),
+                                        void *extraArgs) {
     StateMachine3 *sM3 = (StateMachine3 *) sM;
     if (lower != NULL) {
         double eP = sM->emissions->gapEmissionX(sM->emissions, cX);
@@ -581,18 +586,27 @@ static void stateMachine3_cellCalculate(StateMachine *sM, double *current, doubl
 }
 
 void stateMachine3_print(StateMachine3 *sM3, FILE *f) {
-	fprintf(f, "State machine3: \n");
-	fprintf(f, "\t TRANSITION_MATCH_CONTINUE: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_CONTINUE, exp(sM3->TRANSITION_MATCH_CONTINUE));
-	fprintf(f, "\t TRANSITION_MATCH_FROM_GAP_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_FROM_GAP_X, exp(sM3->TRANSITION_MATCH_FROM_GAP_X));
-	fprintf(f, "\t TRANSITION_MATCH_FROM_GAP_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_FROM_GAP_Y, exp(sM3->TRANSITION_MATCH_FROM_GAP_Y));
-	fprintf(f, "\t TRANSITION_GAP_OPEN_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_OPEN_X, exp(sM3->TRANSITION_GAP_OPEN_X));
-	fprintf(f, "\t TRANSITION_GAP_OPEN_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_OPEN_Y, exp(sM3->TRANSITION_GAP_OPEN_Y));
-	fprintf(f, "\t TRANSITION_GAP_EXTEND_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_EXTEND_X, exp(sM3->TRANSITION_GAP_EXTEND_X));
-	fprintf(f, "\t TRANSITION_GAP_EXTEND_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_EXTEND_Y, exp(sM3->TRANSITION_GAP_EXTEND_Y));
-	fprintf(f, "\t TRANSITION_GAP_SWITCH_TO_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_SWITCH_TO_X, exp(sM3->TRANSITION_GAP_SWITCH_TO_X));
-	fprintf(f, "\t TRANSITION_GAP_SWITCH_TO_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_SWITCH_TO_Y, exp(sM3->TRANSITION_GAP_SWITCH_TO_Y));
-	fprintf(f, "State machine3: emissions\n");
-	sM3->model.emissions->printFn(sM3->model.emissions, f);
+    fprintf(f, "State machine3: \n");
+    fprintf(f, "\t TRANSITION_MATCH_CONTINUE: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_CONTINUE,
+            exp(sM3->TRANSITION_MATCH_CONTINUE));
+    fprintf(f, "\t TRANSITION_MATCH_FROM_GAP_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_FROM_GAP_X,
+            exp(sM3->TRANSITION_MATCH_FROM_GAP_X));
+    fprintf(f, "\t TRANSITION_MATCH_FROM_GAP_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_MATCH_FROM_GAP_Y,
+            exp(sM3->TRANSITION_MATCH_FROM_GAP_Y));
+    fprintf(f, "\t TRANSITION_GAP_OPEN_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_OPEN_X,
+            exp(sM3->TRANSITION_GAP_OPEN_X));
+    fprintf(f, "\t TRANSITION_GAP_OPEN_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_OPEN_Y,
+            exp(sM3->TRANSITION_GAP_OPEN_Y));
+    fprintf(f, "\t TRANSITION_GAP_EXTEND_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_EXTEND_X,
+            exp(sM3->TRANSITION_GAP_EXTEND_X));
+    fprintf(f, "\t TRANSITION_GAP_EXTEND_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_EXTEND_Y,
+            exp(sM3->TRANSITION_GAP_EXTEND_Y));
+    fprintf(f, "\t TRANSITION_GAP_SWITCH_TO_X: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_SWITCH_TO_X,
+            exp(sM3->TRANSITION_GAP_SWITCH_TO_X));
+    fprintf(f, "\t TRANSITION_GAP_SWITCH_TO_Y: %.5f (exp: %.5f)\n", sM3->TRANSITION_GAP_SWITCH_TO_Y,
+            exp(sM3->TRANSITION_GAP_SWITCH_TO_Y));
+    fprintf(f, "State machine3: emissions\n");
+    sM3->model.emissions->printFn(sM3->model.emissions, f);
 }
 
 StateMachine *stateMachine3_construct(StateMachineType type, Emissions *e) {
@@ -620,13 +634,13 @@ StateMachine *stateMachine3_construct(StateMachineType type, Emissions *e) {
     sM3->model.raggedEndStateProb = stateMachine3_raggedEndStateProb;
     sM3->model.cellCalculate = stateMachine3_cellCalculate;
     sM3->model.emissions = e;
-    sM3->model.printFn = (void (*)(StateMachine *, FILE *))stateMachine3_print;
+    sM3->model.printFn = (void (*)(StateMachine *, FILE *)) stateMachine3_print;
 
     return (StateMachine *) sM3;
 }
 
 StateMachine *stateMachine3_constructNucleotide(StateMachineType type) {
-	return stateMachine3_construct(type, nucleotideEmissions_construct());
+    return stateMachine3_construct(type, nucleotideEmissions_construct());
 }
 
 static void stateMachine3_loadAsymmetric(StateMachine3 *sM3, Hmm *hmm) {
@@ -642,8 +656,8 @@ static void stateMachine3_loadAsymmetric(StateMachine3 *sM3, Hmm *hmm) {
     sM3->TRANSITION_GAP_EXTEND_Y = log(hmm_getTransition(hmm, shortGapY, shortGapY));
     sM3->TRANSITION_GAP_SWITCH_TO_X = log(hmm_getTransition(hmm, shortGapY, shortGapX));
     sM3->TRANSITION_GAP_SWITCH_TO_Y = log(hmm_getTransition(hmm, shortGapX, shortGapY));
-    int64_t xGapStates[1] = { shortGapX };
-    int64_t yGapStates[1] = { shortGapY };
+    int64_t xGapStates[1] = {shortGapX};
+    int64_t yGapStates[1] = {shortGapY};
 }
 
 static void stateMachine3_loadSymmetric(StateMachine3 *sM3, Hmm *hmm) {
@@ -663,8 +677,8 @@ static void stateMachine3_loadSymmetric(StateMachine3 *sM3, Hmm *hmm) {
     sM3->TRANSITION_GAP_SWITCH_TO_X = log(
             (hmm_getTransition(hmm, shortGapY, shortGapX) + hmm_getTransition(hmm, shortGapX, shortGapY)) / 2.0);
     sM3->TRANSITION_GAP_SWITCH_TO_Y = sM3->TRANSITION_GAP_SWITCH_TO_X;
-    int64_t xGapStates[2] = { shortGapX };
-    int64_t yGapStates[2] = { shortGapY };
+    int64_t xGapStates[2] = {shortGapX};
+    int64_t yGapStates[2] = {shortGapY};
 }
 
 ///////////////////////////////////
@@ -674,7 +688,7 @@ static void stateMachine3_loadSymmetric(StateMachine3 *sM3, Hmm *hmm) {
 ///////////////////////////////////
 
 StateMachine *hmm_getStateMachine(Hmm *hmm) {
-	Emissions *e = emissions_construct(hmm);
+    Emissions *e = emissions_construct(hmm);
     if (hmm->type == threeStateAsymmetric) {
         StateMachine3 *sM3 = (StateMachine3 *) stateMachine3_construct(hmm->type, e);
         stateMachine3_loadAsymmetric(sM3, hmm);
@@ -689,7 +703,7 @@ StateMachine *hmm_getStateMachine(Hmm *hmm) {
 }
 
 void stateMachine_destruct(StateMachine *stateMachine) {
-	emissions_destruct(stateMachine->emissions);
+    emissions_destruct(stateMachine->emissions);
     free(stateMachine);
 }
 
@@ -700,38 +714,40 @@ void stateMachine_destruct(StateMachine *stateMachine) {
 ///////////////////////////////////
 
 typedef struct _rleNucleotideEmissions {
-	NucleotideEmissions ne;
-	RepeatSubMatrix *repeatSubMatrix;
-	bool strand;
+    NucleotideEmissions ne;
+    RepeatSubMatrix *repeatSubMatrix;
+    bool strand;
 } RleNucleotideEmissions;
 
 static inline double getRleNucleotideGapProbX(RleNucleotideEmissions *rlene, Symbol x) {
-	return getNucleotideGapProb(rlene->ne.EMISSION_GAP_X_PROBS, symbol_stripRepeatCount(x));
+    return getNucleotideGapProb(rlene->ne.EMISSION_GAP_X_PROBS, symbol_stripRepeatCount(x));
 }
 
 static inline double getRleNucleotideGapProbY(RleNucleotideEmissions *rlene, Symbol y) {
-	Symbol base = symbol_stripRepeatCount(y);
-	//double *repeatProbs = (base == 0 || base == 3) ? rlene->repeatSubMatrix->baseLogProbs_AT : rlene->repeatSubMatrix->baseLogProbs_GC;
-	return getNucleotideGapProb(rlene->ne.EMISSION_GAP_Y_PROBS, base); // + 2.3025 * repeatProbs[symbol_getRepeatLength(y)];
+    Symbol base = symbol_stripRepeatCount(y);
+    //double *repeatProbs = (base == 0 || base == 3) ? rlene->repeatSubMatrix->baseLogProbs_AT : rlene->repeatSubMatrix->baseLogProbs_GC;
+    return getNucleotideGapProb(rlene->ne.EMISSION_GAP_Y_PROBS,
+                                base); // + 2.3025 * repeatProbs[symbol_getRepeatLength(y)];
 }
 
 static inline double getRleNucleotideMatchProb(RleNucleotideEmissions *rlene, Symbol x, Symbol y) {
-	Symbol xBase = symbol_stripRepeatCount(x);
+    Symbol xBase = symbol_stripRepeatCount(x);
     return getNucleotideMatchProb(&(rlene->ne), xBase, symbol_stripRepeatCount(y)) +
-    		2.3025 * repeatSubMatrix_getLogProb(rlene->repeatSubMatrix, xBase, rlene->strand, symbol_getRepeatLength(y), symbol_getRepeatLength(x));
+           2.3025 * repeatSubMatrix_getLogProb(rlene->repeatSubMatrix, xBase, rlene->strand, symbol_getRepeatLength(y),
+                                               symbol_getRepeatLength(x));
 }
 
 Emissions *rleNucleotideEmissions_construct(Emissions *emissions, RepeatSubMatrix *repeatSubMatrix, bool strand) {
-	RleNucleotideEmissions *rlene = st_calloc(1, sizeof(RleNucleotideEmissions));
-	rlene->repeatSubMatrix = repeatSubMatrix;
-	rlene->strand = strand;
-	NucleotideEmissions *ne = (NucleotideEmissions *)emissions;
-	rlene->ne = *ne;
-	free(emissions);
-	rlene->ne.e.emission = (double (*)(Emissions *, Symbol, Symbol)) getRleNucleotideMatchProb;
-	rlene->ne.e.gapEmissionX = (double (*)(Emissions *, Symbol)) getRleNucleotideGapProbX;
-	rlene->ne.e.gapEmissionY = (double (*)(Emissions *, Symbol)) getRleNucleotideGapProbY;
+    RleNucleotideEmissions *rlene = st_calloc(1, sizeof(RleNucleotideEmissions));
+    rlene->repeatSubMatrix = repeatSubMatrix;
+    rlene->strand = strand;
+    NucleotideEmissions *ne = (NucleotideEmissions *) emissions;
+    rlene->ne = *ne;
+    free(emissions);
+    rlene->ne.e.emission = (double (*)(Emissions *, Symbol, Symbol)) getRleNucleotideMatchProb;
+    rlene->ne.e.gapEmissionX = (double (*)(Emissions *, Symbol)) getRleNucleotideGapProbX;
+    rlene->ne.e.gapEmissionY = (double (*)(Emissions *, Symbol)) getRleNucleotideGapProbY;
 
-	return (Emissions *)rlene;
+    return (Emissions *) rlene;
 }
 

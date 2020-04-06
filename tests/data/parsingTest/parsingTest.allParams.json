@@ -1,31 +1,70 @@
 {
   "phase": {
-    "alphabet" : [ "Aa", "Cc", "Gg", "Tt", "-" ],
-
-    "wildcard" : "Nn",
-
-    "haplotypeSubstitutionModel" : [
-      0.998, 0.000333, 0.000333, 0.000333, 0.001,
-      0.000333, 0.998, 0.000333, 0.000333, 0.001,
-      0.000333, 0.000333, 0.998, 0.000333, 0.001,
-      0.000333, 0.000333, 0.000333, 0.998, 0.001,
-      0.001, 0.001, 0.001, 0.001, 0.996
+    "alphabet": [
+      "Aa",
+      "Cc",
+      "Gg",
+      "Tt",
+      "-"
     ],
-
-    "readErrorModel" : [
-      0.9, 0.01, 0.01, 0.01, 0.07,
-      0.01, 0.9, 0.01, 0.01, 0.07,
-      0.01, 0.01, 0.9, 0.01, 0.07,
-      0.01, 0.01, 0.01, 0.9, 0.07,
-      0.07, 0.07, 0.07, 0.07, 0.72
+    "wildcard": "Nn",
+    "haplotypeSubstitutionModel": [
+      0.998,
+      0.000333,
+      0.000333,
+      0.000333,
+      0.001,
+      0.000333,
+      0.998,
+      0.000333,
+      0.000333,
+      0.001,
+      0.000333,
+      0.000333,
+      0.998,
+      0.000333,
+      0.001,
+      0.000333,
+      0.000333,
+      0.000333,
+      0.998,
+      0.001,
+      0.001,
+      0.001,
+      0.001,
+      0.001,
+      0.996
     ],
-
-    "maxNotSumTransitions" : true,
-
-    "maxPartitionsInAColumn" : 50,
-
-    "maxCoverageDepth" : 64,
-
-    "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 4,
+    "readErrorModel": [
+      0.9,
+      0.01,
+      0.01,
+      0.01,
+      0.07,
+      0.01,
+      0.9,
+      0.01,
+      0.01,
+      0.07,
+      0.01,
+      0.01,
+      0.9,
+      0.01,
+      0.07,
+      0.01,
+      0.01,
+      0.01,
+      0.9,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.72
+    ],
+    "maxNotSumTransitions": true,
+    "maxPartitionsInAColumn": 50,
+    "maxCoverageDepth": 64,
+    "minReadCoverageToSupportPhasingBetweenHeterozygousSites": 4
   }
 }

@@ -35,16 +35,16 @@ void usage() {
     fprintf(stderr, "\nDefault options:\n");
     fprintf(stderr, "    -h --help                : Print this help screen\n");
     fprintf(stderr, "    -a --logLevel            : Set the log level [default = info]\n");
-    # ifdef _OPENMP
+# ifdef _OPENMP
     fprintf(stderr, "    -t --threads             : Set number of concurrent threads [default = 1]\n");
-    #endif
+#endif
     fprintf(stderr, "    -o --outputBase          : Name to use for output files [default = 'output']\n");
     fprintf(stderr, "    -r --region              : If set, will only compute for given chromosomal region.\n");
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
     fprintf(stderr, "    -2 --diploid             : Will perform diploid phasing.\n");
 
-    # ifdef _HDF5
+# ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
     fprintf(stderr, "    -f --produceFeatures     : output splitRleWeight or diploidRleWeight (based on -2 flag) features for HELEN.\n");
     fprintf(stderr, "    -F --featureType         : output specific feature type for HELEN (overwrites -f).  Valid types:\n");
@@ -285,7 +285,7 @@ int main(int argc, char *argv[]) {
     bool writeChunkSupplementaryOutput = FALSE;
     bool writeChunkSupplementaryOutputOnly = FALSE;
 
-    if(argc < 4) {
+    if (argc < 4) {
         free(outputBase);
         free(logLevelString);
         usage();
@@ -314,6 +314,7 @@ int main(int argc, char *argv[]) {
                 { "splitRleWeightMaxRL", required_argument, 0, 'L'},
 				{ "supplementaryChunks", no_argument, 0, 'c'},
 				{ "supplementaryChunksOnly", no_argument, 0, 'C'},
+				{ "outputRepeatCounts", no_argument, 0, 'i'},
 				{ "outputPoaCsv", no_argument, 0, 'j'},
 				{ "outputPoaDot", no_argument, 0, 'd'},
 				{ "outputHaplotypeBAM", no_argument, 0, 'm'},
@@ -433,21 +434,21 @@ int main(int argc, char *argv[]) {
     }
 
     // sanity check (verify files exist)
-    if (access(bamInFile, R_OK ) != 0) {
+    if (access(bamInFile, R_OK) != 0) {
         st_errAbort("Could not read from file: %s\n", bamInFile);
         char *idx = stString_print("%s.bai", bamInFile);
-        if (access(idx, R_OK ) != 0 ) {
+        if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", bamInFile);
         }
         free(idx);
-    } else if (access(referenceFastaFile, R_OK ) != 0 ) {
+    } else if (access(referenceFastaFile, R_OK) != 0) {
         st_errAbort("Could not read from file: %s\n", referenceFastaFile);
-    } else if (access(paramsFile, R_OK ) != 0 ) {
+    } else if (access(paramsFile, R_OK) != 0) {
         st_errAbort("Could not read from file: %s\n", paramsFile);
-    } else if (trueReferenceBam != NULL && access(trueReferenceBam, R_OK ) != 0 ) {
+    } else if (trueReferenceBam != NULL && access(trueReferenceBam, R_OK) != 0) {
         st_errAbort("Could not read from file: %s\n", trueReferenceBam);
         char *idx = stString_print("%s.bai", trueReferenceBam);
-        if (access(idx, R_OK ) != 0 ) {
+        if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBam);
         }
         free(idx);
@@ -464,7 +465,7 @@ int main(int argc, char *argv[]) {
     time_t startTime = time(NULL);
     st_setLogLevelFromString(logLevelString);
     free(logLevelString);
-    # ifdef _OPENMP
+# ifdef _OPENMP
     if (numThreads <= 0) {
         numThreads = 1;
     }
@@ -498,7 +499,8 @@ int main(int argc, char *argv[]) {
 
     // update depth (if set)
     if (maxDepth >= 0) {
-        st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth, maxDepth);
+        st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
+                       maxDepth);
         params->polishParams->maxDepth = (uint64_t) maxDepth;
     }
 
@@ -507,7 +509,7 @@ int main(int argc, char *argv[]) {
         if (params->polishParams->useRunLengthEncoding) {
             st_errAbort("Invalid runLengthEncoding parameter because of HELEN feature type.\n");
         }
-    // everthing else requires RLE
+        // everthing else requires RLE
     } else if (helenFeatureType != HFEAT_NONE) {
         if (!params->polishParams->useRunLengthEncoding) {
             st_errAbort("Invalid runLengthEncoding parameter because of HELEN feature type.\n");
@@ -515,38 +517,19 @@ int main(int argc, char *argv[]) {
     }
 
     // Print a report of the parsed parameters
-    if(st_getLogLevel() == debug) {
-    	params_printParameters(params, stderr);
+    if (st_getLogLevel() == debug) {
+        params_printParameters(params, stderr);
     }
 
     // get reference sequences (and remove cruft after refName)
     stHash *referenceSequences = parseReferenceSequences(referenceFastaFile);
 
-    // Open output files
-    /*char *polishedReferenceOutFile = stString_print((diploid ? "%s.h1.fa" : "%s.fa"), outputBase);
-    st_logCritical("> Going to write polished reference in :      %s\n", polishedReferenceOutFile);
-    FILE *polishedReferenceOutFh = fopen(polishedReferenceOutFile, "w");
-    if (polishedReferenceOutFh == NULL) {
-        st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFile);
-    }
-    char *polishedReferenceOutFileH2 = NULL;
-    FILE *polishedReferenceOutFhH2 = NULL;
-    if (diploid) {
-        polishedReferenceOutFileH2 = stString_print("%s.h2.fa", outputBase);
-        st_logCritical("> Going to write polished reference (H2) in : %s\n", polishedReferenceOutFileH2);
-        polishedReferenceOutFhH2 = fopen(polishedReferenceOutFileH2, "w");
-        if (polishedReferenceOutFhH2 == NULL) {
-            st_errAbort("Could not open %s for writing!\n", polishedReferenceOutFileH2);
-        }
-        free(polishedReferenceOutFileH2);
-    }
-    free(polishedReferenceOutFile);*/
-
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
-    st_logCritical("> Set up bam chunker with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
-    		   (int)bamChunker->chunkSize, (int)bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr,
-    		   bamChunker->chunkCount);
+    st_logCritical(
+            "> Set up bam chunker with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
+            (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary, regionStr == NULL ? "all" : regionStr,
+            bamChunker->chunkCount);
     if (bamChunker->chunkCount == 0) {
         st_errAbort("> Found no valid reads!\n");
     }
@@ -558,14 +541,11 @@ int main(int argc, char *argv[]) {
         free(trueReferenceBamChunker->bamFile);
         trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
     }
-    #ifdef _HDF5
+#ifdef _HDF5
     if (helenFeatureType != HFEAT_NONE) {
-        helenHDF5Files = (void**) openHelenFeatureHDF5FilesByThreadCount(outputBase, numThreads);
+        helenHDF5Files = (void **) openHelenFeatureHDF5FilesByThreadCount(outputBase, numThreads);
     }
-    #endif
-
-    // Each chunk produces a char* as output which is saved here
-    /*char **chunkResults = st_calloc(bamChunker->chunkCount, sizeof(char*));*/
+#endif
 
     // output info
     char *outputSequenceFile = stString_print("%s.fa", outputBase);
@@ -581,7 +561,7 @@ int main(int argc, char *argv[]) {
             diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
 
     // (may) need to shuffle chunks
-    stList *chunkOrder = stList_construct3(0, (void (*)(void*))stIntTuple_destruct);
+    stList *chunkOrder = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
     for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
         stList_append(chunkOrder, stIntTuple_construct1(i));
     }
@@ -593,9 +573,9 @@ int main(int argc, char *argv[]) {
     int64_t lastReportedPercentage = 0;
     time_t polishStartTime = time(NULL);
 
-    # ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic,1)
-    # endif
+# ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic,1)
+# endif
     for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
         int64_t chunkIdx = stIntTuple_get(stList_get(chunkOrder, i), 0);
         // Time all chunks
@@ -632,23 +612,24 @@ int main(int argc, char *argv[]) {
             int64_t timeTaken = (int64_t) (time(NULL) - polishStartTime);
             int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
             char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
-                    stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
+                                    stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
             st_logCritical("> Polishing %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                    currentPercentage, i, bamChunker->chunkCount, timeDescriptor);
+                           currentPercentage, i, bamChunker->chunkCount, timeDescriptor);
             free(timeDescriptor);
         }
 
         // Get reference string for chunk of alignment
         char *fullReferenceString = stHash_search(referenceSequences, bamChunk->refSeqName);
         if (fullReferenceString == NULL) {
-            st_errAbort("ERROR: Reference sequence missing from reference map: %s. Perhaps the BAM and REF are mismatched?",
+            st_errAbort(
+                    "ERROR: Reference sequence missing from reference map: %s. Perhaps the BAM and REF are mismatched?",
                     bamChunk->refSeqName);
         }
         int64_t fullRefLen = strlen(fullReferenceString);
         if (bamChunk->chunkBoundaryStart > fullRefLen) {
             st_errAbort("ERROR: Reference sequence %s has length %"PRId64", chunk %"PRId64" has start position %"
-            PRId64". Perhaps the BAM and REF are mismatched?",
-                    bamChunk->refSeqName, fullRefLen, chunkIdx, bamChunk->chunkBoundaryStart);
+                        PRId64". Perhaps the BAM and REF are mismatched?",
+                        bamChunk->refSeqName, fullRefLen, chunkIdx, bamChunk->chunkBoundaryStart);
         }
         RleString *rleReference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
         st_logInfo(">%s Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
@@ -670,12 +651,13 @@ int main(int argc, char *argv[]) {
             stList *discardedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
 
             bool didDownsample = poorMansDownsample(params->polishParams->maxDepth, bamChunk, reads, alignments,
-                    filteredReads, filteredAlignments, discardedReads, discardedAlignments);
+                                                    filteredReads, filteredAlignments, discardedReads,
+                                                    discardedAlignments);
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
                 st_logInfo(" %s Downsampled from %"PRId64" to %"PRId64" reads\n", logIdentifier,
-                        stList_length(reads), stList_length(filteredReads));
+                           stList_length(reads), stList_length(filteredReads));
                 // free all reads and alignments not used
                 stList_destruct(discardedReads);
                 stList_destruct(discardedAlignments);
@@ -688,7 +670,7 @@ int main(int argc, char *argv[]) {
                 reads = filteredReads;
                 alignments = filteredAlignments;
             }
-            // no downsampling, we just need to free the (empty) objects
+                // no downsampling, we just need to free the (empty) objects
             else {
                 stList_destruct(filteredReads);
                 stList_destruct(filteredAlignments);
@@ -704,8 +686,8 @@ int main(int argc, char *argv[]) {
         // Run the polishing method
         int64_t totalNucleotides = 0;
         if (st_getLogLevel() >= info) {
-            for (int64_t u = 0 ; u < stList_length(reads); u++) {
-                totalNucleotides += strlen(((BamChunkRead*)stList_get(reads, u))->rleRead->rleString);
+            for (int64_t u = 0; u < stList_length(reads); u++) {
+                totalNucleotides += strlen(((BamChunkRead *) stList_get(reads, u))->rleRead->rleString);
             }
             st_logInfo(">%s Running polishing algorithm with %"PRId64" reads and %"PRIu64"K nucleotides\n",
                        logIdentifier, stList_length(reads), totalNucleotides >> 10);
@@ -841,7 +823,7 @@ int main(int argc, char *argv[]) {
 
             // HELEN feature outputs
             #ifdef _HDF5
-            RleString *polishedRleConsensus = poa->refString;
+            RleString *polishedRleConsensus = rleString_copy(poa->refString);
             polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
                 handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
@@ -898,7 +880,7 @@ int main(int argc, char *argv[]) {
     if (trueReferenceBam != NULL) free(trueReferenceBam);
     if (trueReferenceBamChunker != NULL) bamChunker_destruct(trueReferenceBamChunker);
     if (regionStr != NULL) free(regionStr);
-    #ifdef _HDF5
+#ifdef _HDF5
     if (helenHDF5Files != NULL) {
         for (int64_t i = 0; i < numThreads; i++) {
             HelenFeatureHDF5FileInfo_destruct((HelenFeatureHDF5FileInfo *) helenHDF5Files[i]);
