@@ -33,8 +33,8 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
                         stList *filteredReads, stList *filteredAlignments, stList *discardedReads, stList *discardedAlignments);
 
-void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase, char *outputReadIDsFileBase,
-                           stSet *readsInH1, stSet *readsInH2, char *logIdentifier);
+void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
+        stSet *readsInH1, stSet *readsInH2, char *logIdentifier);
 
 int64_t getAlignedReadLength(bam1_t *aln);
 int64_t getAlignedReadLength2(bam1_t *aln, int64_t *start_softclip, int64_t *end_softclip);

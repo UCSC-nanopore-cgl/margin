@@ -221,11 +221,7 @@ int main(int argc, char *argv[]) {
 		// If diploid
 		if(diploid) {
 			// Get the bubble graph representation
-			//TODO this hack needs to be fixed for multithread
-			bool useReadAlleles = params->polishParams->useReadAlleles;
-			params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
-			BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
-			params->polishParams->useReadAlleles = useReadAlleles;
+            BubbleGraph *bg = bubbleGraph_constructFromPoa2(poa, reads, params->polishParams, TRUE);
 
 			// Now make a POA for each of the haplotypes
 			stHash *readsToPSeqs;

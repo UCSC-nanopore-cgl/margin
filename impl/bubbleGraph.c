@@ -796,8 +796,10 @@ stList *getCandidateAllelesFromReadSubstrings(stList *readSubstrings, PolishPara
 
 	return alleles;
 }
-
 BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, PolishParams *params) {
+	bubbleGraph_constructFromPoa2(poa, bamChunkReads, params, FALSE);
+}
+BubbleGraph *bubbleGraph_constructFromPoa2(Poa *poa, stList *bamChunkReads, PolishParams *params, bool phasing) {
 	// Setup
 	double *candidateWeights = getCandidateWeights(poa, params);
 
@@ -832,10 +834,10 @@ BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, Polis
 
 				if(stList_length(readSubstrings) > 0) {
 					stList *alleles = NULL;
-					if(params->useReadAlleles) {
+					bool useReadAlleles = phasing ? params->useReadAllelesInPhasing : params->useReadAlleles;
+					if(useReadAlleles) {
 						alleles = getCandidateAllelesFromReadSubstrings(readSubstrings, params);
-					}
-					else {
+					} else {
 						// Calculate the list of alleles
 						double weightAdjustment = 1.0;
 						do {

@@ -6,6 +6,7 @@
 
 #include "margin.h"
 #include <sonLibListPrivate.h>
+#include <htsIntegration.h>
 
 char *getLogIdentifier() {
 	char *logIdentifier;
@@ -781,6 +782,8 @@ double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkRead
 	return baseWeights;
 }
 
+
+
 /*
  * Functions to print poa
  */
@@ -1048,17 +1051,17 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
         // Calculate strand specific base weights
         double totalWeight, totalPositiveWeight, totalNegativeWeight;
         double *baseWeights = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-                                                                   &totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
+                &totalWeight, &totalPositiveWeight, &totalNegativeWeight, poa->alphabet, NULL);
 
         // Calculate hap1, strand specific base weights
         double totalWeightHap1, totalPositiveWeightHap1, totalNegativeWeightHap1;
         double *baseWeightsHap1 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-                                                                       &totalWeightHap1, &totalPositiveWeightHap1, &totalNegativeWeightHap1, poa->alphabet, readsInHap1);
+                &totalWeightHap1, &totalPositiveWeightHap1, &totalNegativeWeightHap1, poa->alphabet, readsInHap1);
 
         // Calculate hap1, strand specific base weights
         double totalWeightHap2, totalPositiveWeightHap2, totalNegativeWeightHap2;
         double *baseWeightsHap2 = poaNode_getStrandSpecificBaseWeights(node, bamChunkReads,
-                                                                       &totalWeightHap2, &totalPositiveWeightHap2, &totalNegativeWeightHap2, poa->alphabet, readsInHap2);
+                &totalWeightHap2, &totalPositiveWeightHap2, &totalNegativeWeightHap2, poa->alphabet, readsInHap2);
 
         //fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
         fprintf(fH, "%" PRIi64 ",%c,%f,%f,%f,%f,%f", i, node->base,
@@ -1086,6 +1089,8 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
         }
 
         free(baseWeights);
+        free(baseWeightsHap1);
+        free(baseWeightsHap2);
 
         // Split observations between haplotypes (assume reads not in hap1 are in hap2)
         stList *observationsHap1 = stList_construct();

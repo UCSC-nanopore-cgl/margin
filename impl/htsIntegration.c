@@ -650,6 +650,8 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference,  
     }
 
     // close it all down
+
+
     hts_itr_multi_destroy(iter);
     hts_idx_destroy(idx);
     free(region[0]);
@@ -699,33 +701,27 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 }
 
 
-void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase, char *outputReadIDsFileBase,
+void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
         stSet *readsInH1, stSet *readsInH2, char *logIdentifier) {
     /*
      * Write out sam files with reads in each split based on which haplotype partition they are in.
      */
 
     // Prep
-    char *haplotype1BamOutFile = NULL, *haplotype2BamOutFile = NULL, *unmatchedBamOutFile = NULL;
-    char *haplotype1ReadOutFile = NULL, *haplotype2ReadOutFile = NULL, *unmatchedReadOutFile = NULL;
 
-    char *chunkIdentifier = stString_print("C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
+    char *chunkIdentifier = NULL;
+    if (bamChunk != NULL) {
+        chunkIdentifier = stString_print(".C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
             bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-    if (outputBamFileBase != NULL) {
-        haplotype1BamOutFile = stString_print("%s.%s.h1.bam", outputBamFileBase, chunkIdentifier);
-        haplotype2BamOutFile = stString_print("%s.%s.h2.bam", outputBamFileBase, chunkIdentifier);
-        unmatchedBamOutFile = stString_print("%s.%s.h0.bam", outputBamFileBase, chunkIdentifier);
-        st_logInfo(" %s Writing BAM haplotype output to: %s, %s, and %s \n", logIdentifier, haplotype1BamOutFile,
-                    haplotype2BamOutFile, unmatchedBamOutFile);
+    } else {
+        chunkIdentifier = stString_print("");
     }
-    if (outputReadIDsFileBase != NULL) {
-        haplotype1ReadOutFile = stString_print("%s.%s.h1.txt", outputReadIDsFileBase, chunkIdentifier);
-        haplotype2ReadOutFile = stString_print("%s.%s.h2.txt", outputReadIDsFileBase, chunkIdentifier);
-        unmatchedReadOutFile = stString_print("%s.%s.h0.txt", outputReadIDsFileBase, chunkIdentifier);
-        st_logInfo(" %s Writing ReadID haplotype output to: %s, %s, and %s \n", logIdentifier, haplotype1ReadOutFile,
-                    haplotype2ReadOutFile, unmatchedReadOutFile);
+    char *haplotype1BamOutFile = stString_print("%s%s.hap1.bam", outputBamFileBase, chunkIdentifier);
+    char *haplotype2BamOutFile = stString_print("%s%s.hap2.bam", outputBamFileBase, chunkIdentifier);
+    char *unmatchedBamOutFile = stString_print("%s%s.hap0.bam", outputBamFileBase, chunkIdentifier);
+    st_logInfo(" %s Writing BAM haplotype output to: %s, %s, and %s \n", logIdentifier, haplotype1BamOutFile,
+            haplotype2BamOutFile, unmatchedBamOutFile);
 
-    }
     int64_t h1Count = 0;
     int64_t h2Count = 0;
     int64_t h0Count = 0;
@@ -757,31 +753,32 @@ void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *out
         r = sam_hdr_write(outUnmatched, bamHdr);
     }
     FILE *readOutH1 = NULL, *readOutH2 = NULL, *readOutUnmatched = NULL;
-    if (outputReadIDsFileBase != NULL) {
-        readOutH1 = fopen(haplotype1ReadOutFile, "w");
-        readOutH2 = fopen(haplotype2ReadOutFile, "w");
-        readOutUnmatched = fopen(unmatchedReadOutFile, "w");
-    }
 
     // prep for index (not entirely sure what all this does.  see samtools/sam_view.c
     int filter_state = ALL, filter_op = 0;
     int result;
     samview_settings_t settings = { .bed = NULL };
     char* region[1] = {};
-    region[0] = stString_print("%s:%d-%d", bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-    settings.bed = bed_hash_regions(settings.bed, region, 0, 1, &filter_op); //insert(1) or filter out(0) the regions from the command line in the same hash table as the bed file
-    if (!filter_op) filter_state = FILTERED;
-    int regcount = 0;
-    hts_reglist_t *reglist = bed_reglist(settings.bed, filter_state, &regcount);
-    if(!reglist) {
-        st_errAbort("ERROR: Could not create list of regions for read conversion");
-    }
-    if ((iter = sam_itr_regions(idx, bamHdr, reglist, regcount)) == 0) {
-        st_errAbort("ERROR: Cannot open iterator for region %s for bam file %s\n", region[0], inputBamLocation);
+
+    //TODO validate how to read with and without a region
+    if (bamChunk != NULL) {
+        region[0] = stString_print("%s:%d-%d", bamChunk->refSeqName, bamChunk->chunkBoundaryStart,
+                                   bamChunk->chunkBoundaryEnd);
+        settings.bed = bed_hash_regions(settings.bed, region, 0, 1,
+                                        &filter_op); //insert(1) or filter out(0) the regions from the command line in the same hash table as the bed file
+        if (!filter_op) filter_state = FILTERED;
+        int regcount = 0;
+        hts_reglist_t *reglist = bed_reglist(settings.bed, filter_state, &regcount);
+        if (!reglist) {
+            st_errAbort("ERROR: Could not create list of regions for read conversion");
+        }
+        if ((iter = sam_itr_regions(idx, bamHdr, reglist, regcount)) == 0) {
+            st_errAbort("ERROR: Cannot open iterator for region %s for bam file %s\n", region[0], inputBamLocation);
+        }
     }
 
-    // fetch alignments
-    while ((result = sam_itr_multi_next(in, iter, aln)) >= 0) {
+    // fetch alignments (either all reads or without reads)
+    while ((bamChunk == NULL ? sam_read1(in,bamHdr,aln) : sam_itr_multi_next(in, iter, aln)) >= 0) {
         // basic filtering (no read length, no cigar)
         if (aln->core.l_qseq <= 0) continue;
         if (aln->core.n_cigar == 0) continue;
@@ -803,16 +800,13 @@ void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *out
         //bam_aux_append(aln, HAPLOTYPE_TAG, 'Z', (int)strlen(haplotypeString) + 1, (uint8_t*)haplotypeString);
 
         if (stSet_search(readsInH1, readName)) {
-            if (outputBamFileBase != NULL) r = sam_write1(out1, bamHdr, aln);
-            if (outputReadIDsFileBase != NULL) fprintf(readOutH1, "%s\n", readName);
+            r = sam_write1(out1, bamHdr, aln);
             h1Count++;
         } else if (stSet_search(readsInH2, readName)) {
-            if (outputBamFileBase != NULL) r = sam_write1(out2, bamHdr, aln);
-            if (outputReadIDsFileBase != NULL) fprintf(readOutH2, "%s\n", readName);
+            r = sam_write1(out2, bamHdr, aln);
             h2Count++;
         } else {
-            if (outputBamFileBase != NULL) r = sam_write1(out2, bamHdr, aln);
-            if (outputReadIDsFileBase != NULL) fprintf(readOutH2, "%s\n", readName);
+            r = sam_write1(out2, bamHdr, aln);
             h0Count++;
         }
     }
@@ -820,20 +814,20 @@ void writeHaplotypedOutput(BamChunk *bamChunk, char *inputBamLocation, char *out
             h1Count, h2Count, h0Count);
 
     // Cleanup
+    if (bamChunk != NULL) {
+        hts_itr_multi_destroy(iter);
+        hts_idx_destroy(idx);
+        free(region[0]);
+        bed_destroy(settings.bed);
+    }
     bam_destroy1(aln);
     bam_hdr_destroy(bamHdr);
     sam_close(in);
-    if (outputBamFileBase != NULL) {
-        sam_close(out1);
-        sam_close(out2);
-        sam_close(outUnmatched);
-        free(haplotype1BamOutFile);
-        free(haplotype2BamOutFile);
-        free(unmatchedBamOutFile);
-    }
-    if (outputReadIDsFileBase != NULL) {
-        fclose(readOutH1);
-        fclose(readOutH2);
-        fclose(readOutUnmatched);
-    }
+    sam_close(out1);
+    sam_close(out2);
+    sam_close(outUnmatched);
+    free(chunkIdentifier);
+    free(haplotype1BamOutFile);
+    free(haplotype2BamOutFile);
+    free(unmatchedBamOutFile);
 }

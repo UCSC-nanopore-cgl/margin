@@ -661,6 +661,7 @@ stList *poa_getAnchorAlignments(Poa *poa, const int64_t *poaToConsensusMap, int6
  */
 stList *poa_getReadAlignmentsToConsensus(Poa *poa, stList *bamChunkReads, PolishParams *polishParams);
 
+
 /*
  * Prints representation of the POA.
  */
@@ -1184,6 +1185,7 @@ RleString *bubbleGraph_getConsensusString(BubbleGraph *bg, uint64_t *consensusPa
  * Create a bubble graph from a POA.
  */
 BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, PolishParams *params);
+BubbleGraph *bubbleGraph_constructFromPoa2(Poa *poa, stList *bamChunkReads, PolishParams *params, bool phasing);
 
 void bubbleGraph_destruct(BubbleGraph *bg);
 

@@ -46,13 +46,13 @@ void usage() {
 
     # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
-    fprintf(stderr, "    -f --produceFeatures     : output splitRleWeight features for HELEN.\n");
+    fprintf(stderr, "    -f --produceFeatures     : output splitRleWeight or diploidRleWeight (based on -2 flag) features for HELEN.\n");
     fprintf(stderr, "    -F --featureType         : output specific feature type for HELEN (overwrites -f).  Valid types:\n");
     fprintf(stderr, "                                 splitRleWeight:   [default] run lengths split into chunks\n");
     fprintf(stderr, "                                 channelRleWeight: run lengths split into per-nucleotide channels\n");
     fprintf(stderr, "                                 simpleWeight:     weighted likelihood from POA nodes (non-RLE)\n");
     fprintf(stderr, "                                 diploidRleWeight: [default] produces diploid features \n");
-    fprintf(stderr, "    -L --splitRleWeightMaxRL : max run length (for 'splitRleWeight' and 'channelRleWeight' types) \n");
+    fprintf(stderr, "    -L --splitRleWeightMaxRL : max run length (for RLE feature types) \n");
     fprintf(stderr, "                                 [split default = %d, channel default = %d, diploid default = %d]\n",
             POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT, POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT, POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT);
     fprintf(stderr, "    -u --trueReferenceBam    : true reference aligned to ASSEMBLY_FASTA, for HELEN\n");
@@ -62,11 +62,15 @@ void usage() {
     # endif
 
     fprintf(stderr, "\nMiscellaneous supplementary output options:\n");
-    fprintf(stderr, "    -d --outputPoaDot        : Output base to write out the poa as DOT file [default = NULL]\n");
-    fprintf(stderr, "    -i --outputRepeatCounts  : Output base to write out the repeat counts [default = NULL]\n");
-    fprintf(stderr, "    -j --outputPoaTsv        : Output base to write out the poa as TSV file [default = NULL]\n");
-    fprintf(stderr, "    -m --outputHaplotypeBAM  : Output base to write out phased BAMs [default = NULL]\n");
-    fprintf(stderr, "    -n --outputHaplotypeReads: Output base to write out phased reads [default = NULL]\n");
+    fprintf(stderr, "    -c --supplementaryChunks : Write supplementary files for each chunk (in additon to writing\n");
+    fprintf(stderr, "                               whole genome information)\n");
+    fprintf(stderr, "    -C --supplementaryChunksOnly : Only write supplementary files for each chunk (will not write\n");
+    fprintf(stderr, "                               whole genome information)\n");
+    fprintf(stderr, "    -d --outputPoaDot        : Write out the poa as DOT file (only done per chunk)\n");
+    fprintf(stderr, "    -i --outputRepeatCounts  : Write out the repeat counts as CSV file\n");
+    fprintf(stderr, "    -j --outputPoaCsv        : Write out the poa as CSV file\n");
+    fprintf(stderr, "    -n --outputHaplotypeReads: Write out phased reads and likelihoods as CSV file\n");
+    fprintf(stderr, "    -m --outputHaplotypeBAM  : Write out phased BAMs\n");
     fprintf(stderr, "\n");
 }
 
@@ -182,6 +186,73 @@ void handleDiploidMerge(BamChunker *bamChunker, char **chunkResultsH1, char **ch
 }*/
 
 
+void poa_writeSupplementalChunkInformation(char *outputBase, char *haplotypeIdentifier, int64_t chunkIdx,
+                                           BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
+                                           bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts) {
+
+    if (outputPoaDOT) {
+        char *outputPoaDotFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.dot",
+                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                    haplotypeIdentifier);
+        FILE *outputPoaTsvFileHandle = fopen(outputPoaDotFilename, "w");
+        poa_printDOT(poa, outputPoaTsvFileHandle, reads);
+        fclose(outputPoaTsvFileHandle);
+        free(outputPoaDotFilename);
+    }
+    if (outputPoaCSV) {
+        char *outputPoaCsvFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
+                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                    haplotypeIdentifier);
+        FILE *outputPoaCsvFileHandle = fopen(outputPoaCsvFilename, "w");
+        poa_printCSV(poa, outputPoaCsvFileHandle, reads, params->polishParams->repeatSubMatrix, 5);
+        fclose(outputPoaCsvFileHandle);
+        free(outputPoaCsvFilename);
+    }
+    if (outputRepeatCounts) {
+        char *outputRepeatCountFilename = stString_print("%s.repeatCount.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
+                                                         outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                         haplotypeIdentifier);
+        FILE *outputRepeatCountFileHandle = fopen(outputRepeatCountFilename, "w");
+        poa_printRepeatCountsCSV(poa, outputRepeatCountFileHandle, reads);
+        fclose(outputRepeatCountFileHandle);
+        free(outputRepeatCountFilename);
+    }
+}
+
+void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chunkIdx,
+        BamChunk *bamChunk, stGenomeFragment *genomeFragment, Poa *poaH1, Poa *poaH2, stList *bamChunkReads,
+        stSet *readsInHap1, stSet *readsInHap2, Params *params, bool outputPoaDOT, bool outputPoaCSV,
+        bool outputRepeatCounts, bool outputHaplotypedReadIdCsv, bool outputHaplotypedBam, char *logIdentifier) {
+
+    poa_writeSupplementalChunkInformation(outputBase, ".hap1", chunkIdx, bamChunk, poaH1, bamChunkReads,
+                                          params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+    poa_writeSupplementalChunkInformation(outputBase, ".hap2", chunkIdx, bamChunk, poaH2, bamChunkReads,
+                                          params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+
+    if (outputHaplotypedReadIdCsv) {
+        char *readIdsHap1Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap1.csv",
+                outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+        FILE *readIdsHap1File = fopen(readIdsHap1Filename, "w");
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap1File, TRUE);
+        fclose(readIdsHap1File);
+
+        char *readIdsHap2Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap2.csv",
+                outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+        FILE *readIdsHap2File = fopen(readIdsHap2Filename, "w");
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap2File, FALSE);
+        fclose(readIdsHap2File);
+
+        free(readIdsHap1Filename);
+        free(readIdsHap2Filename);
+    }
+
+    if (outputHaplotypedBam) {
+        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readsInHap1, readsInHap2, logIdentifier);
+    }
+
+}
+
+
 int main(int argc, char *argv[]) {
 
     // Parameters / arguments
@@ -192,11 +263,6 @@ int main(int argc, char *argv[]) {
     char *outputBase = stString_copy("output");
     char *regionStr = NULL;
     int numThreads = 1;
-    char *outputRepeatCountBase = NULL;
-    char *outputPoaTsvBase = NULL;
-    char *outputPoaDotBase = NULL;
-    char *outputHaplotypeBamBase = NULL;
-    char *outputHaplotypeReadsBase = NULL;
     int64_t maxDepth = -1;
     bool diploid = FALSE;
 
@@ -209,6 +275,15 @@ int main(int argc, char *argv[]) {
     bool fullFeatureOutput = FALSE;
     int64_t splitWeightMaxRunLength = 0;
     void **helenHDF5Files = NULL;
+
+    // for supplementary output
+    bool outputPoaDOT = FALSE;
+    bool outputPoaCSV = FALSE;
+    bool outputRepeatCounts = FALSE;
+    bool outputHaplotypeReads = FALSE;
+    bool outputHaplotypeBAM = FALSE;
+    bool writeChunkSupplementaryOutput = FALSE;
+    bool writeChunkSupplementaryOutputOnly = FALSE;
 
     if(argc < 4) {
         free(outputBase);
@@ -224,8 +299,8 @@ int main(int argc, char *argv[]) {
     // Parse the options
     while (1) {
         static struct option long_options[] = {
-                { "logLevel", required_argument, 0, 'a' },
                 { "help", no_argument, 0, 'h' },
+                { "logLevel", required_argument, 0, 'a' },
                 # ifdef _OPENMP
                 { "threads", required_argument, 0, 't'},
                 #endif
@@ -237,15 +312,16 @@ int main(int argc, char *argv[]) {
                 { "featureType", required_argument, 0, 'F'},
                 { "trueReferenceBam", required_argument, 0, 'u'},
                 { "splitRleWeightMaxRL", required_argument, 0, 'L'},
-				{ "outputRepeatCounts", required_argument, 0, 'i'},
-				{ "outputPoaTsv", required_argument, 0, 'j'},
-				{ "outputPoaDot", required_argument, 0, 'd'},
-				{ "outputHaplotypeBAM", required_argument, 0, 'm'},
-				{ "outputHaplotypeReads", required_argument, 0, 'n'},
+				{ "supplementaryChunks", no_argument, 0, 'c'},
+				{ "supplementaryChunksOnly", no_argument, 0, 'C'},
+				{ "outputPoaCsv", no_argument, 0, 'j'},
+				{ "outputPoaDot", no_argument, 0, 'd'},
+				{ "outputHaplotypeBAM", no_argument, 0, 'm'},
+				{ "outputHaplotypeReads", no_argument, 0, 'n'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "a:o:v:r:p:fF:u:hL:i:j:d:t:m:n:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmn", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -271,21 +347,6 @@ int main(int argc, char *argv[]) {
             if (maxDepth < 0) {
                 st_errAbort("Invalid maxDepth: %s", optarg);
             }
-        case 'i':
-            outputRepeatCountBase = getFileBase(optarg, "repeatCount");
-            break;
-        case 'j':
-            outputPoaTsvBase = getFileBase(optarg, "poa");
-            break;
-        case 'd':
-            outputPoaDotBase = getFileBase(optarg, "poa");
-            break;
-        case 'm':
-            outputHaplotypeBamBase = getFileBase(optarg, "haplotype");
-            break;
-        case 'n':
-            outputHaplotypeReadsBase = getFileBase(optarg, "haplotype");
-            break;
         case 'F':
             if (stString_eqcase(optarg, "simpleWeight") || stString_eqcase(optarg, "simple")) {
                 helenFeatureType = HFEAT_SIMPLE_WEIGHT;
@@ -323,6 +384,27 @@ int main(int argc, char *argv[]) {
             break;
         case '2':
             diploid = TRUE;
+            break;
+        case 'c':
+            writeChunkSupplementaryOutput = TRUE;
+            break;
+        case 'C':
+            writeChunkSupplementaryOutputOnly = TRUE;
+            break;
+        case 'i':
+            outputRepeatCounts = TRUE;
+            break;
+        case 'j':
+            outputPoaCSV = TRUE;
+            break;
+        case 'd':
+            outputPoaDOT = TRUE;
+            break;
+        case 'm':
+            outputHaplotypeBAM = TRUE;
+            break;
+        case 'n':
+            outputHaplotypeReads = TRUE;
             break;
         default:
             usage();
@@ -376,11 +458,6 @@ int main(int argc, char *argv[]) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBamHap2);
         }
         free(idx);
-    }
-
-    // sanitiy check for poa plotting
-    if ((outputPoaTsvBase != NULL || outputPoaDotBase != NULL) && regionStr == NULL) {
-        st_logCritical("--outputPoaTsv and --outputPoaDot options should only be used for a specific region!\n");
     }
 
     // Initialization from arguments
@@ -492,16 +569,15 @@ int main(int argc, char *argv[]) {
 
     // output info
     char *outputSequenceFile = stString_print("%s.fa", outputBase);
-    char *outputReadPartitionFile = stString_print("%s.reads.csv", outputBase);
-    char *outputPoaFile = (outputPoaTsvBase == NULL ? NULL : stString_print("%s.poa.csv", outputPoaTsvBase));
-    char *outputRepeatCountFile = (outputRepeatCountBase == NULL ? NULL :
-            stString_print("%s.repeatCount.csv", outputRepeatCountBase));
+    char *outputReadCsvFile = stString_print("%s.reads.csv", outputBase);
+    char *outputPoaCsvFile = stString_print("%s.poa.csv", outputBase);
+    char *outputRepeatCountFile = stString_print("%s.repeatCount.csv", outputBase);
 
     // output chunker tracks intermediate output files
     OutputChunkers *outputChunkers = outputChunkers_construct(numThreads, params, outputSequenceFile,
-            outputPoaTsvBase != NULL ? outputPoaFile : NULL,
-            diploid ? outputReadPartitionFile : NULL,
-            outputRepeatCountBase != NULL ? outputRepeatCountFile : NULL,
+            outputPoaCSV && !writeChunkSupplementaryOutputOnly ? outputPoaCsvFile : NULL,
+            outputHaplotypeReads && !writeChunkSupplementaryOutputOnly ? outputReadCsvFile : NULL,
+            outputRepeatCounts && !writeChunkSupplementaryOutputOnly ? outputRepeatCountFile : NULL,
             diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
 
     // (may) need to shuffle chunks
@@ -648,43 +724,15 @@ int main(int argc, char *argv[]) {
         }
 
         // Write any optional outputs about repeat count and POA, etc.
-        if(outputPoaDotBase != NULL) {
-            char *outputPoaDotFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64".dot",
-                                                        outputPoaDotBase, chunkIdx, bamChunk->refSeqName,
-                                                        bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-            FILE *outputPoaTsvFileHandle = fopen(outputPoaDotFilename, "w");
-            poa_printDOT(poa, outputPoaTsvFileHandle, reads);
-            fclose(outputPoaTsvFileHandle);
-            free(outputPoaDotFilename);
+        if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
+            poa_writeSupplementalChunkInformation(outputBase, "", chunkIdx, bamChunk, poa, reads, params,
+                                                  outputPoaDOT, outputPoaCSV, outputRepeatCounts);
         }
-        if(outputPoaTsvBase != NULL) {
-            char *outputPoaTsvFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64".tsv",
-                                                        outputPoaTsvBase, chunkIdx, bamChunk->refSeqName,
-                                                        bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-            FILE *outputPoaTsvFileHandle = fopen(outputPoaTsvFilename, "w");
-            poa_printCSV(poa, outputPoaTsvFileHandle, reads, params->polishParams->repeatSubMatrix, 5);
-            fclose(outputPoaTsvFileHandle);
-            free(outputPoaTsvFilename);
-        }
-        if(outputRepeatCountBase != NULL) {
-            char *outputRepeatCountFilename = stString_print("%s.repeatCount.C%05"PRId64".%s-%"PRId64"-%"PRId64".tsv",
-                                                             outputRepeatCountBase, chunkIdx, bamChunk->refSeqName,
-                                                             bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-            FILE *outputRepeatCountFileHandle = fopen(outputRepeatCountFilename, "w");
-            poa_printRepeatCountsCSV(poa, outputRepeatCountFileHandle, reads);
-            fclose(outputRepeatCountFileHandle);
-            free(outputRepeatCountFilename);
-        }
-
 
         // handle diploid case
         if(diploid) {
             // Get the bubble graph representation
-            //todo this hack needs to be fixed
-            bool useReadAlleles = params->polishParams->useReadAlleles;
-            params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
-            BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
-            params->polishParams->useReadAlleles = useReadAlleles;
+            BubbleGraph *bg = bubbleGraph_constructFromPoa2(poa, reads, params->polishParams, TRUE);
 
             // Now make a POA for each of the haplotypes
             stHash *readsToPSeqs;
@@ -746,9 +794,10 @@ int main(int argc, char *argv[]) {
             readSetsH2[chunkIdx] = readsBelongingToHap2;*/
 
             //ancillary files
-            if (outputHaplotypeBamBase != NULL || outputHaplotypeReadsBase != NULL) {
-                writeHaplotypedOutput(bamChunk, bamInFile, outputHaplotypeBamBase, outputHaplotypeReadsBase,
-                        readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
+            if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
+                poa_writeSupplementalChunkInformationDiploid(outputBase, chunkIdx, bamChunk, gf, poa_hap1, poa_hap2,
+                        reads, readsBelongingToHap1, readsBelongingToHap2, params, outputPoaDOT, outputPoaCSV,
+                        outputRepeatCounts, outputHaplotypeReads, outputHaplotypeBAM, logIdentifier);
             }
 
             // helen
@@ -865,8 +914,8 @@ int main(int argc, char *argv[]) {
         free(readSetsH2);
     }*/
     free(outputSequenceFile);
-    if (outputPoaFile != NULL) free(outputPoaFile);
-    if (outputReadPartitionFile != NULL) free(outputReadPartitionFile);
+    if (outputPoaCsvFile != NULL) free(outputPoaCsvFile);
+    if (outputReadCsvFile != NULL) free(outputReadCsvFile);
     if (outputRepeatCountFile != NULL) free(outputRepeatCountFile);
     free(outputBase);
     free(bamInFile);
