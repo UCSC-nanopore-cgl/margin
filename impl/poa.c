@@ -330,8 +330,9 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
         int64_t j = stIntTuple_get(match, 2), weight = stIntTuple_get(match, 0);
         assert(poa->alphabet->convertCharToSymbol(read->rleString[j]) < poa->alphabet->alphabetSize);
         node->baseWeights[poa->alphabet->convertCharToSymbol(read->rleString[j])] += weight;
-        assert(read->repeatCounts[j] >= 0 && read->repeatCounts[j] < poa->maxRepeatCount);
-        node->repeatCountWeights[read->repeatCounts[j]] += weight;
+        assert(read->repeatCounts[j] >= 0);
+        int64_t rc = read->repeatCounts[j] < poa->maxRepeatCount ? read->repeatCounts[j] : poa->maxRepeatCount - 1;
+        node->repeatCountWeights[rc] += weight;
 
         // PoaObservation
         stList_append(node->observations,

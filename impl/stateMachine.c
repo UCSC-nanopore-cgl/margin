@@ -123,10 +123,10 @@ Symbol symbol_stripRepeatCount(Symbol s) {
 
 Symbol symbol_addRepeatCount(Symbol character, uint64_t runLength, uint64_t maxRepeatCountExclusive) {
 	assert(character <= 255);
-	assert(runLength <= 255);
 	if (runLength >= maxRepeatCountExclusive) {
 	    runLength = maxRepeatCountExclusive - 1;
 	}
+    assert(runLength <= 255);
 	return (runLength << 8) | character;
 }
 
