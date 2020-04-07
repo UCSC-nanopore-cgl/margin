@@ -1293,6 +1293,9 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
      * joins them into one hmm.
      */
 
+    // for logging
+    char *logIdentifier = getLogIdentifier();
+
     // Generate profile sequences and reference
     stReference *ref = bubbleGraph_getReference(bg, refSeqName, params);
     assert(ref->length == bg->bubbleNo);
@@ -1301,18 +1304,17 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
 
     assert(stList_length(reads) >= stList_length(profileSeqs));
     if (stList_length(reads) != stList_length(profileSeqs)) {
-        st_logInfo(
-                "In converting from reads to profile sequences have %" PRIi64 " reads and %" PRIi64 " profile sequences\n",
-                stList_length(reads), stList_length(profileSeqs));
+        st_logInfo(" %s In converting from reads to profile sequences have %" PRIi64 " reads and %" PRIi64 " profile sequences\n",
+                logIdentifier, stList_length(reads), stList_length(profileSeqs));
     }
 
     // Remove excess coverage reads
     // Filter reads so that the maximum coverage depth does not exceed params->maxCoverageDepth
-    st_logInfo("> Filtering reads by coverage depth\n");
+    st_logInfo(" %s Filtering reads by coverage depth\n", logIdentifier);
     stSet *discardedReadsSet = filterReadsByCoverageDepth2(profileSeqs, params);
 
     // Partition reads based upon strand
-    st_logInfo("> Partitioning reads by strand for phasing\n");
+    st_logInfo(" %s Partitioning reads by strand for phasing\n", logIdentifier);
     stList *forwardStrandProfileSeqs = stList_construct();
     stList *reverseStrandProfileSeqs = stList_construct();
     for (int64_t i = 0; i < stList_length(reads); i++) {
@@ -1327,8 +1329,8 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
             }
         }
     }
-    st_logInfo("Got %" PRIi64 " forward strand reads for phasing and %" PRIi64 " negative strand reads for phasing\n",
-               stList_length(forwardStrandProfileSeqs), stList_length(reverseStrandProfileSeqs));
+    st_logInfo(" %s Got %" PRIi64 " forward strand reads for phasing and %" PRIi64 " negative strand reads for phasing\n",
+               logIdentifier, stList_length(forwardStrandProfileSeqs), stList_length(reverseStrandProfileSeqs));
 
     // Deal with the case that the alignment is empty
     if (stList_length(profileSeqs) == 0) {
@@ -1340,23 +1342,23 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
     // Run phasing for each strand partition
     params->phaseParams->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
 
-    st_logInfo("> Phasing forward strand reads\n");
+    st_logInfo(" %s Phasing forward strand reads\n", logIdentifier);
     stList *tilingPathForward = getRPHmms(forwardStrandProfileSeqs, params->phaseParams);
     stList_setDestructor(tilingPathForward, NULL);
 
-    st_logInfo("> Phasing reverse strand reads\n");
+    st_logInfo(" %s Phasing reverse strand reads\n", logIdentifier);
     stList *tilingPathReverse = getRPHmms(reverseStrandProfileSeqs, params->phaseParams);
     stList_setDestructor(tilingPathReverse, NULL);
 
     // Join the hmms
-    st_logInfo("> Joining forward and reverse strand phasing\n");
+    st_logInfo(" %s Joining forward and reverse strand phasing\n", logIdentifier);
     stRPHmm *hmm = fuseTilingPath(mergeTwoTilingPaths(tilingPathForward, tilingPathReverse));
 
     // Run the forward-backward algorithm
     params->phaseParams->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
     stRPHmm_forwardBackward(hmm);
 
-    st_logInfo("Forward probability of the hmm: %f, backward prob: %f\n", (float) hmm->forwardLogProb,
+    st_logInfo(" %s Forward probability of the hmm: %f, backward prob: %f\n", logIdentifier, (float) hmm->forwardLogProb,
                (float) hmm->backwardLogProb);
 
     // Now compute a high probability path through the hmm
@@ -1418,6 +1420,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
     stList_destruct(profileSeqs);
     stRPHmm_destruct(hmm, true);
     stList_destruct(path);
+    free(logIdentifier);
 
     return gF;
 }

@@ -81,6 +81,7 @@ void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeat
     // Get the range or repeat observations, used to avoid calculating all repeat lengths, heuristically
     *minRepeatLength = repeatSubMatrix->maximumRepeatLength;
     *maxRepeatLength = 0;
+    char *maxRLReadId = NULL;
     for (int64_t i = 0; i < stList_length(observations); i++) {
         PoaBaseObservation *observation = stList_get(observations, i);
         BamChunkRead *read = stList_get(bamChunkReads, observation->readNo);
@@ -90,13 +91,16 @@ void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeat
         }
         if (observedRepeatCount > *maxRepeatLength) {
             *maxRepeatLength = observedRepeatCount;
+            maxRLReadId = read->readName;
         }
     }
     if (*maxRepeatLength >= repeatSubMatrix->maximumRepeatLength) {
+        char *logIdentifier = getLogIdentifier();
         st_logInfo(
-                "Got overlong repeat observation: %" PRIi64 ", ignoring this and cutting off overlong repeat counts to max\n",
-                maxRepeatLength);
+                " %s Got overlong repeat observation(s), max: %" PRIi64 " (%s), ignoring this and cutting off overlong repeat counts to max\n",
+                logIdentifier, maxRepeatLength, maxRLReadId);
         *maxRepeatLength = repeatSubMatrix->maximumRepeatLength - 1;
+        free(logIdentifier);
     }
 }
 

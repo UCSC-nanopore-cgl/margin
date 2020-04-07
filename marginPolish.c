@@ -637,7 +637,7 @@ int main(int argc, char *argv[]) {
                    (int) (fullRefLen < bamChunk->chunkBoundaryEnd ? fullRefLen : bamChunk->chunkBoundaryEnd));
 
         // Convert bam lines into corresponding reads and alignments
-        st_logInfo(">%s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
+        st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
         convertToReadsAndAlignments(bamChunk, rleReference, reads, alignments);
@@ -689,7 +689,7 @@ int main(int argc, char *argv[]) {
             for (int64_t u = 0; u < stList_length(reads); u++) {
                 totalNucleotides += strlen(((BamChunkRead *) stList_get(reads, u))->rleRead->rleString);
             }
-            st_logInfo(">%s Running polishing algorithm with %"PRId64" reads and %"PRIu64"K nucleotides\n",
+            st_logInfo(" %s Running polishing algorithm with %"PRId64" reads and %"PRIu64"K nucleotides\n",
                        logIdentifier, stList_length(reads), totalNucleotides >> 10);
         }
 
@@ -698,7 +698,7 @@ int main(int argc, char *argv[]) {
 
         // Log info about the POA
         if (st_getLogLevel() >= info) {
-            st_logInfo(">%s Summary stats for POA:\t", logIdentifier);
+            st_logInfo(" %s Summary stats for POA:\t", logIdentifier);
             poa_printSummaryStats(poa, stderr);
         }
         if (st_getLogLevel() >= debug) {
