@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # from __future__ import print_function
+import os
 import subprocess
 import sys
 
@@ -45,8 +46,22 @@ def main():
     for j in range(len(axt)):
         if "hello" in axt[j]:
 
+            trueAssemblyAlignmentStart = int(axt[j].split()[2])
+            predictedAssemblyAlignmentStart = int(axt[j].split()[5])
             x = axt[j + 1]
             y = axt[j + 2]
+
+            def getAlignmentToSequenceCoordinateMap(alignedSeq):
+                toSeqCoordinate = {}
+                i = 0
+                for k in range(len(alignedSeq)):
+                    toSeqCoordinate[k] = i
+                    if alignedSeq[k] != '-':
+                        i += 1
+                return toSeqCoordinate
+
+            xAlignmenToSeqCoordinate = getAlignmentToSequenceCoordinateMap(x)
+            yAlignmenToSeqCoordinate = getAlignmentToSequenceCoordinateMap(y)
 
             xLen = len([i for i in x if i != '-'])
             yLen = len([i for i in y if i != '-'])
@@ -57,7 +72,9 @@ def main():
                 xGapEvents = len([i for i in range(1, len(x)) if x[i] == '-' and x[i - 1] != '-'])
                 yGapEvents = len([i for i in range(1, len(y)) if y[i] == '-' and y[i - 1] != '-'])
                 mismatches = sum([1 if (x[i] != y[i] and x[i] != '-' and y[i] != '-') else 0 for i in range(len(x))])
-                mismatchLocations = [(i, x[i - 10:i + 10], y[i - 10:i + 10]) for i in range(len(x)) if
+                mismatchLocations = [(trueAssemblyAlignmentStart + xAlignmenToSeqCoordinate[i] - 1,
+                                      predictedAssemblyAlignmentStart + yAlignmenToSeqCoordinate[i] - 1,
+                                      x[i - 10:i + 10], y[i - 10:i + 10]) for i in range(len(x)) if
                                      (x[i] != y[i] and x[i] != '-' and y[i] != '-')]
                 matches = sum([1 if x[i] == y[i] else 0 for i in range(len(x))])
 
@@ -80,8 +97,8 @@ def main():
         print("xLen: %s, yLen: %s, matches: %s, identity: %s, mismatches: %s, xGaps: %s, yGaps: %s" % (
             xLen, yLen, matches, identity, mismatches, xGaps, yGaps))
         if verbose:
-            for location, xString, yString in mismatchLocations:
-                print(" Mismatch", location, xString, yString)
+            for trueAssemblyIndex, predictedAssemblyIndex, xString, yString in mismatchLocations:
+                print(" Mismatch", trueAssemblyIndex, predictedAssemblyIndex, xString, yString)
 
     print(
         "total-xLen: %s, total-yLen: %s, total-matches: %s, total-identity: %s, total-mismatches: %s, total-xGaps: %s, total-yGaps: %s, total-xGapEvents: %s, total-yGapEvents: %s" %
@@ -89,6 +106,10 @@ def main():
             totalXLen, totalYLen, totalMatches, 2.0 * totalMatches / float(totalXLen + totalYLen + 0.0001),
             totalMismatches,
             totalXGaps, totalYGaps, totalXGapEvents, totalYGapEvents))
+
+    # Cleanup
+    os.remove("temp.fa")
+    os.remove("temp.axt")
 
 
 if __name__ == '__main__':

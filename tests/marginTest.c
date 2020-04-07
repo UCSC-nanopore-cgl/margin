@@ -59,11 +59,15 @@ void test_marginIntegration(CuTest *testCase) {
     char *region = NULL;
     char *base = "temp_output";
 
-    //TODO: Edit params and then save them
+    // Make a temporary params file with smaller default chunk sizes
+    char *tempParamsFile = "params.temp";
+    st_system(
+            "cat %s | sed 's/\"chunkSize\": 100000/\"chunkSize\": 1000/' | sed 's/\"chunkBoundary\": 1000/\"chunkBoundary\": 500/' > %s",
+            polishParamsFile, tempParamsFile);
 
     // Run in diploid mode and get all the file outputs
     st_logInfo("\tTesting diploid polishing on %s\n", bamFile);
-    int i = marginIntegrationTest(bamFile, referenceFile, polishParamsFile, region, base, verbose,
+    int i = marginIntegrationTest(bamFile, referenceFile, tempParamsFile, region, base, verbose,
                                   1, 1, 1, 1);
     CuAssertTrue(testCase, i == 0);
 
@@ -103,8 +107,10 @@ void test_marginIntegration(CuTest *testCase) {
     stFile_rmrf(outputHap1PoaFile);
     stFile_rmrf(outputHap2PoaFile);
     stFile_rmrf(outputHap1RepeatCountFile);
+    stFile_rmrf(outputHap2RepeatCountFile);
     stFile_rmrf(outputHap1ReadPhasingFile);
     stFile_rmrf(outputHap2ReadPhasingFile);
+    stFile_rmrf(tempParamsFile);
 }
 
 CuSuite *marginIntegrationTestSuite(void) {

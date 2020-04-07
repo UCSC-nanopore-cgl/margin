@@ -917,8 +917,11 @@ void printMLRepeatCounts(RepeatSubMatrix *repeatSubMatrix, FILE *fh, Symbol base
     repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
                                                         bamChunkReads, &minRepeatLength, &maxRepeatLength);
 
-    if (minRepeatLength == repeatSubMatrix->maximumRepeatLength) {
-        return; // Case we have no valid observations, so assume repeat length of 0
+    if (minRepeatLength == repeatSubMatrix->maximumRepeatLength) { // Case we have no valid observations
+        for (int64_t i = 1; i < repeatSubMatrix->maximumRepeatLength; i++) {
+            fprintf(fh, ",0");
+        }
+        return;
     }
 
     assert(maxRepeatLength - minRepeatLength >= 0);
@@ -928,32 +931,46 @@ void printMLRepeatCounts(RepeatSubMatrix *repeatSubMatrix, FILE *fh, Symbol base
     repeatSubMatrix_getRepeatCountProbs(repeatSubMatrix, base, observations,
                                         bamChunkReads, logProbabilities, minRepeatLength, maxRepeatLength);
 
+    // Calculate the normalizing constant for the probabilities
+    double totalProb = LOG_ZERO;
+    for (int64_t i = minRepeatLength; i <= maxRepeatLength; i++) {
+        totalProb = stMath_logAddExact(logProbabilities[i - minRepeatLength] * 2.302585093,
+                                       totalProb); // Use constant to move from base 10 to base e
+    }
+
     // Print the repeat counts
-    for (int64_t i = 0; i < minRepeatLength; i++) {
-        fprintf(fh, "0,");
+    for (int64_t i = 1; i < minRepeatLength; i++) {
+        fprintf(fh, ",0");
     }
     for (int64_t i = minRepeatLength; i <= maxRepeatLength; i++) {
-        fprintf(fh, "%f,", (float) logProbabilities[i - minRepeatLength]);
+        fprintf(fh, ",%f", (float) exp(logProbabilities[i - minRepeatLength] * 2.302585093 - totalProb));
     }
     for (int64_t i = maxRepeatLength + 1; i < repeatSubMatrix->maximumRepeatLength; i++) {
-        fprintf(fh, "0,");
+        fprintf(fh, ",0");
     }
+}
+
+static double nFloat(double numerator, double denominator) {
+    return denominator == 0.0 ? 0.0 : numerator / denominator;
 }
 
 void poa_printCSV(Poa *poa, FILE *fH,
                   stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix,
                   float indelSignificanceThreshold) {
 
-    fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_POS_STRAND");
+    fprintf(fH, "REF_INDEX,REF_BASE,REPEAT_COUNT,TOTAL_WEIGHT,FRACTION_POS_STRAND");
     for (int64_t j = 0; j < poa->alphabet->alphabetSize; j++) {
         char c = poa->alphabet->convertSymbolToChar(j);
         fprintf(fH, ",FRACTION_BASE_%c_WEIGHT,FRACTION_BASE_%c_POS_STRAND", c, c);
     }
     for (int64_t j = 1; j < repeatSubMatrix->maximumRepeatLength; j++) {
-        fprintf(fH, ",LOG_PROB_REPEAT_COUNT_%" PRIi64 "", j);
+        fprintf(fH, ",PROB_REPEAT_COUNT_%" PRIi64 "", j);
     }
     fprintf(fH,
-            ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_POS_STRAND),DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_POS_STRAND)\n");
+            ",INSERTS"); //xN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_POS_STRAND)'
+
+    fprintf(fH,
+            ",DELETES\n"); //xN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_POS_STRAND)
 
     // Print info for each base in reference in turn
     for (int64_t i = 0; i < stList_length(poa->nodes); i++) {
@@ -967,17 +984,17 @@ void poa_printCSV(Poa *poa, FILE *fH,
                                                                    &totalWeight, &totalPositiveWeight,
                                                                    &totalNegativeWeight, poa->alphabet, NULL);
 
-        fprintf(fH, "%" PRIi64 ",%c,%f,%f", i, node->base,
-                (float) totalWeight / PAIR_ALIGNMENT_PROB_1,
-                (float) totalPositiveWeight / (totalPositiveWeight + totalNegativeWeight));
+        fprintf(fH, "%" PRIi64 ",%c,%" PRIi64 ",%f,%f", i, node->base, node->repeatCount,
+                nFloat(totalWeight, PAIR_ALIGNMENT_PROB_1),
+                nFloat(totalPositiveWeight, totalPositiveWeight + totalNegativeWeight));
 
         for (int64_t j = 0; j < poa->alphabet->alphabetSize; j++) {
             double positiveStrandBaseWeight = baseWeights[j * 2 + 1];
             double negativeStrandBaseWeight = baseWeights[j * 2 + 0];
             double totalBaseWeight = positiveStrandBaseWeight + negativeStrandBaseWeight;
 
-            fprintf(fH, ",%f,%f", (float) node->baseWeights[j] / totalWeight,
-                    (float) positiveStrandBaseWeight / totalBaseWeight);
+            fprintf(fH, ",%f,%f", nFloat(node->baseWeights[j], totalWeight),
+                    nFloat(positiveStrandBaseWeight, totalBaseWeight));
         }
 
         free(baseWeights);
@@ -987,31 +1004,31 @@ void poa_printCSV(Poa *poa, FILE *fH,
                             node->observations, bamChunkReads);
 
         // Inserts
+        fprintf(fH, ",");
         for (int64_t j = 0; j < stList_length(node->inserts); j++) {
             PoaInsert *insert = stList_get(node->inserts, j);
             if (poaInsert_getWeight(insert) / PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
                 char *s = rleString_expand(insert->insert);
-                fprintf(fH, ",%s,%f,%f",
-                        s, (float) poaInsert_getWeight(insert) / PAIR_ALIGNMENT_PROB_1,
-                        (float) insert->weightForwardStrand / poaInsert_getWeight(insert));
+                fprintf(fH, "|%s|%f|%f",
+                        s, nFloat(poaInsert_getWeight(insert), PAIR_ALIGNMENT_PROB_1),
+                        nFloat(insert->weightForwardStrand, poaInsert_getWeight(insert)));
                 free(s);
             }
         }
 
         // Deletes
+        fprintf(fH, ",");
         for (int64_t j = 0; j < stList_length(node->deletes); j++) {
             PoaDelete *delete = stList_get(node->deletes, j);
             if (poaDelete_getWeight(delete) / PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
-                fprintf(fH, ",%" PRIi64 ",%f,%f",
-                        delete->length, (float) poaDelete_getWeight(delete) / PAIR_ALIGNMENT_PROB_1,
-                        (float) delete->weightForwardStrand / poaDelete_getWeight(delete));
+                fprintf(fH, "|%" PRIi64 "|%f|%f",
+                        delete->length, nFloat(poaDelete_getWeight(delete), PAIR_ALIGNMENT_PROB_1),
+                        nFloat(delete->weightForwardStrand, poaDelete_getWeight(delete)));
             }
         }
-
         fprintf(fH, "\n");
     }
 }
-
 
 void poa_printPhasedCSV_indelPrint(stList *observations, FILE *fH,
                                    stList *bamChunkReads, stSet *readsInHap1, stSet *readsInHap2) {
@@ -1039,12 +1056,12 @@ void poa_printPhasedCSV_indelPrint(stList *observations, FILE *fH,
     double totalWeight =
             totalPositiveWeightHap1 + totalNegativeWeightHap1 + totalPositiveWeightHap2 + totalNegativeWeightHap2;
 
-    fprintf(fH, ",%f,%f,%f,%f,%f",
-            (float) totalWeight / PAIR_ALIGNMENT_PROB_1,
-            (float) (totalPositiveWeightHap1 + totalNegativeWeightHap1) / totalWeight,
-            (float) (totalPositiveWeightHap2 + totalNegativeWeightHap2) / totalWeight,
-            (float) totalPositiveWeightHap1 / (totalPositiveWeightHap1 + totalNegativeWeightHap1),
-            (float) totalPositiveWeightHap2 / (totalPositiveWeightHap2 + totalNegativeWeightHap2));
+    fprintf(fH, "|%f|%f|%f|%f|%f",
+            nFloat(totalWeight, PAIR_ALIGNMENT_PROB_1),
+            nFloat(totalPositiveWeightHap1 + totalNegativeWeightHap1, totalWeight),
+            nFloat(totalPositiveWeightHap2 + totalNegativeWeightHap2, totalWeight),
+            nFloat(totalPositiveWeightHap1, totalPositiveWeightHap1 + totalNegativeWeightHap1),
+            nFloat(totalPositiveWeightHap2, totalPositiveWeightHap2 + totalNegativeWeightHap2));
 }
 
 void poa_printPhasedCSV(Poa *poa, FILE *fH,
@@ -1052,7 +1069,7 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
                         RepeatSubMatrix *repeatSubMatrix, float indelSignificanceThreshold) {
 
     fprintf(fH,
-            "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
+            "REF_INDEX,REF_BASE,REPEAT_COUNT,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
     for (int64_t j = 0; j < poa->alphabet->alphabetSize; j++) {
         char c = poa->alphabet->convertSymbolToChar(j);
         fprintf(fH,
@@ -1060,14 +1077,14 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
                 c, c, c, c, c);
     }
     for (int64_t j = 1; j < repeatSubMatrix->maximumRepeatLength; j++) {
-        fprintf(fH, ",LOG_PROB_HAP1_REPEAT_COUNT_%" PRIi64 "", j);
+        fprintf(fH, ",PROB_HAP1_REPEAT_COUNT_%" PRIi64 "", j);
     }
     for (int64_t j = 1; j < repeatSubMatrix->maximumRepeatLength; j++) {
-        fprintf(fH, ",LOG_PROB_HAP2_REPEAT_COUNT_%" PRIi64 "", j);
+        fprintf(fH, ",PROB_HAP2_REPEAT_COUNT_%" PRIi64 "", j);
     }
     fprintf(fH,
-            ",INSERTSxN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)"
-            ",DELETESxN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)\n");
+            ",INSERTS" //xN(INSERT_SEQ,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)'
+            ",DELETES\n"); //xN(DELETE_LENGTH,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2)'
 
     // Print info for each base in reference in turn
     for (int64_t i = 0; i < stList_length(poa->nodes); i++) {
@@ -1096,10 +1113,10 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
                                                                        readsInHap2);
 
         //fprintf(fH, "REF_INDEX,REF_BASE,TOTAL_WEIGHT,FRACTION_HAP1_WEIGHT,FRACTION_HAP2_WEIGHT,FRACTION_POS_STRAND_HAP1,FRACTION_POS_STRAND_HAP2");
-        fprintf(fH, "%" PRIi64 ",%c,%f,%f,%f,%f,%f", i, node->base,
-                (float) totalWeight / PAIR_ALIGNMENT_PROB_1,
-                (float) totalWeightHap1 / totalWeight, (float) totalWeightHap2 / totalWeight,
-                (float) totalPositiveWeightHap1 / totalWeightHap1, (float) totalPositiveWeightHap2 / totalWeightHap2);
+        fprintf(fH, "%" PRIi64 ",%c,%" PRIi64 ",%f,%f,%f,%f,%f", i, node->base, node->repeatCount,
+                nFloat(totalWeight, PAIR_ALIGNMENT_PROB_1),
+                nFloat(totalWeightHap1, totalWeight), nFloat(totalWeightHap2, totalWeight),
+                nFloat(totalPositiveWeightHap1, totalWeightHap1), nFloat(totalPositiveWeightHap2, totalWeightHap2));
 
         for (int64_t j = 0; j < poa->alphabet->alphabetSize; j++) {
             double positiveStrandBaseWeight = baseWeights[j * 2 + 1];
@@ -1113,11 +1130,11 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
             double negativeStrandBaseWeightHap2 = baseWeightsHap2[j * 2 + 0];
 
             //fprintf(fH, ",NORM_BASE_%c_WEIGHT,FRACTION_BASE_%c_HAP1,FRACTION_BASE_%c_HAP2,FRACTION_BASE_%c_POS_STRAND_HAP1,FRACTION_BASE_%c_POS_STRAND_HAP2", c, c, c, c);
-            fprintf(fH, ",%f,%f,%f,%f,%f", totalBaseWeight / totalWeight,
-                    (positiveStrandBaseWeightHap1 + negativeStrandBaseWeightHap1) / totalBaseWeight,
-                    (positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2) / totalBaseWeight,
-                    positiveStrandBaseWeightHap1 / (positiveStrandBaseWeightHap1 + negativeStrandBaseWeightHap1),
-                    positiveStrandBaseWeightHap2 / (positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2));
+            fprintf(fH, ",%f,%f,%f,%f,%f", nFloat(totalBaseWeight, totalWeight),
+                    nFloat(positiveStrandBaseWeightHap1 + negativeStrandBaseWeightHap1, totalBaseWeight),
+                    nFloat(positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2, totalBaseWeight),
+                    nFloat(positiveStrandBaseWeightHap1, positiveStrandBaseWeightHap1 + negativeStrandBaseWeightHap1),
+                    nFloat(positiveStrandBaseWeightHap2, positiveStrandBaseWeightHap2 + negativeStrandBaseWeightHap2));
         }
 
         free(baseWeights);
@@ -1144,13 +1161,14 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
         stList_destruct(observationsHap2);
 
         // Inserts
+        fprintf(fH, ",");
         for (int64_t j = 0; j < stList_length(node->inserts); j++) {
             PoaInsert *insert = stList_get(node->inserts, j);
             if (poaInsert_getWeight(insert) / PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
 
                 //fprintf(fH, "\tINSERTSxN(INSERT_SEQ, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
                 char *s = rleString_expand(insert->insert);
-                fprintf(fH, ",%s", s);
+                fprintf(fH, "|%s", s);
                 poa_printPhasedCSV_indelPrint(insert->observations, fH,
                                               bamChunkReads, readsInHap1, readsInHap2);
                 free(s);
@@ -1158,17 +1176,17 @@ void poa_printPhasedCSV(Poa *poa, FILE *fH,
         }
 
         // Deletes
+        fprintf(fH, ",");
         for (int64_t j = 0; j < stList_length(node->deletes); j++) {
             PoaDelete *delete = stList_get(node->deletes, j);
             if (poaDelete_getWeight(delete) / PAIR_ALIGNMENT_PROB_1 >= indelSignificanceThreshold) {
 
                 //fprintf(fH, "\tDELETESxN(DELETE_LENGTH, TOTAL_WEIGHT, FRACTION_HAP1_WEIGHT, FRACTION_HAP2_WEIGHT, FRACTION_POS_STRAND_HAP1, FRACTION_POS_STRAND_HAP2)\n");
-                fprintf(fH, ",%" PRIi64 "", delete->length);
+                fprintf(fH, "|%" PRIi64 "", delete->length);
                 poa_printPhasedCSV_indelPrint(delete->observations, fH,
                                               bamChunkReads, readsInHap1, readsInHap2);
             }
         }
-
         fprintf(fH, "\n");
     }
 }
@@ -1628,11 +1646,13 @@ static int64_t expandRLEConsensus2(Poa *poa, PoaNode *node, stList *bamChunkRead
 void poa_estimateRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunkReads, RepeatSubMatrix *repeatSubMatrix) {
     poa->refString->nonRleLength = 0;
     for (uint64_t i = 1; i < stList_length(poa->nodes); i++) {
-        poa->refString->repeatCounts[i - 1] = expandRLEConsensus2(poa, stList_get(poa->nodes, i), bamChunkReads,
+        PoaNode *node = stList_get(poa->nodes, i);
+        poa->refString->repeatCounts[i - 1] = expandRLEConsensus2(poa, node, bamChunkReads,
                                                                   repeatSubMatrix);
         if (poa->refString->repeatCounts[i - 1] == 0) { // Prevent zero length estimates
             poa->refString->repeatCounts[i - 1] = 1;
         }
+        node->repeatCount = poa->refString->repeatCounts[i - 1];
         poa->refString->nonRleLength += poa->refString->repeatCounts[i - 1];
     }
 }
@@ -1660,7 +1680,9 @@ void poa_estimatePhasedRepeatCountsUsingBayesianModel(Poa *poa, stList *bamChunk
             poa->refString->repeatCounts[i - 1] = 1;
         }
 
-        poa->refString->nonRleLength += poa->refString->repeatCounts[i - 1];
+        node->repeatCount = poa->refString->repeatCounts[i - 1]; // Update the repeat count of the node
+
+        poa->refString->nonRleLength += poa->refString->repeatCounts[i - 1]; // Update the length of non-rle refString
     }
 }
 
