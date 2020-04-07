@@ -428,6 +428,7 @@ void renumberCSVLines(stList *csvLines, int64_t index) {
         stList_set(tokens, 0, stString_print("%" PRIi64 "", index++));
         stList_set(csvLines, i, stString_join2(",", tokens));
         stList_destruct(tokens);
+        free(line);
     }
 }
 
