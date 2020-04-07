@@ -247,6 +247,7 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
     }
 
     if (outputHaplotypedBam) {
+        // setup
         stSet *readIdsInHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
         stSetIterator *itor = stSet_getIterator(readsInHap1);
         BamChunkRead *bcr = NULL;
@@ -262,7 +263,12 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         }
         stSet_destructIterator(itor);
 
+        // write it
         writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, logIdentifier);
+
+        // cleanup
+        stSet_destruct(readIdsInHap1);
+        stSet_destruct(readIdsInHap2);
     }
 
 }
