@@ -320,22 +320,23 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
     int64_t transPhase = j + k; // Number of reads consistently phased in trans configuration
 
     // Log the support for the phasing
-    st_logInfo("In phasing between chunks %"PRId64" and %"PRId64" got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
+    char *logIdentifier = getLogIdentifier();
+    st_logInfo(" %s In phasing between chunks %"PRId64" and %"PRId64" got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
                PRIi64 " hap1 and %" PRIi64 " hap2 reads in chunk and %" PRIi64 " reads in intersections\n",
-               pChunk->chunkOrdinal, chunk->chunkOrdinal, stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads),
+               logIdentifier, pChunk->chunkOrdinal, chunk->chunkOrdinal, stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads),
                stSet_size(chunkHap1Reads), stSet_size(chunkHap2Reads), i + j + k + l);
     st_logInfo(
-            " Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h21 intersection, %" PRIi64 " (%f%%) in h12-h22 intersection\n",
-            i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
+            " %s Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h21 intersection, %" PRIi64 " (%f%%) in h12-h22 intersection\n",
+            logIdentifier, i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
             (double) l / (double) (i + j));
     st_logInfo(
-            " Support for phasing trans-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h22 intersection, %" PRIi64 " (%f%%) in h12-h21 intersection\n",
-            j + k, (double) (j + k) / (double) (i + j + k + l), j, (double) j / (double) (k + l), k,
+            " %s Support for phasing trans-configuration, Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h22 intersection, %" PRIi64 " (%f%%) in h12-h21 intersection\n",
+            logIdentifier, j + k, (double) (j + k) / (double) (i + j + k + l), j, (double) j / (double) (k + l), k,
             (double) k / (double) (k + l));
 
     // Switch the relative phasing if the trans phase configuration has more support
     if (cisPhase < transPhase) {
-        st_logDebug("Flipping phase of chunk\n");
+        st_logInfo(" %s Flipping phase of chunk\n", logIdentifier);
         swap((void *) &chunk->seqHap1, (void *) &chunk->seqHap2);
         swap((void *) &chunk->poaHap1StringsLines, (void *) &chunk->poaHap2StringsLines);
         swap((void *) &chunk->readsHap1Lines, (void *) &chunk->readsHap2Lines);
@@ -353,6 +354,7 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
     stSet_destruct(pChunkHap2Reads);
     stSet_destruct(chunkHap1Reads);
     stSet_destruct(chunkHap2Reads);
+    free(logIdentifier);
 }
 
 int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suffixString, int64_t suffixStringLength,
@@ -448,11 +450,13 @@ void chunkToStitch_trimAdjacentChunks2(char **pSeq, char **seq,
                                                params->polishParams, &pSeqCropEnd, &seqCropStart);
 
     // Log
+    char *logIdentifier = getLogIdentifier();
     st_logInfo(
-            "Removed overlap between neighbouring chunks (in RLE space). Approx overlap size: %i, overlap-match weight: %f, "
-            "left-trim: %i, right-trim: %i:\n", (int) params->polishParams->chunkBoundary * 2,
-            (float) overlapMatchWeight / PAIR_ALIGNMENT_PROB_1,
-            pSeqRle->length - pSeqCropEnd, seqCropStart);
+            " %s Removed overlap between neighbouring chunks (in RLE space). Approx overlap size: %i, "
+            "overlap-match weight: %f, left-trim: %i, right-trim: %i:\n", logIdentifier,
+            (int) params->polishParams->chunkBoundary * 2,
+            (float) overlapMatchWeight / PAIR_ALIGNMENT_PROB_1, pSeqRle->length - pSeqCropEnd, seqCropStart);
+    free(logIdentifier);
 
     // Trim the sequences
 
@@ -831,7 +835,7 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
         // Make temporary read phasing file if not specified
         if (outputReadPartitionFile == NULL) {
             outputReadPartitionFile = "temp_read_phasing_file.csv";
-            st_logInfo("Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
+            st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
         }
     }
 

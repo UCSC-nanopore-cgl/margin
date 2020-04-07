@@ -98,7 +98,7 @@ void repeatSubMatrix_getMinAndMaxRepeatCountObservations(RepeatSubMatrix *repeat
         char *logIdentifier = getLogIdentifier();
         st_logInfo(
                 " %s Got overlong repeat observation(s), max: %" PRIi64 " (%s), ignoring this and cutting off overlong repeat counts to max\n",
-                logIdentifier, maxRepeatLength, maxRLReadId);
+                logIdentifier, *maxRepeatLength, maxRLReadId);
         *maxRepeatLength = repeatSubMatrix->maximumRepeatLength - 1;
         free(logIdentifier);
     }
