@@ -35,15 +35,14 @@ time python3 ../../scripts/dirty_assembly_compare.py ../../tests/data/diploidTes
 
 # Compare differences
 echo Comparing predicted hets
-time python3 ../../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt > validatedMismatches.txt
+time python3 ../../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt >validatedMismatches.txt
 cat validatedMismatches.txt
 
 # Make POA visualizations of each
 echo Making POA graph visualizations of predicted hets
 mkdir visualizations
-for i in `cat validatedMismatches.txt| grep 'Predicted mismatch:' | cut -f5 -d' '`
-do
-  j=`echo ${i} - 5 | bc`
+for i in $(cat validatedMismatches.txt | grep 'Predicted mismatch:' | cut -f5 -d' '); do
+  j=$(echo ${i} - 5 | bc)
   python3 ../../scripts/phasedPoaToDot.py output_poa.csv.hap1 --start=${j} --length=10 --output=visualizations/hap1_poa_${j}
 done
 
