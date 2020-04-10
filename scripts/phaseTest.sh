@@ -43,7 +43,8 @@ echo Making POA graph visualizations of predicted hets
 mkdir visualizations
 for i in $(cat validatedMismatches.txt | grep 'Predicted mismatch:' | cut -f5 -d' '); do
   j=$(echo ${i} - 5 | bc)
-  python3 ../../scripts/phasedPoaToDot.py output_poa.csv.hap1 --start=${j} --length=10 --output=visualizations/hap1_poa_${j}
+  k=$(cat validatedMismatches.txt | grep -m 1 ${i} | cut -f7 -d' ')
+  python3 ../../scripts/phasedPoaToDot.py output_poa.csv.hap1 --start=${j} --length=10 --output=visualizations/hap1_poa_${j}_${k}
 done
 
 # Exit
