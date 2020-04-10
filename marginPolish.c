@@ -248,20 +248,8 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
 
     if (outputHaplotypedBam) {
         // setup
-        stSet *readIdsInHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
-        stSetIterator *itor = stSet_getIterator(readsInHap1);
-        BamChunkRead *bcr = NULL;
-        while ((bcr = stSet_getNext(itor)) != NULL) {
-            stSet_insert(readIdsInHap1, stString_copy(bcr->readName));
-        }
-        stSet_destructIterator(itor);
-
-        stSet *readIdsInHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
-        itor = stSet_getIterator(readsInHap2);
-        while ((bcr = stSet_getNext(itor)) != NULL) {
-            stSet_insert(readIdsInHap2, stString_copy(bcr->readName));
-        }
-        stSet_destructIterator(itor);
+        stSet *readIdsInHap1 = bamChunkRead_to_readName(readsInHap1);
+        stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
 
         // write it
         writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, logIdentifier);
@@ -448,33 +436,33 @@ int main(int argc, char *argv[]) {
             if (stList_length(trueRefParts) != 2) {
                 st_errAbort("If --diploid is set, --trueReferenceBam must have two comma-separated values.");
             }
-            trueReferenceBam = stList_get(trueRefParts, 0);
-            trueReferenceBamHap2 = stList_get(trueRefParts, 1);
+            trueReferenceBam = stString_copy(stList_get(trueRefParts, 0));
+            trueReferenceBamHap2 = stString_copy(stList_get(trueRefParts, 1));
             stList_destruct(trueRefParts);
         }
     }
 
     // sanity check (verify files exist)
     if (access(bamInFile, R_OK) != 0) {
-        st_errAbort("Could not read from file: %s\n", bamInFile);
+        st_errAbort("Could not read from input bam file: %s\n", bamInFile);
         char *idx = stString_print("%s.bai", bamInFile);
         if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", bamInFile);
         }
         free(idx);
     } else if (access(referenceFastaFile, R_OK) != 0) {
-        st_errAbort("Could not read from file: %s\n", referenceFastaFile);
+        st_errAbort("Could not read from reference fastafile: %s\n", referenceFastaFile);
     } else if (access(paramsFile, R_OK) != 0) {
-        st_errAbort("Could not read from file: %s\n", paramsFile);
+        st_errAbort("Could not read from params file: %s\n", paramsFile);
     } else if (trueReferenceBam != NULL && access(trueReferenceBam, R_OK) != 0) {
-        st_errAbort("Could not read from file: %s\n", trueReferenceBam);
+        st_errAbort("Could not read from truth file: %s\n", trueReferenceBam);
         char *idx = stString_print("%s.bai", trueReferenceBam);
         if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBam);
         }
         free(idx);
     } else if (trueReferenceBamHap2 != NULL && access(trueReferenceBamHap2, R_OK ) != 0 ) {
-        st_errAbort("Could not read from file: %s\n", trueReferenceBamHap2);
+        st_errAbort("Could not read from truth h2 file: %s\n", trueReferenceBamHap2);
         char *idx = stString_print("%s.bai", trueReferenceBamHap2);
         if (access(idx, R_OK ) != 0 ) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBamHap2);

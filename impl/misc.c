@@ -99,3 +99,14 @@ uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGr
 
     return paddedHap;
 }
+
+stSet *bamChunkRead_to_readName(stSet *bamChunkReads) {
+    stSet *readNames = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    stSetIterator *itor = stSet_getIterator(bamChunkReads);
+    BamChunkRead *bcr = NULL;
+    while ((bcr = stSet_getNext(itor)) != NULL) {
+        stSet_insert(readNames, stString_copy(bcr->readName));
+    }
+    stSet_destructIterator(itor);
+    return readNames;
+}

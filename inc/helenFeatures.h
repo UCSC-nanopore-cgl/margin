@@ -149,11 +149,14 @@ void poa_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads,
         int64_t maxRunLength, HelenFeatureHDF5FileInfo** helenHDF5Files);
 
 stList *alignConsensusAndTruth(char *consensusStr, char *truthStr, uint16_t *score);
+stList *alignConsensusAndTruth2(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams);
+stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams);
 void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featureType, stList *trueRefAlignment,
                                         RleString *trueRefRleString, int64_t *firstMatchedFeaure,
                                         int64_t *lastMatchedFeature);
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl);
+void printMEAAlignment2(RleString *X, RleString *Y, stList *alignedPairs);
 
 void
 writeSimpleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,

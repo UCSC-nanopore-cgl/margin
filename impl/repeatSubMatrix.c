@@ -158,11 +158,9 @@ int64_t getMax(double *values, int64_t length,
     return maxIndex;
 }
 
-int64_t
-repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount, Symbol base,
-                                       stList *observations,
-                                       stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1,
-                                       stSet *readsBelongingToHap2, PolishParams *params) {
+int64_t repeatSubMatrix_getPhasedMLRepeatCount(RepeatSubMatrix *repeatSubMatrix, int64_t existingRepeatCount,
+        Symbol base, stList *observations, stList *bamChunkReads, double *logProbability, stSet *readsBelongingToHap1,
+        stSet *readsBelongingToHap2, PolishParams *params) {
     // Calculate range of repeat counts observed
     int64_t minRepeatLength, maxRepeatLength;
     repeatSubMatrix_getMinAndMaxRepeatCountObservations(repeatSubMatrix, observations,
