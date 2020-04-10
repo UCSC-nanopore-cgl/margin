@@ -392,8 +392,17 @@ void handleDiploidHelenFeatures(
             if (st_getLogLevel() <= info) {
                 st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
                 printMEAAlignment2(polishedRleConsensusH1, trueRefRleStringToHap1, trueRefAlignmentToHap1);
+                char *truthRawToH1 = rleString_expand(trueRefRleStringToHap1);
+                st_logInfo(" %s RAW Consensus Seq H1:\n%s\n", logIdentifier, polishedConsensusStringH1);
+                st_logInfo(" %s RAW Truth Seq H1:\n%s\n", logIdentifier, truthRawToH1);
+                free(truthRawToH1);
+
                 st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
                 printMEAAlignment2(polishedRleConsensusH2, trueRefRleStringToHap2, trueRefAlignmentToHap2);
+                char *truthRawToH2 = rleString_expand(trueRefRleStringToHap1);
+                st_logInfo(" %s RAW Consensus Seq H2:\n%s\n", logIdentifier, polishedConsensusStringH2);
+                st_logInfo(" %s RAW Truth Seq H2:\n%s\n\n", logIdentifier, truthRawToH2);
+                free(truthRawToH2);
             }
 
             //cleanup
@@ -1002,6 +1011,7 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
 
     // iterate over alignment
     stListIterator *alignmentItor = stList_getIterator(alignedPairs);
+    stIntTuple *prevAlign = NULL;
     stIntTuple *currAlign = stList_getNext(alignmentItor);
     int64_t posX = stIntTuple_get(currAlign, 0);
     int64_t posY = stIntTuple_get(currAlign, 1);
@@ -1062,6 +1072,7 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
             }
             posX++;
             posY++;
+            prevAlign = currAlign;
             currAlign = stList_getNext(alignmentItor);
         }
 
