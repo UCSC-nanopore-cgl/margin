@@ -305,6 +305,164 @@ void handleHelenFeatures(
     if (trueRefRleString != NULL) rleString_destruct(trueRefRleString);
 }
 
+void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+                                          RleString *trueRefRleStringA, RleString *trueRefRleStringB,
+                                          RleString **trueRefRleStringToHap1, RleString **trueRefRleStringToHap2,
+                                          stList **trueRefAlignmentToHap1, stList **trueRefAlignmentToHap2,
+                                          Params *params, char *logIdentifier) {
+
+    char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
+    char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
+    char *trueRefExpandedA = rleString_expand(trueRefRleStringA);
+    char *trueRefExpandedB = rleString_expand(trueRefRleStringB);
+
+    // align all to all
+    uint16_t score_trueA_polished1, score_trueA_polished2, score_trueB_polished1, score_trueB_polished2;
+
+    stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruth(
+            polishedConsensusStringH1, trueRefExpandedA, &score_trueA_polished1);
+
+    stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruth(
+            polishedConsensusStringH1, trueRefExpandedB, &score_trueB_polished1);
+
+    stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruth(
+            polishedConsensusStringH2, trueRefExpandedA, &score_trueA_polished2);
+
+    stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruth(
+            polishedConsensusStringH2, trueRefExpandedB, &score_trueB_polished2);
+
+    // determine best alignment
+    bool use_trueA_polished1 = score_trueA_polished1 + score_trueB_polished2 > score_trueA_polished2 + score_trueB_polished1;
+
+    // convert to rleSpace if appropriate
+    if (params->polishParams->useRunLengthEncoding) {
+
+        // hap1
+        *trueRefRleStringToHap1 = rleString_copy(use_trueA_polished1 ? trueRefRleStringA : trueRefRleStringB);
+
+        uint64_t *polishedRleConsensus1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                polishedRleConsensusH1);
+        uint64_t *trueRefRleStringToHap1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                *trueRefRleStringToHap1);
+
+        *trueRefAlignmentToHap1 = runLengthEncodeAlignment(
+                use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished1TrueB,
+                polishedRleConsensus1_nonRleToRleCoordinateMap, trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+        free(polishedRleConsensus1_nonRleToRleCoordinateMap);
+        free(trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+        // hap2
+        *trueRefRleStringToHap2 = rleString_copy(use_trueA_polished1 ? trueRefRleStringB : trueRefRleStringA);
+
+        uint64_t *polishedRleConsensus2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                polishedRleConsensusH2);
+        uint64_t *trueRefRleStringToHap2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                *trueRefRleStringToHap2);
+
+        *trueRefAlignmentToHap2 = runLengthEncodeAlignment(
+                use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished2TrueB : trueRefAlignmentRawSpace_Polished2TrueA,
+                polishedRleConsensus2_nonRleToRleCoordinateMap, trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+        free(polishedRleConsensus2_nonRleToRleCoordinateMap);
+        free(trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+        //cleanup
+        stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
+        stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
+        stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
+        stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
+    }
+
+    // debugging
+    if (st_getLogLevel() <= info) {
+        st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH1, *trueRefRleStringToHap1, *trueRefAlignmentToHap1);
+        char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
+        char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        free(consensusRawH1);
+        free(truthRawToH1);
+
+        st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH2, *trueRefRleStringToHap2, *trueRefAlignmentToHap2);
+        char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
+        char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        free(consensusRawH2);
+        free(truthRawToH2);
+    }
+}
+
+
+
+void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+                                      RleString *trueRefRleStringA, RleString *trueRefRleStringB,
+                                      RleString **trueRefRleStringToHap1, RleString **trueRefRleStringToHap2,
+                                      stList **trueRefAlignmentToHap1, stList **trueRefAlignmentToHap2,
+                                      Params *params, char *logIdentifier) {
+
+    // align all to all
+    double score_polished1_trueA, score_polished2_trueA, score_polished1_trueB, score_polished2_trueB;
+
+    stList *trueRefAlignmentRLESpace_Polished1TrueA = alignConsensusAndTruthRLE(
+            polishedRleConsensusH1, trueRefRleStringA, &score_polished1_trueA, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished1TrueB = alignConsensusAndTruthRLE(
+            polishedRleConsensusH1, trueRefRleStringB, &score_polished1_trueB, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished2TrueA = alignConsensusAndTruthRLE(
+            polishedRleConsensusH2, trueRefRleStringA, &score_polished2_trueA, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished2TrueB = alignConsensusAndTruthRLE(
+            polishedRleConsensusH2, trueRefRleStringB, &score_polished2_trueB, params->polishParams);
+
+    // cis or trans
+    bool use_polished1_trueA = score_polished1_trueA + score_polished2_trueB > score_polished2_trueA + score_polished1_trueB;
+
+    // hap1
+    *trueRefRleStringToHap1 = rleString_copy(use_polished1_trueA ? trueRefRleStringA : trueRefRleStringB);
+    *trueRefAlignmentToHap1 = use_polished1_trueA ?
+                              trueRefAlignmentRLESpace_Polished1TrueA : trueRefAlignmentRLESpace_Polished1TrueB;
+
+    // hap2
+    *trueRefRleStringToHap2 = rleString_copy(use_polished1_trueA ? trueRefRleStringB : trueRefRleStringA);
+    *trueRefAlignmentToHap2 = use_polished1_trueA ?
+                              trueRefAlignmentRLESpace_Polished2TrueB : trueRefAlignmentRLESpace_Polished2TrueA;
+
+    // debugging
+    if (st_getLogLevel() <= info) {
+        st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH1, *trueRefRleStringToHap1, *trueRefAlignmentToHap1);
+        char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
+        char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        free(consensusRawH1);
+        free(truthRawToH1);
+
+        st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH2, *trueRefRleStringToHap2, *trueRefAlignmentToHap2);
+        char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
+        char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        free(consensusRawH2);
+        free(truthRawToH2);
+    }
+
+    //cleanup
+    if (use_polished1_trueA) {
+        stList_destruct(trueRefAlignmentRLESpace_Polished1TrueB);
+        stList_destruct(trueRefAlignmentRLESpace_Polished2TrueA);
+    } else {
+        stList_destruct(trueRefAlignmentRLESpace_Polished1TrueA);
+        stList_destruct(trueRefAlignmentRLESpace_Polished2TrueB);
+    }
+}
+
 void handleDiploidHelenFeatures(
         // global params
         HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
@@ -360,59 +518,10 @@ void handleDiploidHelenFeatures(
             RleString *trueRefRleStringA = trueRefReadA->rleRead;
             RleString *trueRefRleStringB = trueRefReadB->rleRead;
 
-            // align all to all
-            double score_polished1_trueA, score_polished2_trueA, score_polished1_trueB, score_polished2_trueB;
-
-            stList *trueRefAlignmentRLESpace_Polished1TrueA = alignConsensusAndTruthRLE(
-                    polishedRleConsensusH1, trueRefRleStringA, &score_polished1_trueA, params->polishParams);
-
-            stList *trueRefAlignmentRLESpace_Polished1TrueB = alignConsensusAndTruthRLE(
-                    polishedRleConsensusH1, trueRefRleStringB, &score_polished1_trueB, params->polishParams);
-
-            stList *trueRefAlignmentRLESpace_Polished2TrueA = alignConsensusAndTruthRLE(
-                    polishedRleConsensusH2, trueRefRleStringA, &score_polished2_trueA, params->polishParams);
-
-            stList *trueRefAlignmentRLESpace_Polished2TrueB = alignConsensusAndTruthRLE(
-                    polishedRleConsensusH2, trueRefRleStringB, &score_polished2_trueB, params->polishParams);
-
-            // cis or trans
-            bool use_polished1_trueA = score_polished1_trueA + score_polished2_trueB > score_polished2_trueA + score_polished1_trueB;
-
-            // hap1
-            trueRefRleStringToHap1 = rleString_copy(use_polished1_trueA ? trueRefRleStringA : trueRefRleStringB);
-            trueRefAlignmentToHap1 = use_polished1_trueA ?
-                    trueRefAlignmentRLESpace_Polished1TrueA : trueRefAlignmentRLESpace_Polished1TrueB,
-
-            // hap2
-            trueRefRleStringToHap2 = rleString_copy(use_polished1_trueA ? trueRefRleStringB : trueRefRleStringA);
-            trueRefAlignmentToHap2 = use_polished1_trueA ?
-                    trueRefAlignmentRLESpace_Polished2TrueB : trueRefAlignmentRLESpace_Polished2TrueA;
-
-            // debugging
-            if (st_getLogLevel() <= info) {
-                st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
-                printMEAAlignment2(polishedRleConsensusH1, trueRefRleStringToHap1, trueRefAlignmentToHap1);
-                char *truthRawToH1 = rleString_expand(trueRefRleStringToHap1);
-                st_logInfo(" %s RAW Consensus Seq H1:\n%s\n", logIdentifier, polishedConsensusStringH1);
-                st_logInfo(" %s RAW Truth Seq H1:\n%s\n", logIdentifier, truthRawToH1);
-                free(truthRawToH1);
-
-                st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
-                printMEAAlignment2(polishedRleConsensusH2, trueRefRleStringToHap2, trueRefAlignmentToHap2);
-                char *truthRawToH2 = rleString_expand(trueRefRleStringToHap1);
-                st_logInfo(" %s RAW Consensus Seq H2:\n%s\n", logIdentifier, polishedConsensusStringH2);
-                st_logInfo(" %s RAW Truth Seq H2:\n%s\n\n", logIdentifier, truthRawToH2);
-                free(truthRawToH2);
-            }
-
-            //cleanup
-            if (use_polished1_trueA) {
-                stList_destruct(trueRefAlignmentRLESpace_Polished1TrueB);
-                stList_destruct(trueRefAlignmentRLESpace_Polished2TrueA);
-            } else {
-                stList_destruct(trueRefAlignmentRLESpace_Polished1TrueA);
-                stList_destruct(trueRefAlignmentRLESpace_Polished2TrueB);
-            }
+            // assign correct haplotypes to the trueRefXXXToHapX
+            getDiploidHaplotypeAlignmentsRAW2RLE(polishedRleConsensusH1, polishedRleConsensusH2, trueRefRleStringA, trueRefRleStringB,
+                    &trueRefRleStringToHap1, &trueRefRleStringToHap2, &trueRefAlignmentToHap1, &trueRefAlignmentToHap2,
+                    params, logIdentifier);
 
             // we found a single alignment of reference
             double refLengthRatio = 1.0 * (trueRefRleStringA->length + trueRefRleStringB->length) /
@@ -985,6 +1094,10 @@ void printMEAAlignment2(RleString *X, RleString *Y, stList *alignedPairs) {
 }
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl) {
+    if (stList_length(alignedPairs) == 0) {
+        return;
+    }
+
     // should we do run lengths
     bool handleRunLength = Xrl != NULL && Yrl != NULL;
 
@@ -1086,19 +1199,19 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
 
     // print
     fprintf(stderr, "\n");
-    if (handleRunLength) fprintf(stderr, "%s\n", rlXStr);
-    fprintf(stderr, "%s\n", alnXStr);
-    fprintf(stderr, "%s\n", alnDesc);
-    fprintf(stderr, "%s\n", alnYStr);
-    if (handleRunLength) fprintf(stderr, "%s\n", rlYStr);
-    fprintf(stderr, "Matches:    %"PRId64"\n", nuclMatches);
+    if (handleRunLength) fprintf(stderr, "  %s\n", rlXStr);
+    fprintf(stderr, "  %s\n", alnXStr);
+    fprintf(stderr, "  %s\n", alnDesc);
+    fprintf(stderr, "  %s\n", alnYStr);
+    if (handleRunLength) fprintf(stderr, "  %s\n", rlYStr);
+    fprintf(stderr, "  Matches:    %"PRId64"\n", nuclMatches);
     if (handleRunLength) {
-        fprintf(stderr, "  RL Match: %"PRId64"\n", rlMatches);
-        fprintf(stderr, "  RL Miss:  %"PRId64"\n", rlMismatches);
+        fprintf(stderr, "    RL Match: %"PRId64"\n", rlMatches);
+        fprintf(stderr, "    RL Miss:  %"PRId64"\n", rlMismatches);
     }
-    fprintf(stderr, "Mismatches: %"PRId64"\n", nuclMismatches);
-    fprintf(stderr, "X Inserts:  %"PRId64"\n", nuclXInserts);
-    fprintf(stderr, "Y Inserts:  %"PRId64"\n", nuclYInserts);
+    fprintf(stderr, "  Mismatches: %"PRId64"\n", nuclMismatches);
+    fprintf(stderr, "  X Inserts:  %"PRId64"\n", nuclXInserts);
+    fprintf(stderr, "  Y Inserts:  %"PRId64"\n", nuclYInserts);
     fprintf(stderr, "\n");
 
     // cleanup
