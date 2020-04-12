@@ -84,7 +84,7 @@ void test_stitching(CuTest *testCase) {
         OutputChunkers *outputChunkers = outputChunkers_construct(noOfOutputChunkers, params,
                                                                   outputSequenceFile, outputPoaFile, NULL,
                                                                   outputRepeatCountFile,
-                                                                  NULL, NULL);
+                                                                  NULL, NULL, 0);
 
         // Now process the chunks
         for (int64_t i = 0; i < stList_length(randomizedChunks); i++) {

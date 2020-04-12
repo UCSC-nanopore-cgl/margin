@@ -1672,8 +1672,8 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
 
-    getAlignedPairsWithIndels(polishParams->stateMachineForGenomeComparison, sX, sY, polishParams->p,
-            &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY, polishParams->p,
+                              &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
 

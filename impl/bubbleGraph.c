@@ -810,9 +810,11 @@ stList *getCandidateAllelesFromReadSubstrings(stList *readSubstrings, PolishPara
 
     return alleles;
 }
+
 BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, PolishParams *params) {
-	bubbleGraph_constructFromPoa2(poa, bamChunkReads, params, FALSE);
+    return bubbleGraph_constructFromPoa2(poa, bamChunkReads, params, FALSE);
 }
+
 BubbleGraph *bubbleGraph_constructFromPoa2(Poa *poa, stList *bamChunkReads, PolishParams *params, bool phasing) {
     // Setup
     double *candidateWeights = getCandidateWeights(poa, params);
