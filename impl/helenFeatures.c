@@ -1671,9 +1671,10 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
     stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, (uint64_t) polishParams->p->diagonalExpansion);
 
-    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY, polishParams->p,
-                              &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
+            polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
 
@@ -1690,6 +1691,7 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
     stList_destruct(alignedPairs);
     stList_destruct(gapXPairs);
     stList_destruct(gapYPairs);
+    stList_destruct(anchorPairs);
     symbolString_destruct(sX);
     symbolString_destruct(sY);
 
