@@ -564,10 +564,13 @@ int main(int argc, char *argv[]) {
 
     // output chunker tracks intermediate output files
     OutputChunkers *outputChunkers = outputChunkers_construct(numThreads, params, outputSequenceFile,
-            outputPoaCSV && !writeChunkSupplementaryOutputOnly ? outputPoaCsvFile : NULL,
-            outputHaplotypeReads && !writeChunkSupplementaryOutputOnly ? outputReadCsvFile : NULL,
-            outputRepeatCounts && !writeChunkSupplementaryOutputOnly ? outputRepeatCountFile : NULL,
-            diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
+                                                              outputPoaCSV && !writeChunkSupplementaryOutputOnly
+                                                              ? outputPoaCsvFile : NULL,
+                                                              outputHaplotypeReads && !writeChunkSupplementaryOutputOnly
+                                                              ? outputReadCsvFile : NULL,
+                                                              outputRepeatCounts && !writeChunkSupplementaryOutputOnly
+                                                              ? outputRepeatCountFile : NULL,
+                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL, 0);
 
     // (may) need to shuffle chunks
     stList *chunkOrder = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);

@@ -55,6 +55,15 @@ inline int popcount64(uint64_t x) {
     return __builtin_popcountll(x);
 }
 
+inline int popcount128(uint128_t n) {
+    /*
+     *  128 bit popcount. Currently naive. TODO: planning to allow partitions to be up to depth 128
+     */
+    uint64_t parts[2];
+    memcpy(parts, &n, sizeof(n));
+    return popcount64(parts[0]) + popcount64(parts[1]);
+}
+
 static inline uint64_t *retrieveBitCountVector(uint64_t *bitCountVector,
                                                uint64_t siteOffset, uint64_t allele, uint64_t bit) {
     /*

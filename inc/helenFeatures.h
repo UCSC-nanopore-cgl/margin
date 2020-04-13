@@ -151,7 +151,10 @@ void poa_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads,
 stList *alignConsensusAndTruthSSW(char *consensusStr, char *truthStr, uint16_t *score);
 stList *alignConsensusAndTruthCPECAN(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams);
 stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams);
-stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams);
+stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleString *truthStr, double *score,
+                                                 PolishParams *polishParams);
+stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score,
+                                                PolishParams *polishParams);
 void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featureType, stList *trueRefAlignment,
                                         RleString *trueRefRleString, int64_t *firstMatchedFeaure,
                                         int64_t *lastMatchedFeature);

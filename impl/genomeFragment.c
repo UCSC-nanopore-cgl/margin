@@ -103,7 +103,7 @@ void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool h
     /*
      * Prints reads in partition as a CSV file, each line being a read name and the probability the read is in the partition.
      */
-    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_PARTITION\n");
+    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_IN_PARTITION\n");
     stSetIterator *it = stSet_getIterator(hap1 ? gF->reads1 : gF->reads2);
     stProfileSeq *pSeq;
     while ((pSeq = stSet_getNext(it)) != NULL) {

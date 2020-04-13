@@ -334,14 +334,23 @@ void truthAlignmentTest(CuTest *testCase, char *consensusRaw, char* truthRaw) {
     printMEAAlignment2(consensusRle, truthRle, alignedPairsRleCpecan);
 
     // RLE
-    fprintf(stderr, "\nRLE CPECAN w/ SSW Anchors:\n");
-    stList *alignedPairsRleCpecanWithAnchors = alignConsensusAndTruthRLEWithSSWAnchors(consensusRle, truthRle, &score, params->polishParams);
+    fprintf(stderr, "\nRLE CPECAN w/ Kmer Anchors:\n");
+    stList *alignedPairsRleCpecanWithAnchors = alignConsensusAndTruthRLEWithKmerAnchors(consensusRle, truthRle, &score,
+                                                                                        params->polishParams);
     printMEAAlignment2(consensusRle, truthRle, alignedPairsRleCpecanWithAnchors);
+
+    // RLE
+    fprintf(stderr, "\nRLE CPECAN w/ SSW Anchors:\n");
+    stList *alignedPairsRleCpecanWithSSWAnchors = alignConsensusAndTruthRLEWithSSWAnchors(consensusRle, truthRle, &score,
+                                                                                        params->polishParams);
+    printMEAAlignment2(consensusRle, truthRle, alignedPairsRleCpecanWithSSWAnchors);
 
     stList_destruct(alignedPairsRawSSW);
     stList_destruct(alignedPairsRawCpecan);
     stList_destruct(alignedPairsRawCpecanToRLE);
     stList_destruct(alignedPairsRleCpecan);
+    stList_destruct(alignedPairsRleCpecanWithAnchors);
+    stList_destruct(alignedPairsRleCpecanWithSSWAnchors);
     free(polishedRleConsensus_nonRleToRleCoordinateMap);
     free(trueRefRleString_nonRleToRleCoordinateMap);
     rleString_destruct(consensusRle);

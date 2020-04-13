@@ -408,16 +408,16 @@ void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleStri
     // align all to all
     double score_polished1_trueA, score_polished2_trueA, score_polished1_trueB, score_polished2_trueB;
 
-    stList *trueRefAlignmentRLESpace_Polished1TrueA = alignConsensusAndTruthRLE(
+    stList *trueRefAlignmentRLESpace_Polished1TrueA = alignConsensusAndTruthRLEWithKmerAnchors(
             polishedRleConsensusH1, trueRefRleStringA, &score_polished1_trueA, params->polishParams);
 
-    stList *trueRefAlignmentRLESpace_Polished1TrueB = alignConsensusAndTruthRLE(
+    stList *trueRefAlignmentRLESpace_Polished1TrueB = alignConsensusAndTruthRLEWithKmerAnchors(
             polishedRleConsensusH1, trueRefRleStringB, &score_polished1_trueB, params->polishParams);
 
-    stList *trueRefAlignmentRLESpace_Polished2TrueA = alignConsensusAndTruthRLE(
+    stList *trueRefAlignmentRLESpace_Polished2TrueA = alignConsensusAndTruthRLEWithKmerAnchors(
             polishedRleConsensusH2, trueRefRleStringA, &score_polished2_trueA, params->polishParams);
 
-    stList *trueRefAlignmentRLESpace_Polished2TrueB = alignConsensusAndTruthRLE(
+    stList *trueRefAlignmentRLESpace_Polished2TrueB = alignConsensusAndTruthRLEWithKmerAnchors(
             polishedRleConsensusH2, trueRefRleStringB, &score_polished2_trueB, params->polishParams);
 
     // cis or trans
@@ -1673,8 +1673,8 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
 
-    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY, polishParams->p,
-                              &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY,
+            polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
 
@@ -1698,7 +1698,8 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
 }
 
 
-stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams) {
+stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleString *truthStr, double *score,
+                                                 PolishParams *polishParams) {
 
 
     // Symbol strings
@@ -1712,10 +1713,14 @@ stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleStri
     stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
-    stList *anchorPairs = alignConsensusAndTruthSSW(consensusStr->rleString, truthStr->rleString, &apScore);
+    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, (uint64_t) polishParams->p->diagonalExpansion);
+    for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
+        int64_t *ap = stList_get(anchorPairs, i);
+        ap[3] = PAIR_ALIGNMENT_PROB_1;
+    }
 
     getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
-            polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+                                          polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
 
@@ -1732,6 +1737,54 @@ stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleStri
     stList_destruct(alignedPairs);
     stList_destruct(gapXPairs);
     stList_destruct(gapYPairs);
+    stList_destruct(anchorPairs);
+    symbolString_destruct(sX);
+    symbolString_destruct(sY);
+
+    return finalAlignedPairs;
+}
+
+
+stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score,
+                                                 PolishParams *polishParams) {
+
+
+    // Symbol strings
+    SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    SymbolString sY = rleString_constructSymbolString(truthStr, 0, truthStr->length, polishParams->alphabet,
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    uint16_t apScore = 0;
+
+    // Run the alignment
+    stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *anchorPairs = alignConsensusAndTruthSSW(consensusStr->rleString, truthStr->rleString, &apScore);
+    for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
+        int64_t *ap = stList_get(anchorPairs, i);
+        ap[3] = PAIR_ALIGNMENT_PROB_1;
+    }
+
+    getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
+                                          polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
+                                                                          sX.length, sY.length, score, polishParams->p);
+
+    // refactor
+    stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    for (int64_t i = 0; i < stList_length(meaAlignedPairs); i++) {
+        stIntTuple *ap = stList_get(meaAlignedPairs, i);
+        stList_append(finalAlignedPairs, stIntTuple_construct3(stIntTuple_get(ap, 1),
+                                                               stIntTuple_get(ap, 2), stIntTuple_get(ap, 0)));
+    }
+
+    // Cleanup
+    stList_destruct(meaAlignedPairs);
+    stList_destruct(alignedPairs);
+    stList_destruct(gapXPairs);
+    stList_destruct(gapYPairs);
+    stList_destruct(anchorPairs);
     symbolString_destruct(sX);
     symbolString_destruct(sY);
 

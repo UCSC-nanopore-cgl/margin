@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # from __future__ import print_function
+import math
 import os
 import subprocess
 import sys
@@ -100,17 +101,24 @@ def main():
             for trueAssemblyIndex, predictedAssemblyIndex, xString, yString in mismatchLocations:
                 print(" Mismatch", trueAssemblyIndex, predictedAssemblyIndex, xString, yString)
 
+    qv = lambda x: -10.0 * math.log10(1.0 - x)
+
     print(
-        "total-xLen: %s, total-yLen: %s, total-matches: %s, total-identity: %s, total-mismatches: %s, total-xGaps: %s, total-yGaps: %s, total-xGapEvents: %s, total-yGapEvents: %s" %
-        (
-            totalXLen, totalYLen, totalMatches, 2.0 * totalMatches / float(totalXLen + totalYLen + 0.0001),
-            totalMismatches,
-            totalXGaps, totalYGaps, totalXGapEvents, totalYGapEvents))
+        "total-xLen: %s, total-yLen: %s, total-matches: %s, total-identity: %s, "
+        "qv: %s, qv-matches: %s, qv-inserts: %s, qv-deletes: %s, qv-indels: %s, "
+        "total-mismatches: %s, total-xGaps (inserts): %s, total-yGaps (deletes): %s, total-xGapEvents (insert events): %s, total-yGapEvents (delete events): %s" %
+        (totalXLen, totalYLen, totalMatches,
+         totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches),  # identity
+         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches)),  # overall qv
+         qv(totalMatches / (totalMatches + totalMismatches)),  # mismatch qv
+         qv(totalMatches / (totalXGaps + totalMatches)),  # insert qv
+         qv(totalMatches / (totalYGaps + totalMatches)),  # delete qv
+         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps)),  # delete qv
+         totalMismatches, totalXGaps, totalYGaps, totalXGapEvents, totalYGapEvents))
 
     # Cleanup
     os.remove("temp.fa")
     os.remove("temp.axt")
-
 
 if __name__ == '__main__':
     main()

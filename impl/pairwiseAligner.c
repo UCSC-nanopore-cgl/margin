@@ -1508,4 +1508,111 @@ stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolSt
     return filteredAlignedPairs;
 }
 
+/*
+ * Code to create quick and dirty alignment anchors.
+ */
+
+#define KMER_SIZE 10 // that's an alphabet of 4^10 ~= 1x10^6 for DNA/RNA, small enough it work okay
+// for noisy long reads but could be increased to tweak stringency of anchor pairs
+
+uint64_t kmerKey(const void *k) {
+    uint64_t hash = 0; //5381;
+    char *cA = (char *) k;
+    int c;
+    for (int64_t i = 0; i < KMER_SIZE && (c = *cA++) != '\0'; i++) {
+        hash = c + (hash << 6) + (hash << 16) - hash;
+    }
+    return hash;
+}
+
+int kmerEqualKey(const void *key1, const void *key2) {
+    char *cA = (char *) key1, *cA2 = (char *) key2;
+    for (int64_t i = 0; i < KMER_SIZE; i++) {
+        if (cA[i] != cA2[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+stHash *getKmers(SymbolString seq, uint64_t *l) {
+    stHash *kmerOccurrences = stHash_construct3(kmerKey, kmerEqualKey, NULL, NULL);
+    for (int64_t i = 0; i < seq.length - KMER_SIZE + 1; i++) {
+        l[i] = i;
+        stHash_insert(kmerOccurrences, &(seq.sequence[i]),
+                      &(l[i])); // For speed and simplicity this only allows for one entry per k-mer
+        // for KMER_SIZE >= 10, this should not be a big deal as collisions should be rare
+    }
+    return kmerOccurrences;
+}
+
+typedef struct _chainPair {
+    uint64_t x, y, score;
+    int64_t backpointer;
+    bool highScore;
+} ChainPair;
+
+stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t anchorExpansion) {
+    if (KMER_SIZE > seqX.length || KMER_SIZE > seqY.length) { // Won't work if KMER_SIZE larger than sequences lengths
+        return stList_construct();
+    }
+
+    // Get the kmers in seqX
+    uint64_t l[seqX.length - KMER_SIZE + 1];
+    stHash *kmerOccurrences = getKmers(seqX, l);
+
+    // Get the kmers shared in both seqX and seqY
+    ChainPair cPs[seqY.length - KMER_SIZE + 1]; // Array of chain pairs, representing shared k-mers
+    uint64_t i = 0, maxScore = 0;
+    int64_t maxPair = -1;
+    for (int64_t y = 0; y < seqY.length - KMER_SIZE + 1; y++) {
+        int64_t *x = stHash_search(kmerOccurrences, &(seqY.sequence[y]));
+        if (x != NULL) {
+            cPs[i].x = *x;
+            cPs[i].y = y;
+            cPs[i].score = 1; // score of chain pair if no prior chain-pair in chain
+            cPs[i].backpointer = -1; // back-pointer to previous chain pair (-1 indicates no prior pair)
+
+            // Find highest scoring subchain to extend
+            for (int64_t j = i - 1; j >= 0; j--) { // walk through the previous pairs in decreasing y coordinate
+                if (cPs[j].x <
+                    cPs[i].x) { // if previous aligned k-mer pair has smaller x coordinate then can be chained
+                    if (cPs[j].score + 1 > cPs[i].score) { // chain score is better than seen so far
+                        cPs[i].score = cPs[j].score + 1; // update chain score
+                        cPs[i].backpointer = j; // update backpointer
+                    }
+                    if (cPs[j].highScore) { // if this is a high score then can not do better by looking back further, so break
+                        break;
+                    }
+                }
+            }
+
+            // Update if is equal to highest score seen so far
+            if (cPs[i].score >= maxScore) {
+                cPs[i].highScore = 1;
+                maxScore = cPs[i].score;
+                maxPair = i;
+            } else {
+                cPs[i].highScore = 0;
+            }
+
+            i++;
+        }
+    }
+
+    // Traceback
+    stList *anchorPairs = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
+    while (maxPair != -1) {
+        stList_append(anchorPairs,
+                      stIntTuple_construct3(cPs[maxPair].x + KMER_SIZE / 2, cPs[maxPair].y + KMER_SIZE / 2,
+                                            anchorExpansion));
+        maxPair = cPs[maxPair].backpointer;
+    }
+    stList_reverse(anchorPairs); // Put in ascending coordinate order
+
+    // Cleanup
+    stHash_destruct(kmerOccurrences);
+
+    return anchorPairs;
+}
 

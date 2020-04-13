@@ -314,5 +314,10 @@ double scoreByPosteriorProbabilityIgnoringGaps(stList *alignedPairs);
 stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolString seqX, SymbolString seqY,
                                                   PairwiseAlignmentParameters *p);
 
+/*
+ * Get quick and dirty alignment anchors by finding long chain of shared k-mers, mid-point of each k-mer is then an anchor
+ * with given diagonal expansion around it.
+ */
+stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t anchorExpansion);
 
 #endif /* PAIRWISEALIGNER_H_ */

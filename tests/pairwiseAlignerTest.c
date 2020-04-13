@@ -1188,6 +1188,49 @@ void test_computeForwardProbability(CuTest *testCase) {
     }
 }
 
+static void test_getKmerAlignmentAnchors(CuTest *testCase) {
+    for (int64_t test = 0; test < 1000; test++) {
+        // Make a pair of sequences
+        char *sX = getRandomSequence(st_randomInt(1, 1000));
+        char *sY = evolveSequence(sX); //stString_copy(seqX);
+        st_logInfo("Sequence X to find anchors for: %s END\n", sX);
+        st_logInfo("Sequence Y to find anchors for: %s END\n", sY);
+        Alphabet *a = alphabet_constructNucleotide();
+        SymbolString ssX = symbolString_construct(sX, 0, strlen(sX), a);
+        SymbolString ssY = symbolString_construct(sY, 0, strlen(sY), a);
+
+        // Get the alignment anchors
+        int64_t expansion = st_randomInt(1, 20);
+        stList *alignmentAnchors = getKmerAlignmentAnchors(ssX, ssY, expansion);
+
+        // Check the anchors
+        int64_t pX = -1, pY = -1;
+        st_logInfo("Seq X length: %i, seq Y length: %i, anchor-pairs: %i\n", (int) ssX.length, (int) ssY.length,
+                   stList_length(alignmentAnchors));
+        for (int64_t i = 0; i < stList_length(alignmentAnchors); i++) {
+            stIntTuple *pair = stList_get(alignmentAnchors, i);
+            int64_t x = stIntTuple_get(pair, 0);
+            int64_t y = stIntTuple_get(pair, 1);
+
+            CuAssertTrue(testCase, pX < x && x < ssX.length);
+            CuAssertTrue(testCase, pY < y && y < ssY.length);
+            pX = x;
+            pY = y;
+
+            CuAssertTrue(testCase, expansion == stIntTuple_get(pair, 2));
+            st_logDebug("Got anchor: %i %i\n", (int) x, (int) y);
+        }
+
+        // Cleanup
+        symbolString_destruct(ssX);
+        symbolString_destruct(ssY);
+        free(sX);
+        free(sY);
+        alphabet_destruct(a);
+        stList_destruct(alignmentAnchors);
+    }
+}
+
 CuSuite *pairwiseAlignmentTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
 
@@ -1213,6 +1256,7 @@ CuSuite *pairwiseAlignmentTestSuite(void) {
     SUITE_ADD_TEST(suite, test_em_3StateAsymmetric);
     SUITE_ADD_TEST(suite, test_leftShiftAlignment);
     SUITE_ADD_TEST(suite, test_computeForwardProbability);
+    SUITE_ADD_TEST(suite, test_getKmerAlignmentAnchors);
 
     return suite;
 }
