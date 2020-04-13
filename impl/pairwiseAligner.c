@@ -1512,7 +1512,8 @@ stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolSt
  * Code to create quick and dirty alignment anchors.
  */
 
-#define KMER_SIZE 10
+#define KMER_SIZE 10 // that's an alphabet of 4^10 ~= 1x10^6 for DNA/RNA, small enough it work okay
+// for noisy long reads but could be increased to tweak stringency of anchor pairs
 
 uint64_t kmerKey(const void *k) {
     uint64_t hash = 0; //5381;
@@ -1538,7 +1539,9 @@ stHash *getKmers(SymbolString seq, uint64_t *l) {
     stHash *kmerOccurrences = stHash_construct3(kmerKey, kmerEqualKey, NULL, NULL);
     for (int64_t i = 0; i < seq.length - KMER_SIZE + 1; i++) {
         l[i] = i;
-        stHash_insert(kmerOccurrences, &(seq.sequence[i]), &(l[i]));
+        stHash_insert(kmerOccurrences, &(seq.sequence[i]),
+                      &(l[i])); // For speed and simplicity this only allows for one entry per k-mer
+        // for KMER_SIZE >= 10, this should not be a big deal as collisions should be rare
     }
     return kmerOccurrences;
 }
@@ -1549,7 +1552,11 @@ typedef struct _chainPair {
     bool highScore;
 } ChainPair;
 
-stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY) {
+stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t anchorExpansion) {
+    if (KMER_SIZE > seqX.length || KMER_SIZE > seqY.length) { // Won't work if KMER_SIZE larger than sequences lengths
+        return stList_construct();
+    }
+
     // Get the kmers in seqX
     uint64_t l[seqX.length - KMER_SIZE + 1];
     stHash *kmerOccurrences = getKmers(seqX, l);
@@ -1597,7 +1604,8 @@ stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY) {
     stList *anchorPairs = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
     while (maxPair != -1) {
         stList_append(anchorPairs,
-                      stIntTuple_construct3(cPs[maxPair].x + KMER_SIZE / 2, cPs[maxPair].y + KMER_SIZE / 2, KMER_SIZE));
+                      stIntTuple_construct3(cPs[maxPair].x + KMER_SIZE / 2, cPs[maxPair].y + KMER_SIZE / 2,
+                                            anchorExpansion));
         maxPair = cPs[maxPair].backpointer;
     }
     stList_reverse(anchorPairs); // Put in ascending coordinate order

@@ -396,7 +396,7 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
     StateMachine *sM = stateMachine3_constructNucleotide(threeState);
 
     // Get quick and dirty anchor pairs
-    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY);
+    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, polishParams->p->diagonalExpansion);
 
     // Run the alignment
     stList *alignedPairs =
@@ -470,7 +470,7 @@ void chunkToStitch_trimAdjacentChunks2(char **pSeq, char **seq,
     // Get the trim factor
     int64_t pSeqCropEnd, seqCropStart;
     int64_t overlapMatchWeight = removeOverlap(pSeqRle->rleString, pSeqRle->length, seqRle->rleString, seqRle->length,
-                                               params->polishParams->chunkBoundary * 2,
+                                               params->polishParams->chunkBoundary * 1.2,
                                                params->polishParams, &pSeqCropEnd, &seqCropStart);
 
     // Log
