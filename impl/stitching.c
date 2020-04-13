@@ -395,13 +395,19 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
     // Use default state machine for alignment
     StateMachine *sM = stateMachine3_constructNucleotide(threeState);
 
+    // Get quick and dirty anchor pairs
+    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY);
+
     // Run the alignment
-    stList *alignedPairs = getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1); //stList_construct();
+    stList *alignedPairs =
+            getAlignedPairsUsingAnchors(sM, sX, sY, anchorPairs, polishParams->p, 1, 1);
+    //getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1); //stList_construct();
 
     // Cleanup
     symbolString_destruct(sX);
     symbolString_destruct(sY);
     stateMachine_destruct(sM);
+    stList_destruct(anchorPairs);
 
     if (stList_length(alignedPairs) == 0 && st_getLogLevel() >= info) {
         st_logInfo("    Failed to find good overlap. Suffix-string: %s\n", &(prefixString[i]));
