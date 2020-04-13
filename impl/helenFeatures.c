@@ -216,7 +216,8 @@ void handleHelenFeatures(
             char *trueRefExpanded = rleString_expand(trueRefRead->rleRead);
 
             uint16_t score;
-            stList *trueRefAlignmentRawSpace = alignConsensusAndTruth(polishedConsensusString, trueRefExpanded, &score);
+            stList *trueRefAlignmentRawSpace = alignConsensusAndTruthSSW(polishedConsensusString, trueRefExpanded,
+                                                                         &score);
             if (st_getLogLevel() == debug) {
                 printMEAAlignment(polishedConsensusString, trueRefExpanded,
                                   strlen(polishedConsensusString), strlen(trueRefExpanded),
@@ -319,16 +320,16 @@ void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, Rle
     // align all to all
     uint16_t score_trueA_polished1, score_trueA_polished2, score_trueB_polished1, score_trueB_polished2;
 
-    stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruth(
+    stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruthSSW(
             polishedConsensusStringH1, trueRefExpandedA, &score_trueA_polished1);
 
-    stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruth(
+    stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruthSSW(
             polishedConsensusStringH1, trueRefExpandedB, &score_trueB_polished1);
 
-    stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruth(
+    stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruthSSW(
             polishedConsensusStringH2, trueRefExpandedA, &score_trueA_polished2);
 
-    stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruth(
+    stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruthSSW(
             polishedConsensusStringH2, trueRefExpandedB, &score_trueB_polished2);
 
     // determine best alignment
@@ -519,7 +520,7 @@ void handleDiploidHelenFeatures(
             RleString *trueRefRleStringB = trueRefReadB->rleRead;
 
             // assign correct haplotypes to the trueRefXXXToHapX
-            getDiploidHaplotypeAlignmentsRAW2RLE(polishedRleConsensusH1, polishedRleConsensusH2, trueRefRleStringA, trueRefRleStringB,
+            getDiploidHaplotypeAlignmentsRLE(polishedRleConsensusH1, polishedRleConsensusH2, trueRefRleStringA, trueRefRleStringB,
                     &trueRefRleStringToHap1, &trueRefRleStringToHap2, &trueRefAlignmentToHap1, &trueRefAlignmentToHap2,
                     params, logIdentifier);
 
@@ -1662,9 +1663,9 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
 
     // Symbol strings
     SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,
-            TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
     SymbolString sY = rleString_constructSymbolString(truthStr, 0, truthStr->length, polishParams->alphabet,
-            TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
     uint16_t apScore = 0;
 
     // Run the alignment
@@ -1672,8 +1673,8 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
 
-    getAlignedPairsWithIndels(polishParams->stateMachineForGenomeComparison, sX, sY, polishParams->p,
-            &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY, polishParams->p,
+                              &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
 
@@ -1697,10 +1698,47 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
 }
 
 
+stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams) {
 
 
+    // Symbol strings
+    SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    SymbolString sY = rleString_constructSymbolString(truthStr, 0, truthStr->length, polishParams->alphabet,
+                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    uint16_t apScore = 0;
 
-stList *alignConsensusAndTruth2(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams) {
+    // Run the alignment
+    stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *anchorPairs = alignConsensusAndTruthSSW(consensusStr->rleString, truthStr->rleString, &apScore);
+
+    getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
+            polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
+                                                                          sX.length, sY.length, score, polishParams->p);
+
+    // refactor
+    stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    for (int64_t i = 0; i < stList_length(meaAlignedPairs); i++) {
+        stIntTuple *ap = stList_get(meaAlignedPairs, i);
+        stList_append(finalAlignedPairs, stIntTuple_construct3(stIntTuple_get(ap, 1),
+                                                               stIntTuple_get(ap, 2), stIntTuple_get(ap, 0)));
+    }
+
+    // Cleanup
+    stList_destruct(meaAlignedPairs);
+    stList_destruct(alignedPairs);
+    stList_destruct(gapXPairs);
+    stList_destruct(gapYPairs);
+    symbolString_destruct(sX);
+    symbolString_destruct(sY);
+
+    return finalAlignedPairs;
+}
+
+stList *alignConsensusAndTruthCPECAN(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams) {
 
 
     // Symbol strings
@@ -1745,7 +1783,7 @@ stList *alignConsensusAndTruth2(char *consensusStr, char *truthStr, double *scor
 
 
 // this function taken from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/example.c
-stList *alignConsensusAndTruth(char *consensusStr, char *truthStr, uint16_t *score) {
+stList *alignConsensusAndTruthSSW(char *consensusStr, char *truthStr, uint16_t *score) {
 
     int64_t l, m, k;
     uint8_t match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;    // default parameters for genome sequence alignment
