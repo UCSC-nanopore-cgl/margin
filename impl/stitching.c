@@ -221,7 +221,6 @@ void chunkToStitch_readPoaChunk(FILE *fh, ChunkToStitch *chunk, bool phased) {
     }
 }
 
-
 void chunkToStitch_readReadPhasingChunk(FILE *fh, ChunkToStitch *chunk) {
     /*
      * Reads a read phasing chunk.
@@ -242,78 +241,103 @@ void chunkToStitch_readRepeatCountChunk(FILE *fh, ChunkToStitch *chunk, bool pha
     }
 }
 
-stSet *getReadNames(stList *readPartitionLines) {
-    /*
-     * Parse the names of the reads from the lines of output representing the relative read phasing and return as a set
-     * of strings.
-     */
-    stSet *readNames = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
-    for (int64_t i = 0; i < stList_length(readPartitionLines); i++) {
-        char *line = stList_get(readPartitionLines, i);
-        stList *tokens = stString_splitByString(line, ",");
-        if ((stSet_search(readNames, stList_get(tokens, 0)) != NULL))
-        assert(stSet_search(readNames, stList_get(tokens, 0)) == NULL); // Sanity check that read name is not present twice
-        stSet_insert(readNames, stList_removeFirst(tokens)); // First field is the read name
-        stList_destruct(tokens);
-    }
-    return readNames;
-}
-
-stList *removeReadLinesWithTheseNames(stList *readPartitionLines, stSet *filterTheseReadNames) {
-    /*
-     * Removes these read lines with read names matching those in filterTheseReadNames.
-     */
-    stList *filteredReadPartitionLines = stList_construct3(0, free);
-    for (int64_t i = 0; i < stList_length(readPartitionLines); i++) {
-        char *line = stList_get(readPartitionLines, i);
-        stList *tokens = stString_splitByString(line, ",");
-        if (stSet_search(filterTheseReadNames, stList_get(tokens, 0)) == NULL) { // If name is not in filterTheseReadNames
-            stList_append(filteredReadPartitionLines, line);
-        } else {
-            free(line);
-        }
-        stList_destruct(tokens);
-    }
-    // Cleanup
-    stList_setDestructor(readPartitionLines, NULL);
-    stList_destruct(readPartitionLines);
-
-    return filteredReadPartitionLines;
-}
-
 static void swap(void **a, void **b) {
     void *c = *a;
     *a = *b;
     *b = c;
 }
 
-static void addToReadsSeen(stSet *readsSeen, stSet *readsToAdd) {
-    stSetIterator *it = stSet_getIterator(readsToAdd);
+static void addToHapReadsSeen(stHash *hapReads, stHash *otherHapReads, stHash *readsToAdd) {
+    /*
+     * Adds read names / probs from readsToAdd to hapReads that are not in otherHapReads. Cleans up readsToAdd.
+     */
+    stHashIterator *it = stHash_getIterator(readsToAdd);
     char *readName;
-    while ((readName = stSet_getNext(it)) != NULL) {
-        if (stSet_search(readsSeen, readName) == NULL) {
-            stSet_insert(readsSeen, stString_copy(readName));
+    while ((readName = stHash_getNext(it)) != NULL) {
+        double *prob = stHash_search(readsToAdd, readName);
+
+        /*
+         * Check if in reads for other haplotype.
+         * If it is, then if the prob of being in this haplotype is greater then
+         * remove it from the other haplotype so it can be added to this haplotype,
+         * otherwise do not add it to this haplotype.
+         */
+        double *pProb;
+        if ((pProb = stHash_search(otherHapReads, readName)) != NULL) {
+            if (*prob > *pProb) {
+                free(stHash_removeAndFreeKey(otherHapReads, readName)); // Remove from otherHapReads
+            } else {
+                free(prob);
+                continue;
+            }
+        }
+
+        /*
+         * Now add the read to this haplotype
+         */
+        if ((pProb = stHash_search(hapReads, readName)) == NULL) {
+            stHash_insert(hapReads, stString_copy(readName), prob);
+        } else if (*prob > *pProb) {
+            free(stHash_removeAndFreeKey(hapReads, readName)); // Cleanup the prior entries
+            stHash_insert(hapReads, stString_copy(readName), prob);
+        } else {
+            free(prob);
         }
     }
-    stSet_destructIterator(it);
+    stHash_destructIterator(it);
+    stHash_setDestructValues(readsToAdd, NULL);
+    stHash_destruct(readsToAdd);
 }
 
-void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chunk, stSet *readsSeen) {
+stHash *getReadNames(stList *readPartitionLines) {
     /*
-     * Phases chunk so that hap1 in chunk corresponds to hap1 in pChunk (as best as we can tell).
+     * Parse the names of the reads from the lines of output representing the relative read phasing and return as a set
+     * of strings.
+     */
+    stHash *readNames = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, free);
+    for (int64_t i = 1; i < stList_length(readPartitionLines); i++) {
+        char *line = stList_get(readPartitionLines, i);
+        stList *tokens = stString_splitByString(line, ",");
+        assert(stHash_search(readNames, stList_get(tokens, 0)) ==
+               NULL); // Sanity check that read name is not present twice
+        double *prob = st_calloc(1, sizeof(double));
+        *prob = strtof(stList_peek(tokens), NULL); // Get the log prob of the read being in the partition
+        stHash_insert(readNames, stList_removeFirst(tokens), prob); // First field is the read name
+        stList_destruct(tokens);
+    }
+    return readNames;
+}
+
+int64_t sizeOfIntersection(stHash *pSet, stHash *nSet) {
+    /*
+     * Returns the number of keys in nSet also in pSet.
+     */
+    stHashIterator *it = stHash_getIterator(nSet);
+    int64_t i = 0;
+    char *readName;
+    while ((readName = stHash_getNext(it)) != NULL) {
+        if ((stHash_search(pSet, readName)) != NULL) {
+            i++;
+        }
+    }
+    stHash_destructIterator(it);
+    return i;
+}
+
+void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *chunk, stHash *readsInHap1, stHash *readsInHap2) {
+    /*
+     * Phases chunk so that hap1 in chunk corresponds to hap1 in the prior chunks (as best as we can tell).
      */
 
     // Get the names of the reads in the different read sets
-    stSet *pChunkHap1Reads = getReadNames(pChunk->readsHap1Lines);
-    stSet *pChunkHap2Reads = getReadNames(pChunk->readsHap2Lines);
-    stSet *chunkHap1Reads = getReadNames(chunk->readsHap1Lines);
-    stSet *chunkHap2Reads = getReadNames(chunk->readsHap2Lines);
+    stHash *chunkHap1Reads = getReadNames(chunk->readsHap1Lines);
+    stHash *chunkHap2Reads = getReadNames(chunk->readsHap2Lines);
 
     // Calculate the intersection between reads shared between the chunks
-    int64_t i = stSet_sizeOfIntersection(pChunkHap1Reads, chunkHap1Reads);
-    int64_t j = stSet_sizeOfIntersection(pChunkHap1Reads, chunkHap2Reads);
-    int64_t k = stSet_sizeOfIntersection(pChunkHap2Reads, chunkHap1Reads);
-    int64_t l = stSet_sizeOfIntersection(pChunkHap2Reads, chunkHap2Reads);
+    int64_t i = sizeOfIntersection(readsInHap1, chunkHap1Reads);
+    int64_t j = sizeOfIntersection(readsInHap1, chunkHap2Reads);
+    int64_t k = sizeOfIntersection(readsInHap2, chunkHap1Reads);
+    int64_t l = sizeOfIntersection(readsInHap2, chunkHap2Reads);
 
     // Calculate support for the cis (keeping the current relative phasing) and the trans (switching the phasing) configurations
     int64_t cisPhase = i + l; // Number of reads consistently phased in cis configuration
@@ -321,10 +345,9 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
 
     // Log the support for the phasing
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s In phasing between chunks %"PRId64" and %"PRId64" got %" PRIi64 " hap1 and %" PRIi64 " hap2 reads in pChunk, and got %"
-               PRIi64 " hap1 and %" PRIi64 " hap2 reads in chunk and %" PRIi64 " reads in intersections\n",
-               logIdentifier, pChunk->chunkOrdinal, chunk->chunkOrdinal, stSet_size(pChunkHap1Reads), stSet_size(pChunkHap2Reads),
-               stSet_size(chunkHap1Reads), stSet_size(chunkHap2Reads), i + j + k + l);
+    st_logInfo(" %s In phasing chunk %"PRId64" got %"
+               PRIi64 " hap1 and %" PRIi64 " hap2 reads\n",
+               logIdentifier, chunk->chunkOrdinal, stHash_size(chunkHap1Reads), stHash_size(chunkHap2Reads));
     st_logInfo(
             " %s Support for phasing cis-configuration,   Total: %" PRIi64 " (%f), %" PRIi64 " (%f%%) in h11-h21 intersection, %" PRIi64 " (%f%%) in h12-h22 intersection\n",
             logIdentifier, i + l, (double) (i + l) / (double) (i + j + k + l), i, (double) i / (double) (i + j), l,
@@ -341,19 +364,14 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *pChunk, ChunkToStitch *chu
         swap((void *) &chunk->poaHap1StringsLines, (void *) &chunk->poaHap2StringsLines);
         swap((void *) &chunk->readsHap1Lines, (void *) &chunk->readsHap2Lines);
         swap((void *) &chunk->repeatCountLinesHap1, (void *) &chunk->repeatCountLinesHap2);
+        swap((void *) &chunkHap1Reads, (void *) &chunkHap2Reads);
     }
 
     //Remove duplicated reads from output
-    addToReadsSeen(readsSeen, pChunkHap1Reads);
-    addToReadsSeen(readsSeen, pChunkHap2Reads);
-    chunk->readsHap1Lines = removeReadLinesWithTheseNames(chunk->readsHap1Lines, readsSeen);
-    chunk->readsHap2Lines = removeReadLinesWithTheseNames(chunk->readsHap2Lines, readsSeen);
+    addToHapReadsSeen(readsInHap1, readsInHap2, chunkHap1Reads);
+    addToHapReadsSeen(readsInHap2, readsInHap1, chunkHap2Reads);
 
     // Cleanup
-    stSet_destruct(pChunkHap1Reads);
-    stSet_destruct(pChunkHap2Reads);
-    stSet_destruct(chunkHap1Reads);
-    stSet_destruct(chunkHap2Reads);
     free(logIdentifier);
 }
 
@@ -377,13 +395,19 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
     // Use default state machine for alignment
     StateMachine *sM = stateMachine3_constructNucleotide(threeState);
 
+    // Get quick and dirty anchor pairs
+    stList *anchorPairs = getKmerAlignmentAnchors(sX, sY);
+
     // Run the alignment
-    stList *alignedPairs = getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1);
+    stList *alignedPairs =
+            getAlignedPairsUsingAnchors(sM, sX, sY, anchorPairs, polishParams->p, 1, 1);
+    //getAlignedPairs(sM, sX, sY, polishParams->p, 1, 1); //stList_construct();
 
     // Cleanup
     symbolString_destruct(sX);
     symbolString_destruct(sY);
     stateMachine_destruct(sM);
+    stList_destruct(anchorPairs);
 
     if (stList_length(alignedPairs) == 0 && st_getLogLevel() >= info) {
         st_logInfo("    Failed to find good overlap. Suffix-string: %s\n", &(prefixString[i]));
@@ -527,48 +551,82 @@ typedef struct _outputChunker {
     /*
      * Object for managing the output of a polished sequence.
      */
+    bool useMemoryBuffers;
     // Sequence file
-    char *outputSequenceFile;
+    char *outputSequenceFile; // This is either the name of the file or the location in memory of the file buffer
     FILE *outputSequenceFileHandle;
+    size_t outputSequenceFileBufferSize; // Used if in memory
     // Poa file
+    bool outputPoa;
     char *outputPoaFile;
     FILE *outputPoaFileHandle;
+    size_t outputPoaFileBufferSize;
     // Repeat count file
+    bool outputRepeatCounts;
     char *outputRepeatCountFile;
     FILE *outputRepeatCountFileHandle;
+    size_t outputRepeatCountFileBufferSize;
     // Read partition file - this must be specified if phasing is to be performed, as the
     // information is needed for stitching
+    bool outputReadPartition;
     char *outputReadPartitionFile;
     FILE *outputReadPartitionFileHandle;
+    size_t outputRepeatPartitionFileBufferSize;
 
     Params *params;
 } OutputChunker;
+
+static FILE *open(bool output, char **file, size_t *outputBufferSize, bool inMemory, char *openStr) {
+    if (!output) {
+        return NULL;
+    }
+    if (inMemory) {
+        if (stString_eq(openStr, "w")) {
+            return open_memstream(file, outputBufferSize);
+        }
+        assert(stString_eq(openStr, "r"));
+        return fmemopen(*file, (*outputBufferSize) + 1, "r");
+    }
+    return fopen(*file, openStr);
+}
 
 void outputChunker_open(OutputChunker *outputChunker, char *openStr) {
     /*
      * Open the files.
      */
-    outputChunker->outputSequenceFileHandle = fopen(outputChunker->outputSequenceFile, openStr);
-    outputChunker->outputPoaFileHandle = outputChunker->outputPoaFile != NULL ?
-                                         fopen(outputChunker->outputPoaFile, openStr) : NULL;
-    outputChunker->outputRepeatCountFileHandle = outputChunker->outputRepeatCountFile != NULL ?
-                                                 fopen(outputChunker->outputRepeatCountFile, openStr) : NULL;
-    outputChunker->outputReadPartitionFileHandle = outputChunker->outputReadPartitionFile != NULL ?
-                                                   fopen(outputChunker->outputReadPartitionFile, openStr) : NULL;
+    outputChunker->outputSequenceFileHandle = open(1, &(outputChunker->outputSequenceFile),
+                                                   &(outputChunker->outputSequenceFileBufferSize),
+                                                   outputChunker->useMemoryBuffers, openStr);
+    outputChunker->outputPoaFileHandle = open(outputChunker->outputPoa, &(outputChunker->outputPoaFile),
+                                              &(outputChunker->outputPoaFileBufferSize),
+                                              outputChunker->useMemoryBuffers, openStr);
+    outputChunker->outputRepeatCountFileHandle = open(outputChunker->outputRepeatCounts,
+                                                      &(outputChunker->outputRepeatCountFile),
+                                                      &(outputChunker->outputRepeatCountFileBufferSize),
+                                                      outputChunker->useMemoryBuffers, openStr);
+    outputChunker->outputReadPartitionFileHandle = open(outputChunker->outputReadPartition,
+                                                        &(outputChunker->outputReadPartitionFile),
+                                                        &(outputChunker->outputRepeatPartitionFileBufferSize),
+                                                        outputChunker->useMemoryBuffers, openStr);
 }
 
-OutputChunker *outputChunker_construct(Params *params, char *outputSequenceFile, char *outputPoaFile,
-                                       char *outputReadPartitionFile, char *outputRepeatCountFile) {
+OutputChunker *
+outputChunker_construct(Params *params, char *outputSequenceFile, char *outputPoaFile, char *outputReadPartitionFile,
+                        char *outputRepeatCountFile) {
     /*
      * Create an OutputChunker object, ready to write chunks of output to the given output files.
      */
     OutputChunker *outputChunker = st_calloc(1, sizeof(OutputChunker));
 
     // Initialize variables
+    outputChunker->useMemoryBuffers = 0;
     outputChunker->outputSequenceFile = outputSequenceFile;
     outputChunker->outputPoaFile = outputPoaFile;
+    outputChunker->outputPoa = outputPoaFile != NULL;
     outputChunker->outputRepeatCountFile = outputRepeatCountFile;
+    outputChunker->outputRepeatCounts = outputRepeatCountFile != NULL;
     outputChunker->outputReadPartitionFile = outputReadPartitionFile;
+    outputChunker->outputReadPartition = outputReadPartitionFile != NULL;
     outputChunker->params = params;
 
     // Open files for writing
@@ -577,7 +635,29 @@ OutputChunker *outputChunker_construct(Params *params, char *outputSequenceFile,
     return outputChunker;
 }
 
-void outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName, Poa *poa,
+OutputChunker *
+outputChunker_constructInMemory(Params *params, bool outputPoaFile, bool outputReadPartitionFile,
+                                bool outputRepeatCountFile) {
+    /*
+     * Create an OutputChunker object, ready to write chunks of output to the given output files.
+     */
+    OutputChunker *outputChunker = st_calloc(1, sizeof(OutputChunker));
+
+    // Initialize variables
+    outputChunker->useMemoryBuffers = 1;
+    outputChunker->outputPoa = outputPoaFile;
+    outputChunker->outputReadPartition = outputReadPartitionFile;
+    outputChunker->outputRepeatCounts = outputRepeatCountFile;
+    outputChunker->params = params;
+
+    // Open files for writing
+    outputChunker_open(outputChunker, "w");
+
+    return outputChunker;
+}
+
+void
+outputChunker_processChunkSequence(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName, Poa *poa,
                                    stList *reads) {
     // Create chunk name
     char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", sequenceName, chunkOrdinal);
@@ -715,22 +795,26 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
      */
     outputChunker_close(outputChunker); // Closes file streams
 
-    // Delete the sequence output file
-    stFile_rmrf(outputChunker->outputSequenceFile);
+    if (!outputChunker->useMemoryBuffers) { // If not in memory need to delete underlying files
+        // if in memory, buffers will be freed in destructor
 
-    // Delete repeat count file
-    if (outputChunker->outputRepeatCountFile != NULL) {
-        stFile_rmrf(outputChunker->outputRepeatCountFile);
-    }
+        // Delete the sequence output file
+        stFile_rmrf(outputChunker->outputSequenceFile);
 
-    // Delete the poa file
-    if (outputChunker->outputPoaFile != NULL) {
-        stFile_rmrf(outputChunker->outputPoaFile);
-    }
+        // Delete repeat count file
+        if (outputChunker->outputRepeatCountFile != NULL) {
+            stFile_rmrf(outputChunker->outputRepeatCountFile);
+        }
 
-    // Delete read partition file
-    if (outputChunker->outputReadPartitionFile != NULL) {
-        stFile_rmrf(outputChunker->outputReadPartitionFile);
+        // Delete the poa file
+        if (outputChunker->outputPoaFile != NULL) {
+            stFile_rmrf(outputChunker->outputPoaFile);
+        }
+
+        // Delete read partition file
+        if (outputChunker->outputReadPartitionFile != NULL) {
+            stFile_rmrf(outputChunker->outputReadPartitionFile);
+        }
     }
 }
 
@@ -742,7 +826,7 @@ void writeLines(FILE *fh, stList *lines) {
 
 void outputChunker_writeChunkToFinalOutput(OutputChunker *outputChunker,
                                            char *seqName, char *seq, stList *poaLines, stList *repeatCountLines,
-                                           stList *readPartitionLines, bool startOfSequence) {
+                                           bool startOfSequence) {
     /*
      * Writes the chunk to the final output files
      */
@@ -762,11 +846,6 @@ void outputChunker_writeChunkToFinalOutput(OutputChunker *outputChunker,
     // Write the repeat counts
     if (outputChunker->outputRepeatCountFile != NULL) {
         writeLines(outputChunker->outputRepeatCountFileHandle, repeatCountLines);
-    }
-
-    // Write the read
-    if (outputChunker->outputReadPartitionFile != NULL) {
-        writeLines(outputChunker->outputReadPartitionFileHandle, readPartitionLines);
     }
 }
 
@@ -824,10 +903,10 @@ static char *printFinalFileName(char *fileName, char *suffix) {
     return stString_print("%s%s", fileName, suffix == NULL ? "" : suffix);
 }
 
-OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *params,
-                                         char *outputSequenceFile, char *outputPoaFile,
-                                         char *outputReadPartitionFile, char *outputRepeatCountFile,
-                                         char *hap1Suffix, char *hap2Suffix) {
+OutputChunkers *
+outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outputSequenceFile, char *outputPoaFile,
+                         char *outputReadPartitionFile, char *outputRepeatCountFile, char *hap1Suffix, char *hap2Suffix,
+                         bool inMemoryBuffers) {
     if (hap2Suffix != NULL) {
         if (stString_eq(hap1Suffix, hap2Suffix)) {
             st_errAbort("Hap1 and hap2 suffixes are identical, can not open distinct files for output\n");
@@ -837,6 +916,10 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
             outputReadPartitionFile = "temp_read_phasing_file.csv";
             st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
         }
+    } else {
+        if (outputReadPartitionFile != NULL) {
+            st_errAbort("Hap2 not specified but trying to output read partition\n");
+        }
     }
 
     OutputChunkers *outputChunkers = st_calloc(1, sizeof(OutputChunkers));
@@ -845,7 +928,11 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
     // Make the temporary, parallel chunkers
     outputChunkers->tempFileChunkers = stList_construct3(0, (void (*)(void *)) outputChunker_destruct);
     for (int64_t i = 0; i < noOfOutputChunkers; i++) {
-        stList_append(outputChunkers->tempFileChunkers, outputChunker_construct(params,
+        stList_append(outputChunkers->tempFileChunkers, inMemoryBuffers ?
+                                                        outputChunker_constructInMemory(params, outputPoaFile != NULL,
+                                                                                        outputReadPartitionFile != NULL,
+                                                                                        outputRepeatCountFile != NULL) :
+                                                        outputChunker_construct(params,
                                                                                 printTempFileName(outputSequenceFile,
                                                                                                   i),
                                                                                 printTempFileName(outputPoaFile, i),
@@ -860,17 +947,6 @@ OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *par
                                                                 printFinalFileName(outputPoaFile, hap1Suffix),
                                                                 printFinalFileName(outputReadPartitionFile, hap1Suffix),
                                                                 printFinalFileName(outputRepeatCountFile, hap1Suffix));
-
-    /*st_logInfo("Writing polished sequence chunks in: %s\n", outputSequenceFile);
-    if(outputPoaCsv) {
-        st_logInfo("Writing poa chunks in: %s\n", outputPoaFile);
-    }
-    if(outputReadPhasing) {
-        st_logInfo("Writing read phasing chunks in: ", outputReadPartitionFile);
-    }
-    if(outputRepeatCounts) {
-        st_logInfo("Writing repeat counts chunks in: ", outputRepeatCounts);
-    }*/
 
     if (hap2Suffix != NULL) {
         outputChunkers->outputChunkerHap2 = outputChunker_construct(params,
@@ -903,7 +979,6 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
                                              poaHap2, reads, readsBelongingToHap1,
                                              readsBelongingToHap2, gF);
 }
-
 
 void outputChunkers_close(OutputChunkers *outputChunkers) {
     /*
@@ -977,13 +1052,28 @@ void outputChunkers_writeChunk(OutputChunkers *outputChunkers, ChunkToStitch *ch
      */
     outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap1,
                                           chunk->seqName, chunk->seqHap1, chunk->poaHap1StringsLines,
-                                          chunk->repeatCountLinesHap1, chunk->readsHap1Lines, chunk->startOfSequence);
+                                          chunk->repeatCountLinesHap1, chunk->startOfSequence);
     if (outputChunkers->outputChunkerHap2 != NULL) {
         outputChunker_writeChunkToFinalOutput(outputChunkers->outputChunkerHap2,
                                               chunk->seqName, chunk->seqHap2, chunk->poaHap2StringsLines,
-                                              chunk->repeatCountLinesHap2, chunk->readsHap2Lines,
+                                              chunk->repeatCountLinesHap2,
                                               chunk->startOfSequence);
     }
+}
+
+
+void writeReadPartition(stHash *readsInHap, FILE *fh) {
+    /*
+     * Write out the reads for a haplotype in the given file
+     */
+    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_IN_PARTITION\n");
+    stHashIterator *it = stHash_getIterator(readsInHap);
+    char *readName;
+    while ((readName = stHash_getNext(it)) != NULL) {
+        double *prob = stHash_search(readsInHap, readName);
+        fprintf(fh, "%s,%f\n", readName, *prob);
+    }
+    stHash_destructIterator(it);
 }
 
 //TODO remove
@@ -1001,17 +1091,25 @@ void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
     // Get the first chunk
     ChunkToStitch *pChunk = outputChunkers_getNextChunkInSequence(outputChunkers, orderedChunks, phased), *chunk;
 
+    if (pChunk == NULL) {
+        // Nothing to do
+        stSortedSet_destruct(orderedChunks);
+        return;
+    }
+
     // Length of the output sequences
     int64_t lengthOfSequenceOutputSoFarHap1 = 0;
     int64_t lengthOfSequenceOutputSoFarHap2 = 0;
 
-    // Set to keep track of read names
-    stSet *readsSeen = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
-
-    // Set the start of sequence flag
-    if (pChunk != NULL) {
-        pChunk->startOfSequence = 1;
+    // Track the names of the reads in the two haplotypes, if phased
+    stHash *hap1Reads = NULL, *hap2Reads = NULL;
+    if (phased) {
+        hap1Reads = getReadNames(pChunk->readsHap1Lines);
+        hap2Reads = getReadNames(pChunk->readsHap2Lines);
     }
+
+    // Indicate we're at the of beginning a sequences
+    pChunk->startOfSequence = 1;
 
     // Get each successive chunk and stitch and phase progressively
     while ((chunk = outputChunkers_getNextChunkInSequence(outputChunkers, orderedChunks, phased)) != NULL) {
@@ -1019,7 +1117,7 @@ void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
 
         // If phased, ensure the chunks phasing is consistent
         if (phased) {
-            chunkToStitch_phaseAdjacentChunks(pChunk, chunk, readsSeen);
+            chunkToStitch_phaseAdjacentChunks(chunk, hap1Reads, hap2Reads);
         }
 
         // Set the flag determining if this is the start of a new sequence
@@ -1044,12 +1142,16 @@ void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
         pChunk = chunk;
     }
 
-    if (pChunk != NULL) {
-        // Write out the pChunk
-        outputChunkers_writeChunk(outputChunkers, pChunk);
+    // Write out the pChunk
+    outputChunkers_writeChunk(outputChunkers, pChunk);
 
-        // Cleanup the pChunk
-        chunkToStitch_destruct(pChunk);
+    // Cleanup the pChunk
+    chunkToStitch_destruct(pChunk);
+
+    // Write out the read name phasing, if needed
+    if (phased) {
+        writeReadPartition(hap1Reads, outputChunkers->outputChunkerHap1->outputReadPartitionFileHandle);
+        writeReadPartition(hap2Reads, outputChunkers->outputChunkerHap2->outputReadPartitionFileHandle);
     }
 
     // Cleanup
@@ -1057,7 +1159,10 @@ void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
         st_errAbort("Got chunks left over after writing out chunks");
     }
     stSortedSet_destruct(orderedChunks);
-    stSet_destruct(readsSeen);
+    if (phased) {
+        stHash_destruct(hap1Reads);
+        stHash_destruct(hap2Reads);
+    }
 }
 
 void updateStitchingChunk(ChunkToStitch *stitched, ChunkToStitch *pChunk, stList *hap1Seqs, stList *hap2Seqs,
@@ -1066,10 +1171,6 @@ void updateStitchingChunk(ChunkToStitch *stitched, ChunkToStitch *pChunk, stList
     stList_append(hap1Seqs, stString_copy(pChunk->seqHap1));
     if (phased) {
         stList_append(hap2Seqs, stString_copy(pChunk->seqHap2));
-        stList_appendAll(stitched->readsHap1Lines, pChunk->readsHap1Lines);
-        stList_appendAll(stitched->readsHap2Lines, pChunk->readsHap2Lines);
-        stList_setDestructor(pChunk->readsHap1Lines, NULL);
-        stList_setDestructor(pChunk->readsHap2Lines, NULL);
     }
     if (trackPoa) {
         stList_appendAll(stitched->poaHap1StringsLines, pChunk->poaHap1StringsLines);
@@ -1089,23 +1190,18 @@ void updateStitchingChunk(ChunkToStitch *stitched, ChunkToStitch *pChunk, stList
     }
 }
 
-void removeDuplicateStringsFromList(stList **toFilter) {
-    stSet *encounteredStrings = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
-    stList *unfiltered = *toFilter;
-    stList *filtered = stList_construct3(0, free);
-    for (int64_t i = 0; i < stList_length(unfiltered); i++) {
-        char *readId = stList_get(unfiltered, i);
-        if (stSet_search(encounteredStrings, readId) == NULL) {
-            stList_append(filtered, readId);
-            stSet_insert(encounteredStrings, readId);
-        } else {
-            free(readId);
-        }
+void convertReadPartitionToLines(stHash *readsInHap, stList *readPartitionLines) {
+    /*
+     * Format the output of the reads for a haplotype
+     */
+    stList_append(readPartitionLines, stString_print("READ_NAME,LOG_PROB_OF_BEING_IN_PARTITION\n"));
+    stHashIterator *it = stHash_getIterator(readsInHap);
+    char *readName;
+    while ((readName = stHash_getNext(it)) != NULL) {
+        double *prob = stHash_search(readsInHap, readName);
+        stList_append(readPartitionLines, stString_print("%s,%f\n", readName, *prob));
     }
-    stList_setDestructor(unfiltered, NULL);
-    stList_destruct(unfiltered);
-    stSet_destruct(encounteredStrings);
-    *toFilter = filtered;
+    stHash_destructIterator(it);
 }
 
 ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, bool phased,
@@ -1129,20 +1225,26 @@ ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64
     stList *hap1Seqs = stList_construct3(0, free);
     stList *hap2Seqs = (phased ? stList_construct3(0, free) : NULL);
 
-    // Set to keep track of read names
-    stSet *readsSeen = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    // Track the names of the reads in the two haplotypes, if phased
+    stHash *hap1Reads, *hap2Reads;
+    if (phased) {
+        hap1Reads = getReadNames(pChunk->readsHap1Lines);
+        hap2Reads = getReadNames(pChunk->readsHap2Lines);
+    }
 
     // Get each successive chunk and stitch and phase progressively
-    for (int64_t chunkIndex = startIdx+1; chunkIndex < endIdxExclusive; chunkIndex++) {
+    for (int64_t chunkIndex = startIdx + 1; chunkIndex < endIdxExclusive; chunkIndex++) {
         assert(pChunk != NULL);
         chunk = chunks[chunkIndex];
 
         // If phased, ensure the chunks phasing is consistent
         if (phased) {
-            chunkToStitch_phaseAdjacentChunks(pChunk, chunk, readsSeen);
+            chunkToStitch_phaseAdjacentChunks(chunk, hap1Reads, hap2Reads);
         }
+
+        // Trim the overlap between chunks
         chunkToStitch_trimAdjacentChunks(pChunk, chunk, params,
-                &lengthOfSequenceOutputSoFarHap1, &lengthOfSequenceOutputSoFarHap2);
+                                         &lengthOfSequenceOutputSoFarHap1, &lengthOfSequenceOutputSoFarHap2);
 
         // Save to stitched
         updateStitchingChunk(stitched, pChunk, hap1Seqs, hap2Seqs, phased, trackPoa, trackRepeatCounts);
@@ -1154,26 +1256,28 @@ ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64
         pChunk = chunk;
     }
 
-    // save the last chunk
+    // save the last chunk and the read phasing
     updateStitchingChunk(stitched, pChunk, hap1Seqs, hap2Seqs, phased, trackPoa, trackRepeatCounts);
     stitched->seqHap1 = stString_join2("", hap1Seqs);
     if (phased) {
         stitched->seqHap2 = stString_join2("", hap2Seqs);
-        // remove duplicates from stitched reads
-        removeDuplicateStringsFromList(&stitched->readsHap1Lines);
-        removeDuplicateStringsFromList(&stitched->readsHap2Lines);
+        // Save back the reads in each haplotype to the stitched chunk
+        convertReadPartitionToLines(hap1Reads, stitched->readsHap1Lines);
+        convertReadPartitionToLines(hap2Reads, stitched->readsHap2Lines);
     }
 
     // cleanup
     chunkToStitch_destruct(pChunk);
-    stSet_destruct(readsSeen);
     stList_destruct(hap1Seqs);
-    if (phased) stList_destruct(hap2Seqs);
+    if (phased) {
+        stList_destruct(hap2Seqs);
+        stHash_destruct(hap1Reads);
+        stHash_destruct(hap2Reads);
+    }
 
     // fin
     return stitched;
 }
-
 
 ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
                                 bool phased, Params *params, char *referenceSequenceName) {
@@ -1267,7 +1371,8 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
             if (currentPercentage != lastReportedPercentage) {
                 lastReportedPercentage = currentPercentage;
                 int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
-                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
+                int64_t secondsRemaining = (int64_t) floor(
+                        1.0 * timeTaken / currentPercentage * (double) (100 - currentPercentage));
                 char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
                                         stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
                 st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",

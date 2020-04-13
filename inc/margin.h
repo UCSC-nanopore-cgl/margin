@@ -1279,10 +1279,10 @@ Emissions *rleNucleotideEmissions_construct(Emissions *emissions, RepeatSubMatri
  * Stitching code
  */
 
-OutputChunkers *outputChunkers_construct(int64_t noOfOutputChunkers, Params *params,
-										 char *outputSequenceFile, char *outputPoaFile,
-										 char *outputReadPartitionFile, char *outputRepeatCountFile,
-										 char *hap1Suffix, char *hap2Suffix);
+OutputChunkers *
+outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outputSequenceFile, char *outputPoaFile,
+						 char *outputReadPartitionFile, char *outputRepeatCountFile, char *hap1Suffix, char *hap2Suffix,
+						 bool inMemoryBuffers);
 
 void
 outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
@@ -1296,16 +1296,22 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
 
+void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased);
+
 void outputChunkers_destruct(OutputChunkers *outputChunkers);
 
 /*
  * Misc
  */
 char *getTimeDescriptorFromSeconds(int64_t seconds);
+
 stHash *parseReferenceSequences(char *referenceFastaFile);
+
 char *getFileBase(char *base, char *defawlt);
+
 RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params);
 uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params);
+stSet *bamChunkRead_to_readName(stSet *bamChunkReads);
 
 /*
  * HELEN Features

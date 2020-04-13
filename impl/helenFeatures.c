@@ -305,6 +305,164 @@ void handleHelenFeatures(
     if (trueRefRleString != NULL) rleString_destruct(trueRefRleString);
 }
 
+void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+                                          RleString *trueRefRleStringA, RleString *trueRefRleStringB,
+                                          RleString **trueRefRleStringToHap1, RleString **trueRefRleStringToHap2,
+                                          stList **trueRefAlignmentToHap1, stList **trueRefAlignmentToHap2,
+                                          Params *params, char *logIdentifier) {
+
+    char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
+    char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
+    char *trueRefExpandedA = rleString_expand(trueRefRleStringA);
+    char *trueRefExpandedB = rleString_expand(trueRefRleStringB);
+
+    // align all to all
+    uint16_t score_trueA_polished1, score_trueA_polished2, score_trueB_polished1, score_trueB_polished2;
+
+    stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruth(
+            polishedConsensusStringH1, trueRefExpandedA, &score_trueA_polished1);
+
+    stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruth(
+            polishedConsensusStringH1, trueRefExpandedB, &score_trueB_polished1);
+
+    stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruth(
+            polishedConsensusStringH2, trueRefExpandedA, &score_trueA_polished2);
+
+    stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruth(
+            polishedConsensusStringH2, trueRefExpandedB, &score_trueB_polished2);
+
+    // determine best alignment
+    bool use_trueA_polished1 = score_trueA_polished1 + score_trueB_polished2 > score_trueA_polished2 + score_trueB_polished1;
+
+    // convert to rleSpace if appropriate
+    if (params->polishParams->useRunLengthEncoding) {
+
+        // hap1
+        *trueRefRleStringToHap1 = rleString_copy(use_trueA_polished1 ? trueRefRleStringA : trueRefRleStringB);
+
+        uint64_t *polishedRleConsensus1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                polishedRleConsensusH1);
+        uint64_t *trueRefRleStringToHap1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                *trueRefRleStringToHap1);
+
+        *trueRefAlignmentToHap1 = runLengthEncodeAlignment(
+                use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished1TrueB,
+                polishedRleConsensus1_nonRleToRleCoordinateMap, trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+        free(polishedRleConsensus1_nonRleToRleCoordinateMap);
+        free(trueRefRleStringToHap1_nonRleToRleCoordinateMap);
+
+        // hap2
+        *trueRefRleStringToHap2 = rleString_copy(use_trueA_polished1 ? trueRefRleStringB : trueRefRleStringA);
+
+        uint64_t *polishedRleConsensus2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                polishedRleConsensusH2);
+        uint64_t *trueRefRleStringToHap2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(
+                *trueRefRleStringToHap2);
+
+        *trueRefAlignmentToHap2 = runLengthEncodeAlignment(
+                use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished2TrueB : trueRefAlignmentRawSpace_Polished2TrueA,
+                polishedRleConsensus2_nonRleToRleCoordinateMap, trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+        free(polishedRleConsensus2_nonRleToRleCoordinateMap);
+        free(trueRefRleStringToHap2_nonRleToRleCoordinateMap);
+
+        //cleanup
+        stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
+        stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
+        stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
+        stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
+    }
+
+    // debugging
+    if (st_getLogLevel() <= info) {
+        st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH1, *trueRefRleStringToHap1, *trueRefAlignmentToHap1);
+        char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
+        char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        free(consensusRawH1);
+        free(truthRawToH1);
+
+        st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH2, *trueRefRleStringToHap2, *trueRefAlignmentToHap2);
+        char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
+        char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        free(consensusRawH2);
+        free(truthRawToH2);
+    }
+}
+
+
+
+void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+                                      RleString *trueRefRleStringA, RleString *trueRefRleStringB,
+                                      RleString **trueRefRleStringToHap1, RleString **trueRefRleStringToHap2,
+                                      stList **trueRefAlignmentToHap1, stList **trueRefAlignmentToHap2,
+                                      Params *params, char *logIdentifier) {
+
+    // align all to all
+    double score_polished1_trueA, score_polished2_trueA, score_polished1_trueB, score_polished2_trueB;
+
+    stList *trueRefAlignmentRLESpace_Polished1TrueA = alignConsensusAndTruthRLE(
+            polishedRleConsensusH1, trueRefRleStringA, &score_polished1_trueA, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished1TrueB = alignConsensusAndTruthRLE(
+            polishedRleConsensusH1, trueRefRleStringB, &score_polished1_trueB, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished2TrueA = alignConsensusAndTruthRLE(
+            polishedRleConsensusH2, trueRefRleStringA, &score_polished2_trueA, params->polishParams);
+
+    stList *trueRefAlignmentRLESpace_Polished2TrueB = alignConsensusAndTruthRLE(
+            polishedRleConsensusH2, trueRefRleStringB, &score_polished2_trueB, params->polishParams);
+
+    // cis or trans
+    bool use_polished1_trueA = score_polished1_trueA + score_polished2_trueB > score_polished2_trueA + score_polished1_trueB;
+
+    // hap1
+    *trueRefRleStringToHap1 = rleString_copy(use_polished1_trueA ? trueRefRleStringA : trueRefRleStringB);
+    *trueRefAlignmentToHap1 = use_polished1_trueA ?
+                              trueRefAlignmentRLESpace_Polished1TrueA : trueRefAlignmentRLESpace_Polished1TrueB;
+
+    // hap2
+    *trueRefRleStringToHap2 = rleString_copy(use_polished1_trueA ? trueRefRleStringB : trueRefRleStringA);
+    *trueRefAlignmentToHap2 = use_polished1_trueA ?
+                              trueRefAlignmentRLESpace_Polished2TrueB : trueRefAlignmentRLESpace_Polished2TrueA;
+
+    // debugging
+    if (st_getLogLevel() <= info) {
+        st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH1, *trueRefRleStringToHap1, *trueRefAlignmentToHap1);
+        char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
+        char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        free(consensusRawH1);
+        free(truthRawToH1);
+
+        st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
+        printMEAAlignment2(polishedRleConsensusH2, *trueRefRleStringToHap2, *trueRefAlignmentToHap2);
+        char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
+        char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
+        st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        free(consensusRawH2);
+        free(truthRawToH2);
+    }
+
+    //cleanup
+    if (use_polished1_trueA) {
+        stList_destruct(trueRefAlignmentRLESpace_Polished1TrueB);
+        stList_destruct(trueRefAlignmentRLESpace_Polished2TrueA);
+    } else {
+        stList_destruct(trueRefAlignmentRLESpace_Polished1TrueA);
+        stList_destruct(trueRefAlignmentRLESpace_Polished2TrueB);
+    }
+}
+
 void handleDiploidHelenFeatures(
         // global params
         HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
@@ -313,7 +471,7 @@ void handleDiploidHelenFeatures(
 
         // chunk params
         char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
-        stSet *readsInH1, stSet *readsInH2, char *polishedConsensusStringH1, char *polishedConsensusStringH2,
+        stSet *readsInH1BCR, stSet *readsInH2BCR, char *polishedConsensusStringH1, char *polishedConsensusStringH2,
         RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2) {
 
     st_logInfo(">%s Performing diploid feature generation for chunk.\n", logIdentifier);
@@ -356,82 +514,18 @@ void handleDiploidHelenFeatures(
             // get reads
             BamChunkRead *trueRefReadA = stList_get(trueRefReadsA, 0);
             BamChunkRead *trueRefReadB = stList_get(trueRefReadsB, 0);
-            char *trueRefExpandedA = rleString_expand(trueRefReadA->rleRead);
-            char *trueRefExpandedB = rleString_expand(trueRefReadB->rleRead);
 
-            // align all to all
-            uint16_t score_trueA_polished1, score_trueA_polished2, score_trueB_polished1, score_trueB_polished2;
-            stList *trueRefAlignmentRawSpace_Polished1TrueA = alignConsensusAndTruth(
-                    polishedConsensusStringH1, trueRefExpandedA, &score_trueA_polished1);
-            stList *trueRefAlignmentRawSpace_Polished1TrueB = alignConsensusAndTruth(
-                    polishedConsensusStringH2, trueRefExpandedA, &score_trueA_polished2);
-            stList *trueRefAlignmentRawSpace_Polished2TrueA= alignConsensusAndTruth(
-                    polishedConsensusStringH1, trueRefExpandedB, &score_trueB_polished1);
-            stList *trueRefAlignmentRawSpace_Polished2TrueB = alignConsensusAndTruth(
-                    polishedConsensusStringH2, trueRefExpandedB, &score_trueB_polished2);
+            RleString *trueRefRleStringA = trueRefReadA->rleRead;
+            RleString *trueRefRleStringB = trueRefReadB->rleRead;
 
-            // determine best alignment
-            bool use_trueA_polished1 = score_trueA_polished1 + score_trueB_polished2 > score_trueA_polished2 + score_trueB_polished1;
-
-            // convert to rleSpace if appropriate
-            if (params->polishParams->useRunLengthEncoding) {
-
-                // hap1
-                trueRefRleStringToHap1 = rleString_construct(use_trueA_polished1 ? trueRefExpandedA : trueRefExpandedB);
-
-                uint64_t *polishedRleConsensus1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH1);
-                uint64_t *trueRefRleStringToHap1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleStringToHap1);
-
-                trueRefAlignmentToHap1 = runLengthEncodeAlignment(
-                        use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished2TrueB,
-                        polishedRleConsensus1_nonRleToRleCoordinateMap, trueRefRleStringToHap1_nonRleToRleCoordinateMap);
-
-                free(polishedRleConsensus1_nonRleToRleCoordinateMap);
-                free(trueRefRleStringToHap1_nonRleToRleCoordinateMap);
-
-                // hap2
-                trueRefRleStringToHap2 = rleString_construct(use_trueA_polished1 ? trueRefExpandedB : trueRefExpandedA);
-
-                uint64_t *polishedRleConsensus2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH2);
-                uint64_t *trueRefRleStringToHap2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleStringToHap2);
-
-                trueRefAlignmentToHap2 = runLengthEncodeAlignment(
-                        use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueB : trueRefAlignmentRawSpace_Polished2TrueA,
-                        polishedRleConsensus2_nonRleToRleCoordinateMap, trueRefRleStringToHap2_nonRleToRleCoordinateMap);
-
-                free(polishedRleConsensus2_nonRleToRleCoordinateMap);
-                free(trueRefRleStringToHap2_nonRleToRleCoordinateMap);
-
-                //cleanup
-                stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
-                stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
-                stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
-                stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
-
-            } else {
-
-                //hap1
-                trueRefRleStringToHap1 = rleString_construct_no_rle(use_trueA_polished1 ? trueRefExpandedA : trueRefExpandedB);
-                trueRefAlignmentToHap1 = use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished1TrueA : trueRefAlignmentRawSpace_Polished1TrueB;
-
-                // hap2
-                trueRefRleStringToHap2 = rleString_construct_no_rle(use_trueA_polished1 ? trueRefExpandedB : trueRefExpandedA);
-                trueRefAlignmentToHap2 = use_trueA_polished1 ? trueRefAlignmentRawSpace_Polished2TrueB : trueRefAlignmentRawSpace_Polished2TrueA;
-
-                // cleanup
-                if (use_trueA_polished1) {
-                    stList_destruct(trueRefAlignmentRawSpace_Polished1TrueB);
-                    stList_destruct(trueRefAlignmentRawSpace_Polished2TrueA);
-                } else {
-                    stList_destruct(trueRefAlignmentRawSpace_Polished1TrueA);
-                    stList_destruct(trueRefAlignmentRawSpace_Polished2TrueB);
-                }
-            }
-
+            // assign correct haplotypes to the trueRefXXXToHapX
+            getDiploidHaplotypeAlignmentsRAW2RLE(polishedRleConsensusH1, polishedRleConsensusH2, trueRefRleStringA, trueRefRleStringB,
+                    &trueRefRleStringToHap1, &trueRefRleStringToHap2, &trueRefAlignmentToHap1, &trueRefAlignmentToHap2,
+                    params, logIdentifier);
 
             // we found a single alignment of reference
-            double refLengthRatio = 1.0 * (strlen(trueRefExpandedA) + strlen(trueRefExpandedB)) /
-                    (strlen(polishedConsensusStringH1) + strlen(polishedConsensusStringH2));
+            double refLengthRatio = 1.0 * (trueRefRleStringA->length + trueRefRleStringB->length) /
+                    (polishedRleConsensusH1->length + polishedRleConsensusH2->length);
             double alnLengthRatio = 1.0 * (stList_length(trueRefAlignmentToHap1) + stList_length(trueRefAlignmentToHap2)) /
                     (polishedRleConsensusH1->length + polishedRleConsensusH2->length);
             int refLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - refLengthRatio)));
@@ -445,10 +539,6 @@ void handleDiploidHelenFeatures(
                            logIdentifier, (polishedRleConsensusH1->length + polishedRleConsensusH2->length) / 2,
                            refLengthRatio, alnLengthRatio);
             }
-
-            //cleanup
-            free(trueRefExpandedA);
-            free(trueRefExpandedB);
         }
 
         stList_destruct(trueRefReadsA);
@@ -464,12 +554,15 @@ void handleDiploidHelenFeatures(
     } else {
         st_logInfo(" %s Writing HELEN features with filename base: %s\n", logIdentifier, helenFeatureOutfileBase);
 
-
         // write the actual features (type dependent)
+        stSet *readIdsInH1 = bamChunkRead_to_readName(readsInH1BCR);
+        stSet *readIdsInH2 = bamChunkRead_to_readName(readsInH2BCR);
         poa_writeDiploidHelenFeatures(helenFeatureType, bamChunkReads, helenFeatureOutfileBase,
-                bamChunk, poaH1, poaH2, readsInH1, readsInH2, trueRefAlignmentToHap1, trueRefAlignmentToHap2,
+                bamChunk, poaH1, poaH2, readIdsInH1, readIdsInH2, trueRefAlignmentToHap1, trueRefAlignmentToHap2,
                 trueRefRleStringToHap1,  trueRefRleStringToHap2, splitWeightMaxRunLength,
                 (HelenFeatureHDF5FileInfo**) helenHDF5Files);
+        stSet_destruct(readIdsInH1);
+        stSet_destruct(readIdsInH2);
     }
 
     // cleanup
@@ -996,10 +1089,15 @@ stList *poa_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, stSet *
 
 
 
-
-
+void printMEAAlignment2(RleString *X, RleString *Y, stList *alignedPairs) {
+    printMEAAlignment(X->rleString, Y->rleString, X->length, Y->length, alignedPairs, X->repeatCounts, Y->repeatCounts);
+}
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl) {
+    if (stList_length(alignedPairs) == 0) {
+        return;
+    }
+
     // should we do run lengths
     bool handleRunLength = Xrl != NULL && Yrl != NULL;
 
@@ -1026,6 +1124,7 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
 
     // iterate over alignment
     stListIterator *alignmentItor = stList_getIterator(alignedPairs);
+    stIntTuple *prevAlign = NULL;
     stIntTuple *currAlign = stList_getNext(alignmentItor);
     int64_t posX = stIntTuple_get(currAlign, 0);
     int64_t posY = stIntTuple_get(currAlign, 1);
@@ -1086,6 +1185,7 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
             }
             posX++;
             posY++;
+            prevAlign = currAlign;
             currAlign = stList_getNext(alignmentItor);
         }
 
@@ -1099,19 +1199,19 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
 
     // print
     fprintf(stderr, "\n");
-    if (handleRunLength) fprintf(stderr, "%s\n", rlXStr);
-    fprintf(stderr, "%s\n", alnXStr);
-    fprintf(stderr, "%s\n", alnDesc);
-    fprintf(stderr, "%s\n", alnYStr);
-    if (handleRunLength) fprintf(stderr, "%s\n", rlYStr);
-    fprintf(stderr, "Matches:    %"PRId64"\n", nuclMatches);
+    if (handleRunLength) fprintf(stderr, "  %s\n", rlXStr);
+    fprintf(stderr, "  %s\n", alnXStr);
+    fprintf(stderr, "  %s\n", alnDesc);
+    fprintf(stderr, "  %s\n", alnYStr);
+    if (handleRunLength) fprintf(stderr, "  %s\n", rlYStr);
+    fprintf(stderr, "  Matches:    %"PRId64"\n", nuclMatches);
     if (handleRunLength) {
-        fprintf(stderr, "  RL Match: %"PRId64"\n", rlMatches);
-        fprintf(stderr, "  RL Miss:  %"PRId64"\n", rlMismatches);
+        fprintf(stderr, "    RL Match: %"PRId64"\n", rlMatches);
+        fprintf(stderr, "    RL Miss:  %"PRId64"\n", rlMismatches);
     }
-    fprintf(stderr, "Mismatches: %"PRId64"\n", nuclMismatches);
-    fprintf(stderr, "X Inserts:  %"PRId64"\n", nuclXInserts);
-    fprintf(stderr, "Y Inserts:  %"PRId64"\n", nuclYInserts);
+    fprintf(stderr, "  Mismatches: %"PRId64"\n", nuclMismatches);
+    fprintf(stderr, "  X Inserts:  %"PRId64"\n", nuclXInserts);
+    fprintf(stderr, "  Y Inserts:  %"PRId64"\n", nuclYInserts);
     fprintf(stderr, "\n");
 
     // cleanup
@@ -1557,6 +1657,92 @@ void poa_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads,
 
 
 
+stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams) {
+
+
+    // Symbol strings
+    SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,
+            TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    SymbolString sY = rleString_constructSymbolString(truthStr, 0, truthStr->length, polishParams->alphabet,
+            TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+    uint16_t apScore = 0;
+
+    // Run the alignment
+    stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+
+    getAlignedPairsWithIndels(polishParams->stateMachineForForwardStrandRead, sX, sY, polishParams->p,
+                              &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
+                                                                          sX.length, sY.length, score, polishParams->p);
+
+    // refactor
+    stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    for (int64_t i = 0; i < stList_length(meaAlignedPairs); i++) {
+        stIntTuple *ap = stList_get(meaAlignedPairs, i);
+        stList_append(finalAlignedPairs, stIntTuple_construct3(stIntTuple_get(ap, 1),
+                                                               stIntTuple_get(ap, 2), stIntTuple_get(ap, 0)));
+    }
+
+    // Cleanup
+    stList_destruct(meaAlignedPairs);
+    stList_destruct(alignedPairs);
+    stList_destruct(gapXPairs);
+    stList_destruct(gapYPairs);
+    symbolString_destruct(sX);
+    symbolString_destruct(sY);
+
+    return finalAlignedPairs;
+}
+
+
+
+
+
+stList *alignConsensusAndTruth2(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams) {
+
+
+    // Symbol strings
+    SymbolString sX = symbolString_construct(consensusStr, 0, strlen(consensusStr), polishParams->alphabet);
+    SymbolString sY = symbolString_construct(truthStr, 0, strlen(truthStr), polishParams->alphabet);
+    uint16_t apScore = 0;
+
+    // Use default state machine for alignment
+    StateMachine *sM = stateMachine3_constructNucleotide(threeState);
+
+    // Run the alignment
+    stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+
+    getAlignedPairsWithIndels(sM, sX, sY, polishParams->p, &alignedPairs, &gapXPairs,
+            &gapYPairs, TRUE, TRUE);
+    stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
+            sX.length, sY.length, score, polishParams->p);
+
+    // refactor
+    stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    for (int64_t i = 0; i < stList_length(meaAlignedPairs); i++) {
+        stIntTuple *ap = stList_get(meaAlignedPairs, i);
+        stList_append(finalAlignedPairs, stIntTuple_construct3(stIntTuple_get(ap, 1),
+                stIntTuple_get(ap, 2), stIntTuple_get(ap, 0)));
+    }
+
+    // Cleanup
+    stList_destruct(meaAlignedPairs);
+    stList_destruct(alignedPairs);
+    stList_destruct(gapXPairs);
+    stList_destruct(gapYPairs);
+    symbolString_destruct(sX);
+    symbolString_destruct(sY);
+    stateMachine_destruct(sM);
+
+    return finalAlignedPairs;
+}
+
+
+
 
 // this function taken from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/example.c
 stList *alignConsensusAndTruth(char *consensusStr, char *truthStr, uint16_t *score) {
@@ -1627,6 +1813,8 @@ stList *alignConsensusAndTruth(char *consensusStr, char *truthStr, uint16_t *sco
                 consensusPos += length;
             } else if (letter == 'D') {
                 truthPos += length;
+            } else {
+                st_errAbort("Got unexpected alignment character '%c' aligning truth and consensus", letter);
             }
         }
     }
@@ -2460,9 +2648,419 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
         stList *featuresH1, int64_t featureStartIdxH1, int64_t featureEndIdxInclusiveH1,
         stList *featuresH2, int64_t featureStartIdxH2, int64_t featureEndIdxInclusiveH2,
         const int64_t maxRunLength) {
-    //TODO
 
+    herr_t status = 0;
+    /*
+     * Get feature data set up
+     */
+
+    // count features, create feature array
+    uint64_t featureCountH1 = 0;
+    uint64_t featureCountH2 = 0;
+    for (int64_t i = featureStartIdxH1; i <= featureEndIdxInclusiveH1; i++) {
+        PoaFeatureDiploidRleWeight *feature = stList_get(featuresH1, i);
+        while (feature != NULL) {
+            PoaFeatureDiploidRleWeight *rlFeature = feature;
+            while (rlFeature != NULL) {
+                featureCountH1++;
+                rlFeature = rlFeature->nextRunLength;
+            }
+            feature = feature->nextInsert;
+        }
+    }
+    for (int64_t i = featureStartIdxH2; i <= featureEndIdxInclusiveH2; i++) {
+        PoaFeatureDiploidRleWeight *feature = stList_get(featuresH2, i);
+        while (feature != NULL) {
+            PoaFeatureDiploidRleWeight *rlFeature = feature;
+            while (rlFeature != NULL) {
+                featureCountH2++;
+                rlFeature = rlFeature->nextRunLength;
+            }
+            feature = feature->nextInsert;
+        }
+    }
+
+    // don't write small feature sets when training
+    if ((featureCountH1 < HDF5_FEATURE_SIZE || featureCountH2 < HDF5_FEATURE_SIZE) && outputLabels) {
+        char *logIdentifier = getLogIdentifier();
+        st_logInfo(" %s Feature count %"PRId64" / %"PRId64" less than minimum of %d\n", logIdentifier,
+                featureCountH1, featureCountH2, HDF5_FEATURE_SIZE);
+        free(logIdentifier);
+        return;
+    }
+
+    // get all feature data into an array
+    uint32_t **positionDataH1 = getTwoDArrayUInt32(featureCountH1, 3);
+    uint32_t **positionDataH2 = getTwoDArrayUInt32(featureCountH2, 3);
+    int64_t rleNucleotideStrandColumnCount_singleHap = ((SYMBOL_NUMBER - 1) * (maxRunLength + 1) + 1) * 2; //(nucl*(rl+0)+gap)*strand
+    uint8_t **normalizationDataH1 = getTwoDArrayUInt8(featureCountH1, 1);
+    uint8_t **normalizationDataH2 = getTwoDArrayUInt8(featureCountH2, 1);
+    uint8_t **imageDataH1 = getTwoDArrayUInt8(featureCountH1, rleNucleotideStrandColumnCount_singleHap * 2);
+    uint8_t **imageDataH2 = getTwoDArrayUInt8(featureCountH2, rleNucleotideStrandColumnCount_singleHap * 2);
+    uint8_t **labelCharacterDataH1 = NULL;
+    uint8_t **labelCharacterDataH2 = NULL;
+    uint8_t **labelRunLengthDataH1 = NULL;
+    uint8_t **labelRunLengthDataH2 = NULL;
+    if (outputLabels) {
+        labelCharacterDataH1 = getTwoDArrayUInt8(featureCountH1, 1);
+        labelCharacterDataH2 = getTwoDArrayUInt8(featureCountH2, 1);
+        labelRunLengthDataH1 = getTwoDArrayUInt8(featureCountH1, 1);
+        labelRunLengthDataH2 = getTwoDArrayUInt8(featureCountH2, 1);
+    }
+
+
+    /*
+     *   Set up feature data in HDF5 format
+     */
+
+    // add feature data H1
+    int64_t featureCount = 0;
+    for (int64_t i = featureStartIdxH1; i <= featureEndIdxInclusiveH1; i++) {
+        PoaFeatureDiploidRleWeight *refFeature = stList_get(featuresH1, i);
+
+        // total weight is calculated for the very first refPos feature, used for all inserts and run lengths
+        double totalWeight = 0;
+        for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
+            totalWeight += refFeature->weightsHOn[j] + refFeature->weightsHOff[j];
+        }
+
+        // iterate over all insert features
+        PoaFeatureDiploidRleWeight *insFeature = refFeature;
+        while (insFeature != NULL) {
+
+            // iterate over all run length features
+            PoaFeatureDiploidRleWeight *rlFeature = insFeature;
+            while (rlFeature != NULL) {
+                // position
+                positionDataH1[featureCount][0] = (uint32_t) rlFeature->refPosition;
+                positionDataH1[featureCount][1] = (uint32_t) rlFeature->insertPosition;
+                positionDataH1[featureCount][2] = (uint32_t) rlFeature->runLengthPosition;
+
+                // normalization
+                normalizationDataH1[featureCount][0] = convertTotalWeightToUInt8(totalWeight);
+
+                // copy weights over (into normalized uint8 space)
+                for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
+                    imageDataH1[featureCount][j] = normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOn[j]);
+                    imageDataH1[featureCount][j+rleNucleotideStrandColumnCount_singleHap] =
+                            normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOff[j]);
+                }
+
+                // labels
+                if (outputLabels) {
+                    Symbol label = alphabet->convertCharToSymbol(rlFeature->labelChar);
+                    labelCharacterDataH1[featureCount][0] = (uint8_t) (alphabet->convertSymbolToChar(label) == 'N' ?
+                                                                     0 : label + 1);
+                    labelRunLengthDataH1[featureCount][0] = (uint8_t) (alphabet->convertSymbolToChar(label) == 'N' ?
+                                                                     0 : rlFeature->labelRunLength);
+                    if (labelRunLengthDataH1[featureCount][0] > maxRunLength) {
+                        st_errAbort("Encountered run length of %d (max %"PRId64") in H1 chunk %s:%"PRId64"-%"PRId64,
+                                    labelRunLengthDataH1[featureCount][0], maxRunLength, bamChunk->refSeqName,
+                                    bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+                    }
+                }
+
+                // iterate
+                featureCount++;
+                rlFeature = rlFeature->nextRunLength;
+            }
+            insFeature = insFeature->nextInsert;
+        }
+    }
+
+    // add feature data H2
+    featureCount = 0;
+    for (int64_t i = featureStartIdxH2; i <= featureEndIdxInclusiveH2; i++) {
+        PoaFeatureDiploidRleWeight *refFeature = stList_get(featuresH2, i);
+
+        // total weight is calculated for the very first refPos feature, used for all inserts and run lengths
+        double totalWeight = 0;
+        for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
+            totalWeight += refFeature->weightsHOn[j] + refFeature->weightsHOff[j];
+        }
+
+        // iterate over all insert features
+        PoaFeatureDiploidRleWeight *insFeature = refFeature;
+        while (insFeature != NULL) {
+
+            // iterate over all run length features
+            PoaFeatureDiploidRleWeight *rlFeature = insFeature;
+            while (rlFeature != NULL) {
+                // position
+                positionDataH2[featureCount][0] = (uint32_t) rlFeature->refPosition;
+                positionDataH2[featureCount][1] = (uint32_t) rlFeature->insertPosition;
+                positionDataH2[featureCount][2] = (uint32_t) rlFeature->runLengthPosition;
+
+                // normalization
+                normalizationDataH2[featureCount][0] = convertTotalWeightToUInt8(totalWeight);
+
+                // copy weights over (into normalized uint8 space)
+                for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
+                    imageDataH2[featureCount][j] = normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOn[j]);
+                    imageDataH2[featureCount][j+rleNucleotideStrandColumnCount_singleHap] =
+                            normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOff[j]);
+                }
+
+                // labels
+                if (outputLabels) {
+                    Symbol label = alphabet->convertCharToSymbol(rlFeature->labelChar);
+                    labelCharacterDataH2[featureCount][0] = (uint8_t) (alphabet->convertSymbolToChar(label) == 'N' ?
+                                                                     0 : label + 1);
+                    labelRunLengthDataH2[featureCount][0] = (uint8_t) (alphabet->convertSymbolToChar(label) == 'N' ?
+                                                                     0 : rlFeature->labelRunLength);
+                    if (labelRunLengthDataH2[featureCount][0] > maxRunLength) {
+                        st_errAbort("Encountered run length of %d (max %"PRId64") in H2 chunk %s:%"PRId64"-%"PRId64,
+                                    labelRunLengthDataH2[featureCount][0], maxRunLength, bamChunk->refSeqName,
+                                    bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+                    }
+                }
+
+                // iterate
+                featureCount++;
+                rlFeature = rlFeature->nextRunLength;
+            }
+            insFeature = insFeature->nextInsert;
+        }
+    }
+
+    /*
+     * Get hdf5 data set up
+     */
+    // so that we can produce chunks smaller than HDF5_FEATURE_SIZE (not used during training)
+    hsize_t featureSize = (hsize_t) (featureCount < HDF5_FEATURE_SIZE ? featureCount : HDF5_FEATURE_SIZE);
+
+    hsize_t metadataDimension[1] = {1};
+    hsize_t postionDimension[2] = {featureSize, 3};
+    hsize_t labelCharacterDimension[2] = {featureSize, 1};
+    hsize_t labelRunLengthDimension[2] = {featureSize, 1};
+    hsize_t normalizationDimension[2] = {featureSize, 1};
+    hsize_t imageDimension[2] = {featureSize, (hsize_t) rleNucleotideStrandColumnCount_singleHap * 2};
+
+    hid_t metadataSpace = H5Screate_simple(1, metadataDimension, NULL);
+    hid_t positionSpace = H5Screate_simple(2, postionDimension, NULL);
+    hid_t labelCharacterSpace = H5Screate_simple(2, labelCharacterDimension, NULL);
+    hid_t labelRunLengthSpace = H5Screate_simple(2, labelRunLengthDimension, NULL);
+    hid_t normalizationSpace = H5Screate_simple(2, normalizationDimension, NULL);
+    hid_t imageSpace = H5Screate_simple(2, imageDimension, NULL);
+
+    hid_t stringType = H5Tcopy(H5T_C_S1);
+    H5Tset_size(stringType, strlen(bamChunk->refSeqName) + 1);
+
+
+    /*
+     *   Write features to files
+     */
+
+    // Write for hap1
+    int64_t totalFeatureFilesH1 =
+            (int64_t) (featureCountH1 / HDF5_FEATURE_SIZE) + (featureCountH1 % HDF5_FEATURE_SIZE == 0 ? 0 : 1);
+    int64_t featureOffsetH1 = 0;
+    if (featureCount >= HDF5_FEATURE_SIZE) {
+        featureOffsetH1 = (int64_t) ((HDF5_FEATURE_SIZE * totalFeatureFilesH1 - featureCountH1) /
+                                   (int64_t) (featureCountH1 / HDF5_FEATURE_SIZE));
+    }
+    for (int64_t featureIndex = 0; featureIndex < totalFeatureFilesH1; featureIndex++) {
+        // get start pos
+        int64_t chunkFeatureStartIdx = (HDF5_FEATURE_SIZE * featureIndex) - (featureOffsetH1 * featureIndex);
+        if (featureIndex + 1 == totalFeatureFilesH1 && featureCount >= HDF5_FEATURE_SIZE) {
+            chunkFeatureStartIdx = featureCount - HDF5_FEATURE_SIZE;
+        }
+
+        // create group
+        char *outputGroup = stString_print("images/%s.H1.%"PRId64, outputFileBase, featureIndex);
+        hid_t group = H5Gcreate(hdf5FileInfo->file, outputGroup, hdf5FileInfo->groupPropertyList, H5P_DEFAULT,
+                                H5P_DEFAULT);
+
+        // write metadata
+        hid_t contigDataset = H5Dcreate(group, "contig", stringType, metadataSpace, H5P_DEFAULT, H5P_DEFAULT,
+                                        H5P_DEFAULT);
+        status |= H5Dwrite(contigDataset, stringType, H5S_ALL, H5S_ALL, H5P_DEFAULT, bamChunk->refSeqName);
+        hid_t contigStartDataset = H5Dcreate(group, "contig_start", hdf5FileInfo->int64Type, metadataSpace, H5P_DEFAULT,
+                                             H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(contigStartDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &bamChunk->chunkBoundaryStart);
+        hid_t contigEndDataset = H5Dcreate(group, "contig_end", hdf5FileInfo->int64Type, metadataSpace, H5P_DEFAULT,
+                                           H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(contigEndDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &bamChunk->chunkBoundaryEnd);
+        hid_t chunkIndexDataset = H5Dcreate(group, "feature_chunk_idx", hdf5FileInfo->int64Type, metadataSpace,
+                                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(chunkIndexDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT, &featureIndex);
+        hid_t haplotypeIndexDataset = H5Dcreate(group, "haplotype", hdf5FileInfo->int64Type, metadataSpace,
+                                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        int64_t haplotype = 1;
+        status |= H5Dwrite(haplotypeIndexDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT, &haplotype);
+
+        // write position info
+        hid_t positionDataset = H5Dcreate(group, "position", hdf5FileInfo->uint32Type, positionSpace, H5P_DEFAULT,
+                                          H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(positionDataset, hdf5FileInfo->uint32Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           positionDataH1[chunkFeatureStartIdx]);
+
+        // write rle data
+        hid_t imageDataset = H5Dcreate(group, "image", hdf5FileInfo->uint8Type, imageSpace, H5P_DEFAULT, H5P_DEFAULT,
+                                       H5P_DEFAULT);
+        status |= H5Dwrite(imageDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           imageDataH1[chunkFeatureStartIdx]);
+        hid_t normalizationDataset = H5Dcreate(group, "normalization", hdf5FileInfo->uint8Type, normalizationSpace,
+                                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(normalizationDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           normalizationDataH1[chunkFeatureStartIdx]);
+
+        // if labels, add all these too
+        if (outputLabels) {
+            hid_t labelCharacterDataset = H5Dcreate(group, "label_base", hdf5FileInfo->uint8Type, labelCharacterSpace,
+                                                    H5P_DEFAULT,
+                                                    H5P_DEFAULT, H5P_DEFAULT);
+            status |= H5Dwrite(labelCharacterDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                               labelCharacterDataH1[chunkFeatureStartIdx]);
+            hid_t labelRunLengthDataset = H5Dcreate(group, "label_run_length", hdf5FileInfo->uint8Type,
+                                                    labelRunLengthSpace,
+                                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+            status |= H5Dwrite(labelRunLengthDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                               labelRunLengthDataH1[chunkFeatureStartIdx]);
+
+            status |= H5Dclose(labelCharacterDataset);
+            status |= H5Dclose(labelRunLengthDataset);
+        }
+
+        // cleanup
+        status |= H5Dclose(contigDataset);
+        status |= H5Dclose(contigStartDataset);
+        status |= H5Dclose(contigEndDataset);
+        status |= H5Dclose(chunkIndexDataset);
+        status |= H5Dclose(haplotypeIndexDataset);
+        status |= H5Dclose(positionDataset);
+        status |= H5Dclose(imageDataset);
+        status |= H5Dclose(normalizationDataset);
+        status |= H5Gclose(group);
+        free(outputGroup);
+    }
+
+    // Write for hap2
+    int64_t totalFeatureFilesH2 =
+            (int64_t) (featureCountH2 / HDF5_FEATURE_SIZE) + (featureCountH2 % HDF5_FEATURE_SIZE == 0 ? 0 : 1);
+    int64_t featureOffsetH2 = 0;
+    if (featureCountH2 >= HDF5_FEATURE_SIZE) {
+        featureOffsetH2 = (int64_t) ((HDF5_FEATURE_SIZE * totalFeatureFilesH2 - featureCountH2) /
+                                   (int64_t) (featureCountH2 / HDF5_FEATURE_SIZE));
+    }
+    for (int64_t featureIndex = 0; featureIndex < totalFeatureFilesH2; featureIndex++) {
+        // get start pos
+        int64_t chunkFeatureStartIdx = (HDF5_FEATURE_SIZE * featureIndex) - (featureOffsetH2 * featureIndex);
+        if (featureIndex + 1 == totalFeatureFilesH2 && featureCount >= HDF5_FEATURE_SIZE) {
+            chunkFeatureStartIdx = featureCount - HDF5_FEATURE_SIZE;
+        }
+
+        // create group
+        char *outputGroup = stString_print("images/%s.H2.%"PRId64, outputFileBase, featureIndex);
+        hid_t group = H5Gcreate(hdf5FileInfo->file, outputGroup, hdf5FileInfo->groupPropertyList, H5P_DEFAULT,
+                                H5P_DEFAULT);
+
+        // write metadata
+        hid_t contigDataset = H5Dcreate(group, "contig", stringType, metadataSpace, H5P_DEFAULT, H5P_DEFAULT,
+                                        H5P_DEFAULT);
+        status |= H5Dwrite(contigDataset, stringType, H5S_ALL, H5S_ALL, H5P_DEFAULT, bamChunk->refSeqName);
+        hid_t contigStartDataset = H5Dcreate(group, "contig_start", hdf5FileInfo->int64Type, metadataSpace, H5P_DEFAULT,
+                                             H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(contigStartDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &bamChunk->chunkBoundaryStart);
+        hid_t contigEndDataset = H5Dcreate(group, "contig_end", hdf5FileInfo->int64Type, metadataSpace, H5P_DEFAULT,
+                                           H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(contigEndDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           &bamChunk->chunkBoundaryEnd);
+        hid_t chunkIndexDataset = H5Dcreate(group, "feature_chunk_idx", hdf5FileInfo->int64Type, metadataSpace,
+                                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(chunkIndexDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT, &featureIndex);
+        hid_t haplotypeIndexDataset = H5Dcreate(group, "haplotype", hdf5FileInfo->int64Type, metadataSpace,
+                                                H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        int64_t haplotype = 2;
+        status |= H5Dwrite(haplotypeIndexDataset, hdf5FileInfo->int64Type, H5S_ALL, H5S_ALL, H5P_DEFAULT, &haplotype);
+
+        // write position info
+        hid_t positionDataset = H5Dcreate(group, "position", hdf5FileInfo->uint32Type, positionSpace, H5P_DEFAULT,
+                                          H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(positionDataset, hdf5FileInfo->uint32Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           positionDataH2[chunkFeatureStartIdx]);
+
+        // write rle data
+        hid_t imageDataset = H5Dcreate(group, "image", hdf5FileInfo->uint8Type, imageSpace, H5P_DEFAULT, H5P_DEFAULT,
+                                       H5P_DEFAULT);
+        status |= H5Dwrite(imageDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           imageDataH2[chunkFeatureStartIdx]);
+        hid_t normalizationDataset = H5Dcreate(group, "normalization", hdf5FileInfo->uint8Type, normalizationSpace,
+                                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        status |= H5Dwrite(normalizationDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                           normalizationDataH2[chunkFeatureStartIdx]);
+
+        // if labels, add all these too
+        if (outputLabels) {
+            hid_t labelCharacterDataset = H5Dcreate(group, "label_base", hdf5FileInfo->uint8Type, labelCharacterSpace,
+                                                    H5P_DEFAULT,
+                                                    H5P_DEFAULT, H5P_DEFAULT);
+            status |= H5Dwrite(labelCharacterDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                               labelCharacterDataH2[chunkFeatureStartIdx]);
+            hid_t labelRunLengthDataset = H5Dcreate(group, "label_run_length", hdf5FileInfo->uint8Type,
+                                                    labelRunLengthSpace,
+                                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+            status |= H5Dwrite(labelRunLengthDataset, hdf5FileInfo->uint8Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                               labelRunLengthDataH2[chunkFeatureStartIdx]);
+
+            status |= H5Dclose(labelCharacterDataset);
+            status |= H5Dclose(labelRunLengthDataset);
+        }
+
+        // cleanup
+        status |= H5Dclose(contigDataset);
+        status |= H5Dclose(contigStartDataset);
+        status |= H5Dclose(contigEndDataset);
+        status |= H5Dclose(chunkIndexDataset);
+        status |= H5Dclose(haplotypeIndexDataset);
+        status |= H5Dclose(positionDataset);
+        status |= H5Dclose(imageDataset);
+        status |= H5Dclose(normalizationDataset);
+        status |= H5Gclose(group);
+        free(outputGroup);
+    }
+
+    // cleanup
+    free(imageDataH1[0]);
+    free(imageDataH2[0]);
+    free(imageDataH1);
+    free(imageDataH2);
+    free(normalizationDataH1[0]);
+    free(normalizationDataH2[0]);
+    free(normalizationDataH1);
+    free(normalizationDataH2);
+    free(positionDataH1[0]);
+    free(positionDataH2[0]);
+    free(positionDataH1);
+    free(positionDataH2);
+    status |= H5Sclose(metadataSpace);
+    status |= H5Sclose(positionSpace);
+    status |= H5Sclose(imageSpace);
+    status |= H5Sclose(normalizationSpace);
+    status |= H5Sclose(labelRunLengthSpace);
+    status |= H5Sclose(labelCharacterSpace);
+    status |= H5Tclose(stringType);
+    if (outputLabels) {
+        free(labelCharacterDataH1[0]);
+        free(labelCharacterDataH2[0]);
+        free(labelCharacterDataH1);
+        free(labelCharacterDataH2);
+        free(labelRunLengthDataH1[0]);
+        free(labelRunLengthDataH2[0]);
+        free(labelRunLengthDataH1);
+        free(labelRunLengthDataH2);
+    }
+
+    if (status) {
+        char *logIdentifier = getLogIdentifier();
+        st_logInfo(" %s Error writing HELEN features to HDF5 files: %s\n", logIdentifier, outputFileBase);
+        free(logIdentifier);
+    }
 }
+
 
 HelenFeatureHDF5FileInfo *HelenFeatureHDF5FileInfo_construct(char *filename) {
     HelenFeatureHDF5FileInfo *fileInfo = st_calloc(1, sizeof(HelenFeatureHDF5FileInfo));

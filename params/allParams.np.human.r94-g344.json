@@ -33,7 +33,7 @@
 		
 		  "chunkSize" : 5000,
 		
-		  "chunkBoundary" : 50,
+		  "chunkBoundary" : 500,
 
 		  "maxDepth" : 64,
 		

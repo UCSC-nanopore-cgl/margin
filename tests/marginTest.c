@@ -14,8 +14,8 @@ char *getSequence(CuTest *testCase, char *outputSequenceFile, char *sequenceName
 
 int64_t
 marginIntegrationTest(char *bamFile, char *referenceFile, char *paramsFile, char *region, char *base, bool verbose,
-                      bool diploid,
-                      bool outputRepeatCounts, bool outputPoaCsv, bool outputReadPhasingCsv) {
+                      bool diploid, bool outputRepeatCounts, bool outputPoaCsv, bool outputReadPhasingCsv,
+                      bool inMemoryBuffers) {
     // Run margin phase
     char *logString = verbose ? "--logLevel DEBUG" : "--logLevel INFO";
     char *regionStr = region == NULL ? stString_print("") : stString_print("--region %s", region);
@@ -23,9 +23,11 @@ marginIntegrationTest(char *bamFile, char *referenceFile, char *paramsFile, char
     char *outputRepeatCountsString = outputRepeatCounts ? "--outputRepeatCounts" : "";
     char *outputPoaCsvString = outputPoaCsv ? "--outputPoaCsv" : "";
     char *outputReadPhasingCsvString = outputReadPhasingCsv ? "--outputReadPhasingCsv" : "";
-    char *command = stString_print("./margin %s %s %s %s %s %s %s %s %s --output %s",
+    char *inMemoryBuffersString = inMemoryBuffers ? "--inMemory" : "";
+    char *command = stString_print("./margin %s %s %s %s %s %s %s %s %s %s --output %s",
                                    bamFile, referenceFile, paramsFile, regionStr, logString, diploidString,
-                                   outputRepeatCountsString, outputPoaCsvString, outputReadPhasingCsvString, base);
+                                   outputRepeatCountsString, outputPoaCsvString, outputReadPhasingCsvString,
+                                   inMemoryBuffersString, base);
     st_logInfo("> Running command: %s\n", command);
 
     int64_t i = st_system(command);
@@ -52,7 +54,7 @@ static stSet *getReadNamesFromPartitionFile(CuTest *testCase, char *readPartitio
     return readNames;
 }
 
-void test_marginIntegration(CuTest *testCase) {
+void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
     char *referenceFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.fasta";
     bool verbose = false;
     char *bamFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.bam ";
@@ -68,7 +70,7 @@ void test_marginIntegration(CuTest *testCase) {
     // Run in diploid mode and get all the file outputs
     st_logInfo("\tTesting diploid polishing on %s\n", bamFile);
     int i = marginIntegrationTest(bamFile, referenceFile, tempParamsFile, region, base, verbose,
-                                  1, 1, 1, 1);
+                                  1, 1, 1, 1, inMemoryBuffers);
     CuAssertTrue(testCase, i == 0);
 
     // outputs
@@ -113,9 +115,18 @@ void test_marginIntegration(CuTest *testCase) {
     stFile_rmrf(tempParamsFile);
 }
 
+void test_marginIntegration(CuTest *testCase) {
+    test_marginIntegration2(testCase, 0);
+}
+
+void test_marginIntegrationInMemory(CuTest *testCase) {
+    test_marginIntegration2(testCase, 1);
+}
+
 CuSuite *marginIntegrationTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
     SUITE_ADD_TEST(suite, test_marginIntegration);
+    SUITE_ADD_TEST(suite, test_marginIntegrationInMemory);
 
     return suite;
 }

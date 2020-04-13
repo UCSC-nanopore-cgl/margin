@@ -50,6 +50,7 @@ void usage() {
     fprintf(stderr, "                                 If --diploid will write out two files: base_poa_hap1.csv and  base_hap1_poa_hap2.csv\n");
     fprintf(stderr, "    -k --outputReadPhasingCsv: Write read phasing in two files: base_reads_hap1.csv and base_reads_hap2.csv , where 'base' is specified by --output\n");
     fprintf(stderr, "                                 Requires --diploid to be specified\n");
+    fprintf(stderr, "    -m --inMemory              : Do stitching using in memory buffers rather than temp files\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -66,6 +67,7 @@ int main(int argc, char *argv[]) {
     bool outputPoaCsv = 0;
     bool outputRepeatCounts = 0;
     bool outputReadPhasing = 0;
+    bool inMemoryBuffers = 0;
 
     // TODO: When done testing, optionally set random seed using st_randomSeed();
 
@@ -91,6 +93,7 @@ int main(int argc, char *argv[]) {
                 {"outputRepeatCounts",   no_argument,       0, 'i'},
                 {"outputPoaCsv",         no_argument,       0, 'j'},
                 {"outputReadPhasingCsv", no_argument,       0, 'k'},
+                {"inMemory",             no_argument,       0, 'm'},
                 {0, 0,                                      0, 0}};
 
         int option_index = 0;
@@ -136,6 +139,9 @@ int main(int argc, char *argv[]) {
                     st_errAbort("Invalid thread count: %d", numThreads);
                 }
                 break;
+            case 'm':
+                inMemoryBuffers = !inMemoryBuffers;
+                break;
             default:
                 usage();
                 return 0;
@@ -176,7 +182,8 @@ int main(int argc, char *argv[]) {
                                                               outputPoaCsv ? outputPoaFile : NULL,
                                                               outputReadPhasing ? outputReadPartitionFile : NULL,
                                                               outputRepeatCounts ? outputRepeatCountFile : NULL,
-                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL);
+                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL,
+                                                              inMemoryBuffers);
 
     // if regionStr is NULL, it will be ignored in construct2
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
@@ -295,7 +302,7 @@ int main(int argc, char *argv[]) {
             stGenomeFragment_destruct(gf);
 		} else {
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
-		}
+        }
 
         // Cleanup
         poa_destruct(poa);
@@ -304,8 +311,12 @@ int main(int argc, char *argv[]) {
         rleString_destruct(reference);
     }
 
-	// Now stitch together the chunks
-	outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
+    // Now stitch together the chunks
+    st_logInfo("Stitching together final output\n");
+    time_t startTime = time(NULL);
+    outputChunkers_stitchOld(outputChunkers, diploid); //, bamChunker->chunkCount);
+    time_t totalTime = time(NULL) - startTime;
+    st_logInfo("Took %f seconds to stitch together final output\n", (float) totalTime);
 
     // Cleanup
     outputChunkers_destruct(outputChunkers);
