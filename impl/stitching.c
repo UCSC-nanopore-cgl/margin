@@ -921,6 +921,9 @@ outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outpu
             st_errAbort("Hap2 not specified but trying to output read partition\n");
         }
     }
+    if (inMemoryBuffers) {
+        st_logInfo("> Saving temporary data to in-memory buffers.\n");
+    }
 
     OutputChunkers *outputChunkers = st_calloc(1, sizeof(OutputChunkers));
     outputChunkers->noOfOutputChunkers = noOfOutputChunkers;

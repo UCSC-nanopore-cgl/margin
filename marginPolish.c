@@ -43,6 +43,7 @@ void usage() {
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
     fprintf(stderr, "    -2 --diploid             : Will perform diploid phasing.\n");
+    fprintf(stderr, "    -k --tempFilesToDisk     : Write temporary files to disk (for --diploid or supplementary output).\n");
 
 # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
@@ -274,6 +275,7 @@ int main(int argc, char *argv[]) {
     int numThreads = 1;
     int64_t maxDepth = -1;
     bool diploid = FALSE;
+    bool inMemory = TRUE;
 
     // for feature generation
     HelenFeatureType helenFeatureType = HFEAT_NONE;
@@ -328,10 +330,11 @@ int main(int argc, char *argv[]) {
 				{ "outputPoaDot", no_argument, 0, 'd'},
 				{ "outputHaplotypeBAM", no_argument, 0, 'm'},
 				{ "outputHaplotypeReads", no_argument, 0, 'n'},
+                { "tempFilesToDisk", no_argument, 0, 'k'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmn", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmnk", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -394,6 +397,9 @@ int main(int argc, char *argv[]) {
             break;
         case '2':
             diploid = TRUE;
+            break;
+        case 'k':
+            inMemory = FALSE;
             break;
         case 'c':
             writeChunkSupplementaryOutput = TRUE;
@@ -570,7 +576,7 @@ int main(int argc, char *argv[]) {
                                                               ? outputReadCsvFile : NULL,
                                                               outputRepeatCounts && !writeChunkSupplementaryOutputOnly
                                                               ? outputRepeatCountFile : NULL,
-                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL, 0);
+                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL, inMemory);
 
     // (may) need to shuffle chunks
     stList *chunkOrder = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
