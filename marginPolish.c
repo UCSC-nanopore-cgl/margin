@@ -814,10 +814,14 @@ int main(int argc, char *argv[]) {
             // helen
             #ifdef _HDF5
             if (helenFeatureType != HFEAT_NONE) {
-                handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
-                        helenHDF5Files, fullFeatureOutput, trueReferenceBam, trueReferenceBamHap2, params,
-                        logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2, readsBelongingToHap1,
-                        readsBelongingToHap2, polishedRleConsensusH1, polishedRleConsensusH2, rleReference);
+                PoaFeature_handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker,
+                                                      splitWeightMaxRunLength,
+                                                      helenHDF5Files, fullFeatureOutput, trueReferenceBam,
+                                                      trueReferenceBamHap2, params,
+                                                      logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2,
+                                                      readsBelongingToHap1,
+                                                      readsBelongingToHap2, polishedRleConsensusH1,
+                                                      polishedRleConsensusH2, rleReference);
             }
             #endif
 
@@ -854,9 +858,10 @@ int main(int argc, char *argv[]) {
             RleString *polishedRleConsensus = rleString_copy(poa->refString);
             polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
-                handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
-                                    helenHDF5Files, fullFeatureOutput, trueReferenceBam, params, logIdentifier, chunkIdx,
-                                    bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
+                PoaFeature_handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
+                                               helenHDF5Files, fullFeatureOutput, trueReferenceBam, params,
+                                               logIdentifier, chunkIdx,
+                                               bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
 
             }
             free(polishedConsensusString);

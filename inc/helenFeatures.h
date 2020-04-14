@@ -115,38 +115,55 @@ void PoaFeature_ChannelRleWeight_destruct(PoaFeatureChannelRleWeight *feature);
 PoaFeatureDiploidRleWeight *PoaFeature_DiploidRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos, int64_t maxRunLength);
 void PoaFeature_DiploidRleWeight_destruct(PoaFeatureDiploidRleWeight *feature);
 
-stList *poa_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads);
+stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads);
 
-stList *poa_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, int64_t maxRunLength);
+stList *PoaFeature_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, int64_t maxRunLength);
 
-stList *poa_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, int64_t maxRunLength);
-stList *poa_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, stSet *onHapReads, const int64_t maxRunLength);
+stList *PoaFeature_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, int64_t maxRunLength);
+stList *PoaFeature_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, stSet *onHapReads,
+                                               const int64_t maxRunLength);
 
-void handleHelenFeatures(HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
-                         int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
-                         char *trueReferenceBam,
-                         Params *params, char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, Poa *poa,
-                         stList *bamChunkReads,
-                         char *polishedConsensusString, RleString *polishedRleConsensus);
+void PoaFeature_handleHelenFeatures(HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
+                                    int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
+                                    char *trueReferenceBam,
+                                    Params *params, char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, Poa *poa,
+                                    stList *bamChunkReads,
+                                    char *polishedConsensusString, RleString *polishedRleConsensus);
 
-void handleDiploidHelenFeatures(HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
-        int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
-        char *trueReferenceBamA, char *trueReferenceBamB, Params *params,
-        char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
-        stSet *readsInH1, stSet *readsInH2, RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
-        RleString *originalReference);
+void PoaFeature_handleDiploidHelenFeatures(HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
+                                           int64_t splitWeightMaxRunLength, void **helenHDF5Files,
+                                           bool fullFeatureOutput,
+                                           char *trueReferenceBamA, char *trueReferenceBamB, Params *params,
+                                           char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk,
+                                           stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
+                                           stSet *readsInH1, stSet *readsInH2, RleString *polishedRleConsensusH1,
+                                           RleString *polishedRleConsensusH2,
+                                           RleString *originalReference);
 
-void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkReads,
-                            char *outputFileBase, BamChunk *bamChunk, stList *trueRefAlignment,
-                            RleString *consensusRleString,
-                            RleString *trueRefRleString, bool fullFeatureOutput, int64_t splitWeightMaxRunLength,
-                            HelenFeatureHDF5FileInfo **helenHDF5Files);
+void PoaFeature_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkReads,
+                                   char *outputFileBase, BamChunk *bamChunk, stList *trueRefAlignment,
+                                   RleString *consensusRleString,
+                                   RleString *trueRefRleString, bool fullFeatureOutput, int64_t splitWeightMaxRunLength,
+                                   HelenFeatureHDF5FileInfo **helenHDF5Files);
 
-void poa_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads, char *outputFileBase,
-        BamChunk *bamChunk, Poa *poaH1, Poa *poaH2, stSet *readsInH1, stSet *readsInH2,
-        stList *trueRefAlignmentToH1, stList *trueRefAlignmentToH2,
-        RleString *trueRefRleStringToH1, RleString *trueRefRleStringToH2,
-        int64_t maxRunLength, HelenFeatureHDF5FileInfo** helenHDF5Files);
+void PoaFeature_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads, char *outputFileBase,
+                                          BamChunk *bamChunk, Poa *poaH1, Poa *poaH2, stSet *readsInH1,
+                                          stSet *readsInH2,
+                                          stList *trueRefAlignmentToH1, stList *trueRefAlignmentToH2,
+                                          RleString *trueRefRleStringToH1, RleString *trueRefRleStringToH2,
+                                          int64_t maxRunLength, HelenFeatureHDF5FileInfo **helenHDF5Files);
+
+
+typedef struct _HelenFeatureTruthAlignment HelenFeatureTruthAlignment;
+struct _HelenFeatureTruthAlignment {
+    int64_t startPosIncl;
+    int64_t endPosExcl;
+    stList *alignedPairs;
+};
+
+HelenFeatureTruthAlignment *HelenFeatureTruthAlignment_construct(int64_t startPosInclusive, int64_t endPosExclusive,
+                                                                 stList *alignedPairs);
+HelenFeatureTruthAlignment *HelenFeatureTruthAlignment_destruct(HelenFeatureTruthAlignment *hfta);
 
 stList *alignConsensusAndTruthSSW(char *consensusStr, char *truthStr, uint16_t *score);
 stList *alignConsensusAndTruthCPECAN(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams);
@@ -155,31 +172,24 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
                                                  PolishParams *polishParams);
 stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleString *truthStr, double *score,
                                                 PolishParams *polishParams);
-void poa_annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featureType, stList *trueRefAlignment,
-                                        RleString *trueRefRleString, int64_t *firstMatchedFeaure,
-                                        int64_t *lastMatchedFeature);
+void annotateHelenFeaturesWithTruth(stList *features, HelenFeatureType featureType, stList *trueRefAlignment,
+                                    RleString *trueRefRleString, int64_t *firstMatchedFeaure,
+                                    int64_t *lastMatchedFeature);
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl);
 void printMEAAlignment2(RleString *X, RleString *Y, stList *alignedPairs);
 
-void
-writeSimpleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
+void writeSimpleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
                                    BamChunk *bamChunk, bool outputLabels, stList *features,
                                    int64_t featureStartIdx, int64_t featureEndIdxInclusive);
 
-void
-writeSplitRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
+void writeSplitRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
                                      BamChunk *bamChunk, bool outputLabels, stList *features,
                                      int64_t featureStartIdx, int64_t featureEndIdxInclusive, int64_t maxRunLength);
 
-void
-writeChannelRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
+void writeChannelRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo *hdf5FileInfo, char *outputFileBase,
                                        BamChunk *bamChunk, bool outputLabels, stList *features, int64_t featureStartIdx,
                                        int64_t featureEndIdxInclusive, const int64_t maxRunLength);
-
-void writeChannelRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo* hdf5FileInfo, char *outputFileBase,
-        BamChunk *bamChunk, bool outputLabels, stList *features, int64_t featureStartIdx,
-        int64_t featureEndIdxInclusive, int64_t maxRunLength);
 
 void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo* hdf5FileInfo,
                                             char *outputFileBase, BamChunk *bamChunk, bool outputLabels,
