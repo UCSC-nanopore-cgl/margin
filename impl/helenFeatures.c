@@ -376,7 +376,7 @@ void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, Rle
     }
 
     // debugging
-    if (st_getLogLevel() <= info) {
+    if (st_getLogLevel() <= debug) {
         st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
         printMEAAlignment2(polishedRleConsensusH1, *trueRefRleStringToHap1, *trueRefAlignmentToHap1);
         char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
