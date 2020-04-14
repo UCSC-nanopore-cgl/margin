@@ -1066,7 +1066,7 @@ void writeReadPartition(stHash *readsInHap, FILE *fh) {
     /*
      * Write out the reads for a haplotype in the given file
      */
-    fprintf(fh, "READ_NAME,LOG_PROB_OF_BEING_IN_PARTITION\n");
+    fprintf(fh, "READ_NAME,PHRED_SCORE_OF_BEING_IN_PARTITION\n");
     stHashIterator *it = stHash_getIterator(readsInHap);
     char *readName;
     while ((readName = stHash_getNext(it)) != NULL) {
@@ -1122,7 +1122,6 @@ void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
 
         // Set the flag determining if this is the start of a new sequence
         chunk->startOfSequence = !stString_eq(pChunk->seqName, chunk->seqName);
-
 
         if (chunk->startOfSequence) { // Reset the lengths of the new sequence output
             lengthOfSequenceOutputSoFarHap1 = 0;

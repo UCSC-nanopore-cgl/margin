@@ -169,7 +169,7 @@ struct _stReference {
 	char *referenceName;
 	uint64_t length; // Number of sites
 	uint64_t totalAlleles; // Total number of alleles across all sites
-	stSite *sites;
+    stSite *sites;
 };
 
 void stReference_destruct(stReference *ref);
@@ -179,14 +179,16 @@ void stReference_destruct(stReference *ref);
  * Struct for profile sequence
  */
 
+#define PROFILE_PROB_SCALAR 30.0
+
 struct _stProfileSeq {
-	stReference *ref;
-	char *readId;
-	uint64_t refStart; // The first site in the reference
-	uint64_t length; // Number of reference sites
-	uint64_t alleleOffset; // The index of the first allele in this sequence
-	// in a sequence of all alleles in the reference, ordered first by site then
-	// by order in the site.
+    stReference *ref;
+    char *readId;
+    uint64_t refStart; // The first site in the reference
+    uint64_t length; // Number of reference sites
+    uint64_t alleleOffset; // The index of the first allele in this sequence
+    // in a sequence of all alleles in the reference, ordered first by site then
+    // by order in the site.
 
 	// The log-probability of alleles, as specified by uint8_t
 	// Each is expressed as an 8 bit unsigned int, with the value from 0 to -255

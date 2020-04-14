@@ -1104,12 +1104,12 @@ stHash *bubbleGraph_getProfileSeqs(BubbleGraph *bg, stReference *ref) {
                 totalLogProb = stMath_logAddExact(totalLogProb, b->alleleReadSupports[b->readNo * k + j]);
             }
 
-            // Set prob as diff to most probable allele
+            // Normalize prob by totalLogProb
             uint64_t alleleOffset = b->alleleOffset - pSeq->alleleOffset;
             for (uint64_t k = 0; k < b->alleleNo; k++) {
                 float logProb = b->alleleReadSupports[b->readNo * k + j];
                 assert(logProb <= totalLogProb);
-                int64_t l = roundf(30.0 * (totalLogProb - logProb));
+                int64_t l = roundf(PROFILE_PROB_SCALAR * (totalLogProb - logProb));
                 assert(l >= 0);
                 pSeq->profileProbs[alleleOffset + k] = l > 255 ? 255 : l;
             }
@@ -1143,7 +1143,8 @@ stReference *bubbleGraph_getReference(BubbleGraph *bg, char *refName, Params *pa
         for (uint64_t j = 0; j < b->alleleNo; j++) {
             for (uint64_t k = 0; k < b->alleleNo; k++) {
                 s->substitutionLogProbs[j * b->alleleNo + k] =
-                        j == k ? 0 : roundf(-log(params->polishParams->hetSubstitutionProbability) * 30.0); //l;
+                        j == k ? 0 : roundf(
+                                -log(params->polishParams->hetSubstitutionProbability) * PROFILE_PROB_SCALAR); //l;
             }
         }
     }
