@@ -456,19 +456,30 @@ int main(int argc, char *argv[]) {
             st_errAbort("BAM does not appear to be indexed: %s\n", bamInFile);
         }
         free(idx);
-    } else if (access(referenceFastaFile, R_OK) != 0) {
+    }
+    if (access(referenceFastaFile, R_OK) != 0) {
         st_errAbort("Could not read from reference fastafile: %s\n", referenceFastaFile);
-    } else if (access(paramsFile, R_OK) != 0) {
+    }
+    if (access(paramsFile, R_OK) != 0) {
         st_errAbort("Could not read from params file: %s\n", paramsFile);
-    } else if (trueReferenceBam != NULL && access(trueReferenceBam, R_OK) != 0) {
-        st_errAbort("Could not read from truth file: %s\n", trueReferenceBam);
+    }
+    if (trueReferenceBam != NULL) {
+        if (access(trueReferenceBam, R_OK) != 0) {
+            st_errAbort("Could not read from truth file: %s\n", trueReferenceBam);
+        }
         char *idx = stString_print("%s.bai", trueReferenceBam);
         if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBam);
         }
         free(idx);
-    } else if (trueReferenceBamHap2 != NULL && access(trueReferenceBamHap2, R_OK ) != 0 ) {
-        st_errAbort("Could not read from truth h2 file: %s\n", trueReferenceBamHap2);
+    }
+    if (trueReferenceBamHap2 != NULL) {
+        if (access(trueReferenceBamHap2, R_OK ) != 0 ) {
+            st_errAbort("Could not read from truth h2 file: %s\n", trueReferenceBamHap2);
+        }
+        if (stString_eq(trueReferenceBam, trueReferenceBamHap2)) {
+            st_errAbort("Truth H1 and H2 files are the same: %", trueReferenceBam);
+        }
         char *idx = stString_print("%s.bai", trueReferenceBamHap2);
         if (access(idx, R_OK ) != 0 ) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBamHap2);
@@ -806,8 +817,7 @@ int main(int argc, char *argv[]) {
                 handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
                         helenHDF5Files, fullFeatureOutput, trueReferenceBam, trueReferenceBamHap2, params,
                         logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2, readsBelongingToHap1,
-                        readsBelongingToHap2, polishedConsensusStringH1, polishedConsensusStringH2,
-                        polishedRleConsensusH1, polishedRleConsensusH2);
+                        readsBelongingToHap2, polishedRleConsensusH1, polishedRleConsensusH2, rleReference);
             }
             #endif
 

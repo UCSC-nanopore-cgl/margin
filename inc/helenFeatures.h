@@ -133,8 +133,8 @@ void handleDiploidHelenFeatures(HelenFeatureType helenFeatureType, BamChunker *t
         int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
         char *trueReferenceBamA, char *trueReferenceBamB, Params *params,
         char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
-        stSet *readsInH1, stSet *readsInH2, char *polishedConsensusStringH1, char *polishedConsensusStringH2,
-        RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2);
+        stSet *readsInH1, stSet *readsInH2, RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+        RleString *originalReference);
 
 void poa_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamChunkReads,
                             char *outputFileBase, BamChunk *bamChunk, stList *trueRefAlignment,

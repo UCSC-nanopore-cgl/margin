@@ -472,8 +472,8 @@ void handleDiploidHelenFeatures(
 
         // chunk params
         char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, stList *bamChunkReads, Poa *poaH1, Poa *poaH2,
-        stSet *readsInH1BCR, stSet *readsInH2BCR, char *polishedConsensusStringH1, char *polishedConsensusStringH2,
-        RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2) {
+        stSet *readsInH1BCR, stSet *readsInH2BCR, RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+        RleString *originalReference) {
 
     st_logInfo(">%s Performing diploid feature generation for chunk.\n", logIdentifier);
 
@@ -507,11 +507,37 @@ void handleDiploidHelenFeatures(
         BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
         trueRefBamChunk->parent = trueReferenceBamChunker;
         // get true ref as "read"
-        uint32_t trueAlignmentCountA = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReadsA, unusedA);
-        uint32_t trueAlignmentCountB = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReadsB, unusedB);
+        uint32_t trueAlignmentCountA = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReadsA, unusedA);
+        uint32_t trueAlignmentCountB = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReadsB, unusedB);
 
         // poor man's "do we have a unique alignment"
-        if (trueAlignmentCountA == 1 && trueAlignmentCountB == 1) {
+        if (trueAlignmentCountA != 1 || trueAlignmentCountB != 1) {
+            st_logInfo(" %s Found %"PRId64", %"PRId64" true reference alignments for feature generation.\n",
+                       logIdentifier, trueAlignmentCountA, trueAlignmentCountB);
+            //todo maybe wrap in a if loglevel <= debug?
+            stList *alignmentDesc = stList_construct3(0, free);
+            for (int i = 0; i < stList_length(unusedA); i++) {
+                stList *truthAlign = stList_get(unusedA, i);
+                stList_append(alignmentDesc, stList_length(truthAlign) == 0 ? stString_copy("A,0-0,0") :
+                                             stString_print("A,%"PRId64"-%"PRId64",%"PRId64,
+                                                            stIntTuple_get(stList_get(truthAlign,0), 0),
+                                                            stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
+                                                            ((BamChunkRead*)stList_get(trueRefReadsA, i))->rleRead->length));
+            }
+            for (int i = 0; i < stList_length(unusedB); i++) {
+                stList *truthAlign = stList_get(unusedB, i);
+                stList_append(alignmentDesc, stList_length(truthAlign) == 0 ? stString_copy("B,0-0,0") :
+                                             stString_print("B,%"PRId64"-%"PRId64",%"PRId64,
+                                                            stIntTuple_get(stList_get(truthAlign,0), 0),
+                                                            stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
+                                                            ((BamChunkRead*)stList_get(trueRefReadsB, i))->rleRead->length));
+            }
+            char *alnSum = stString_join2("; ", alignmentDesc);
+            st_logInfo(" %s   Alignment summary: %s\n", logIdentifier, alnSum);
+            free(alnSum);
+            stList_destruct(alignmentDesc);
+
+        } else {
             // get reads
             BamChunkRead *trueRefReadA = stList_get(trueRefReadsA, 0);
             BamChunkRead *trueRefReadB = stList_get(trueRefReadsB, 0);
