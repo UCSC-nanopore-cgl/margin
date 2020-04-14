@@ -1512,21 +1512,19 @@ stList *filterPairwiseAlignmentToMakePairsOrdered(stList *alignedPairs, SymbolSt
  * Code to create quick and dirty alignment anchors.
  */
 
-#define KMER_SIZE 10 // that's an alphabet of 4^10 ~= 1x10^6 for DNA/RNA, small enough it work okay
-// for noisy long reads but could be increased to tweak stringency of anchor pairs
+#define KMER_SIZE 20 // that's an alphabet of 4^20 ~= 1x10^12 for DNA/RNA
 
 uint64_t kmerKey(const void *k) {
     uint64_t hash = 0; //5381;
-    char *cA = (char *) k;
-    int c;
-    for (int64_t i = 0; i < KMER_SIZE && (c = *cA++) != '\0'; i++) {
-        hash = c + (hash << 6) + (hash << 16) - hash;
+    Symbol *cA = (Symbol *) k;
+    for (int64_t i = 0; i < KMER_SIZE; i++) {
+        hash = cA[i] + (hash << 6) + (hash << 16) - hash;
     }
     return hash;
 }
 
 int kmerEqualKey(const void *key1, const void *key2) {
-    char *cA = (char *) key1, *cA2 = (char *) key2;
+    Symbol *cA = (Symbol *) key1, *cA2 = (Symbol *) key2;
     for (int64_t i = 0; i < KMER_SIZE; i++) {
         if (cA[i] != cA2[i]) {
             return 0;
@@ -1539,9 +1537,16 @@ stHash *getKmers(SymbolString seq, uint64_t *l) {
     stHash *kmerOccurrences = stHash_construct3(kmerKey, kmerEqualKey, NULL, NULL);
     for (int64_t i = 0; i < seq.length - KMER_SIZE + 1; i++) {
         l[i] = i;
+        if (stHash_search(kmerOccurrences, &(seq.sequence[i])) != NULL) {
+            st_uglyf("Got k-mer collision: ");
+            for (int64_t j = 0; j < KMER_SIZE; j++) {
+                st_uglyf("%c", seq.sequence[i + j]);
+            }
+            st_uglyf("\n");
+        }
         stHash_insert(kmerOccurrences, &(seq.sequence[i]),
                       &(l[i])); // For speed and simplicity this only allows for one entry per k-mer
-        // for KMER_SIZE >= 10, this should not be a big deal as collisions should be rare
+        // for KMER_SIZE >= 20, this should not be a big deal as collisions should be rare
     }
     return kmerOccurrences;
 }
@@ -1615,4 +1620,3 @@ stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t a
 
     return anchorPairs;
 }
-
