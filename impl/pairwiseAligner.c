@@ -1537,13 +1537,6 @@ stHash *getKmers(SymbolString seq, uint64_t *l) {
     stHash *kmerOccurrences = stHash_construct3(kmerKey, kmerEqualKey, NULL, NULL);
     for (int64_t i = 0; i < seq.length - KMER_SIZE + 1; i++) {
         l[i] = i;
-        if (stHash_search(kmerOccurrences, &(seq.sequence[i])) != NULL) {
-            st_uglyf("Got k-mer collision: ");
-            for (int64_t j = 0; j < KMER_SIZE; j++) {
-                st_uglyf("%c", seq.sequence[i + j]);
-            }
-            st_uglyf("\n");
-        }
         stHash_insert(kmerOccurrences, &(seq.sequence[i]),
                       &(l[i])); // For speed and simplicity this only allows for one entry per k-mer
         // for KMER_SIZE >= 20, this should not be a big deal as collisions should be rare
