@@ -288,7 +288,7 @@ BamChunker *bamChunker_copyConstruct(BamChunker *toCopy) {
 }
 
 void bamChunker_destruct(BamChunker *bamChunker) {
-    free(bamChunker->bamFile);
+    if (bamChunker->bamFile != NULL) free(bamChunker->bamFile);
     stList_destruct(bamChunker->chunks);
     free(bamChunker);
 }

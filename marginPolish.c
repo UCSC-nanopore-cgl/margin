@@ -282,7 +282,6 @@ int main(int argc, char *argv[]) {
     bool setDefaultHelenFeature = false;
     char *trueReferenceBam = NULL;
     char *trueReferenceBamHap2 = NULL;
-    BamChunker *trueReferenceChunker = NULL;
     bool fullFeatureOutput = FALSE;
     int64_t splitWeightMaxRunLength = 0;
     void **helenHDF5Files = NULL;
@@ -561,12 +560,13 @@ int main(int argc, char *argv[]) {
     }
 
     // for feature generation
-    BamChunker *trueReferenceBamChunker = NULL;
-    if (trueReferenceBam != NULL) {
-        trueReferenceBamChunker = bamChunker_copyConstruct(bamChunker);
-        free(trueReferenceBamChunker->bamFile);
-        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
-    }
+    //TODO remove
+//    BamChunker *trueReferenceBamChunker = NULL;
+//    if (trueReferenceBam != NULL) {
+//        trueReferenceBamChunker = bamChunker_copyConstruct(bamChunker);
+//        free(trueReferenceBamChunker->bamFile);
+//        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
+//    }
 #ifdef _HDF5
     if (helenFeatureType != HFEAT_NONE) {
         helenHDF5Files = (void **) openHelenFeatureHDF5FilesByThreadCount(outputBase, numThreads);
@@ -814,7 +814,7 @@ int main(int argc, char *argv[]) {
             // helen
             #ifdef _HDF5
             if (helenFeatureType != HFEAT_NONE) {
-                PoaFeature_handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker,
+                PoaFeature_handleDiploidHelenFeatures(helenFeatureType,
                                                       splitWeightMaxRunLength,
                                                       helenHDF5Files, fullFeatureOutput, trueReferenceBam,
                                                       trueReferenceBamHap2, params,
@@ -858,7 +858,7 @@ int main(int argc, char *argv[]) {
             RleString *polishedRleConsensus = rleString_copy(poa->refString);
             polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
-                PoaFeature_handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
+                PoaFeature_handleHelenFeatures(helenFeatureType, splitWeightMaxRunLength,
                                                helenHDF5Files, fullFeatureOutput, trueReferenceBam, params,
                                                logIdentifier, chunkIdx,
                                                bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);

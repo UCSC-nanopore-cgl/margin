@@ -160,9 +160,8 @@ int PoaFeature_DiploidRleWeight_gapIndex(int64_t maxRunLength, bool forward) {
 
 void PoaFeature_handleHelenFeatures(
         // global params
-        HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
-        int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
-        char *trueReferenceBam, Params *params,
+        HelenFeatureType helenFeatureType, int64_t splitWeightMaxRunLength, void **helenHDF5Files,
+        bool fullFeatureOutput, char *trueReferenceBam, Params *params,
 
         // chunk params
         char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, Poa *poa, stList *bamChunkReads,
@@ -206,6 +205,9 @@ void PoaFeature_handleHelenFeatures(
         stList *unused = stList_construct3(0, (void (*)(void *)) stList_destruct);
         // construct new chunk
         BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
+        BamChunker *trueReferenceBamChunker = bamChunker_copyConstruct(bamChunk->parent);
+        free(trueReferenceBamChunker->bamFile);
+        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
         trueRefBamChunk->parent = trueReferenceBamChunker;
         // get true ref as "read"
         uint32_t trueAlignmentCount = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReads, unused);
@@ -271,6 +273,7 @@ void PoaFeature_handleHelenFeatures(
         stList_destruct(trueRefReads);
         stList_destruct(unused);
         bamChunk_destruct(trueRefBamChunk);
+        bamChunker_destruct(trueReferenceBamChunker);
     }
 
     // either write it, or note that we failed to find a valid reference alignment
@@ -282,8 +285,8 @@ void PoaFeature_handleHelenFeatures(
         // write the actual features (type dependent)
         PoaFeature_writeHelenFeatures(helenFeatureType, poa, bamChunkReads, helenFeatureOutfileBase,
                                       bamChunk, trueRefAlignment, polishedRleConsensus, trueRefRleString,
-                                      fullFeatureOutput,
-                                      splitWeightMaxRunLength, (HelenFeatureHDF5FileInfo **) helenHDF5Files);
+                                      fullFeatureOutput, splitWeightMaxRunLength,
+                                      (HelenFeatureHDF5FileInfo **) helenHDF5Files);
 
         // write the polished chunk in fasta format
         if (fullFeatureOutput) {
@@ -465,9 +468,200 @@ void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleStri
     }
 }
 
+void alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleConsensusH1,
+        RleString *polishedRleConsensusH2, stList *truthAlignmentsH1, stList *truthAlignmentsH2,
+        stList *truthAlignmentDescriptors, Params *params, char *alignmentDesc, char *logIdentifier) {
+
+    // align to both haplotypes
+    double score_consensusH1, score_consensusH2;
+    stList *alignToH1 = alignConsensusAndTruthRLEWithKmerAnchors(polishedRleConsensusH1, trueRefRleString,
+                                                                 &score_consensusH1, params->polishParams);
+    stList *alignToH2 = alignConsensusAndTruthRLEWithKmerAnchors(polishedRleConsensusH2, trueRefRleString,
+                                                                 &score_consensusH2, params->polishParams);
+
+    // for logging
+    char *newAlignmentDesc;
+
+    if (score_consensusH1 == score_consensusH2) {
+        // no good alignment
+        newAlignmentDesc = stString_print("-0_%s", *alignmentDesc);
+        stList_destruct(alignToH1);
+        stList_destruct(alignToH2);
+
+    } else if (score_consensusH1 > score_consensusH2) {
+        // alignment better to h1
+        if (st_getLogLevel() <= debug) {
+            char *truthRaw = rleString_expand(trueRefRleString);
+            st_logInfo(" %s RAW Truth:\n    %s\n\n", logIdentifier, truthRaw);
+            st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
+            printMEAAlignment2(polishedRleConsensusH1, trueRefRleString, truthAlignmentsH1);
+            free(truthRaw);
+        }
+
+        double alnLengthRatio = 1.0 * stList_length(alignToH1) / trueRefRleString->length;
+        if (alnLengthRatio < .95) {
+            st_logInfo(" %s True reference alignment failed for -1_%s, aligned pairs to length ratio : %f\n",
+                       logIdentifier, alignmentDesc, alnLengthRatio);
+            newAlignmentDesc = stString_print("-1_%s", *alignmentDesc);
+            stList_destruct(alignToH1);
+        } else {
+            newAlignmentDesc = stString_print("+1_%s", *alignmentDesc);
+            int64_t startAlign = stIntTuple_get(stList_get(alignToH1, 0), 0);
+            int64_t endAlign = stIntTuple_get(stList_get(alignToH1, stList_length(alignToH1) - 1), 0);
+            stList_append(truthAlignmentsH1, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH1,
+                                                                                  rleString_copy(trueRefRleString)));
+        }
+        stList_destruct(alignToH2);
+
+    } else {
+        // alignment better to h2
+        if (st_getLogLevel() <= debug) {
+            char *truthRaw = rleString_expand(trueRefRleString);
+            st_logInfo(" %s RAW Truth:\n    %s\n\n", logIdentifier, truthRaw);
+            st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
+            printMEAAlignment2(polishedRleConsensusH2, trueRefRleString, truthAlignmentsH2);
+            free(truthRaw);
+        }
+
+        double alnLengthRatio = 1.0 * stList_length(alignToH2) / trueRefRleString->length;
+        if (alnLengthRatio < .95) {
+            st_logInfo(" %s True reference alignment failed for -2_%s, aligned pairs to length ratio : %f\n",
+                       logIdentifier, alignmentDesc, alnLengthRatio);
+            newAlignmentDesc = stString_print("-2_%s", *alignmentDesc);
+            stList_destruct(alignToH2);
+        } else {
+            newAlignmentDesc = stString_print("+2_%s", *alignmentDesc);
+            int64_t startAlign = stIntTuple_get(stList_get(alignToH2, 0), 0);
+            int64_t endAlign = stIntTuple_get(stList_get(alignToH2, stList_length(alignToH2) - 1), 0);
+            stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign,
+                                                                                  alignToH2,
+                                                                                  rleString_copy(trueRefRleString)));
+        }
+
+        stList_destruct(alignToH1);
+    }
+
+    // save to list
+    stList_append(truthAlignmentDescriptors, newAlignmentDesc);
+}
+
+bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *trueReferenceBamB, BamChunk *bamChunk,
+        RleString *originalReference,
+        RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
+        stList *finalAlignmentsToH1, stList *finalAlignmentsToH2,
+        Params *params, char *logIdentifier) {
+
+    // get alignment of true ref to assembly
+    stList *truthReadsA = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+    stList *truthReadsB = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+    stList *truthOriginalRefAlignA = stList_construct3(0, (void (*)(void *)) stList_destruct);
+    stList *truthOriginalRefAlignB = stList_construct3(0, (void (*)(void *)) stList_destruct);
+    // construct new chunk
+    BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
+    BamChunker *trueReferenceBamChunker = bamChunker_copyConstruct(bamChunk->parent);
+    free(trueReferenceBamChunker->bamFile);
+    trueRefBamChunk->parent = trueReferenceBamChunker;
+    // get true ref as reads
+    trueReferenceBamChunker->bamFile = trueReferenceBamA;
+    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsA, truthOriginalRefAlignA);
+    trueReferenceBamChunker->bamFile = trueReferenceBamB;
+    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsB, truthOriginalRefAlignB);
+    trueReferenceBamChunker->bamFile = NULL;
+    // tracking
+    stList *truthAlignmentDescriptors = stList_construct3(0, free);
+    stList *truthAlignmentsH1 = stList_construct();
+    stList *truthAlignmentsH2 = stList_construct();
+
+    //logging
+    if (st_getLogLevel() <= debug) {
+        char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
+        char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
+        st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
+        st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH1);
+        free(consensusRawH1);
+        free(consensusRawH2);
+    }
+
+    // align truth reads A
+    for (int64_t i = 0; i < stList_length(truthReadsA); i++) {
+        BamChunkRead *trueRefBamChunkReadA = stList_get(truthReadsA, i);
+        RleString *trueRefRleStringA = trueRefBamChunkReadA->rleRead;
+        stList *truthAlign = stList_get(truthOriginalRefAlignA, i);
+
+        // for logging
+        char *alignmentDesc = stList_length(truthAlign) == 0 ? stString_copy("A,0-0,0") :
+                              stString_print("A,%"PRId64"-%"PRId64",%"PRId64, stIntTuple_get(stList_get(truthAlign, 0), 0),
+                                             stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
+                                             trueRefRleStringA->length);
+
+        // save alignment
+        alignToBestConsensus(trueRefRleStringA, polishedRleConsensusH1, polishedRleConsensusH2,
+                             truthAlignmentsH1, truthAlignmentsH2, truthAlignmentDescriptors, params, alignmentDesc, logIdentifier);
+        free(alignmentDesc); //copied in a2BC before saving
+    }
+
+    // align truthReads B
+    for (int64_t i = 0; i < stList_length(truthReadsB); i++) {
+        BamChunkRead *trueRefBamChunkReadB = stList_get(truthReadsB, i);
+        RleString *trueRefRleStringB = trueRefBamChunkReadB->rleRead;
+        stList *truthAlign = stList_get(truthOriginalRefAlignB, i);
+
+        // for logging
+        char *alignmentDesc = stList_length(truthAlign) == 0 ? stString_copy("B,0-0,0") :
+                              stString_print("B,%"PRId64"-%"PRId64",%"PRId64, stIntTuple_get(stList_get(truthAlign, 0), 0),
+                                             stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
+                                             trueRefRleStringB->length);
+
+        // save alignment
+        alignToBestConsensus(trueRefRleStringB, polishedRleConsensusH1, polishedRleConsensusH2,
+                             truthAlignmentsH1, truthAlignmentsH2, truthAlignmentDescriptors, params, alignmentDesc, logIdentifier);
+        free(alignmentDesc); //copied in a2BC before saving
+    }
+
+    // did we find a viable alignment
+    bool foundValidAlignment = FALSE;
+
+    //filter for non-overlap
+    stList_sort(truthAlignmentsH1, HelenFeatureTruthAlignment_cmp);
+    for (int64_t i = 0; i < stList_length(truthAlignmentsH1); i++) {
+        HelenFeatureTruthAlignment *hfta = stList_get(truthAlignmentsH1, i);
+        if (stList_length(finalAlignmentsToH1) == 0 ||
+            ((HelenFeatureTruthAlignment*)stList_peek(finalAlignmentsToH1))->endPosExcl <= hfta->startPosIncl) {
+            stList_append(finalAlignmentsToH1, hfta);
+            foundValidAlignment = TRUE;
+        } else {
+            HelenFeatureTruthAlignment_destruct(hfta);
+        }
+    }
+
+    stList_sort(truthAlignmentsH2, HelenFeatureTruthAlignment_cmp);
+    for (int64_t i = 0; i < stList_length(truthAlignmentsH2); i++) {
+        HelenFeatureTruthAlignment *hfta = stList_get(truthAlignmentsH2, i);
+        if (stList_length(finalAlignmentsToH2) == 0 ||
+            ((HelenFeatureTruthAlignment*)stList_peek(finalAlignmentsToH2))->endPosExcl <= hfta->startPosIncl) {
+            stList_append(finalAlignmentsToH2, hfta);
+            foundValidAlignment = TRUE;
+        } else {
+            HelenFeatureTruthAlignment_destruct(hfta);
+        }
+    }
+
+    //cleanump
+    stList_destruct(truthAlignmentsH1);
+    stList_destruct(truthAlignmentsH2);
+    stList_destruct(truthReadsA);
+    stList_destruct(truthOriginalRefAlignA);
+    stList_destruct(truthReadsB);
+    stList_destruct(truthOriginalRefAlignB);
+    bamChunk_destruct(trueRefBamChunk);
+    bamChunker_destruct(trueReferenceBamChunker);
+
+    return foundValidAlignment;
+}
+
 void PoaFeature_handleDiploidHelenFeatures(
         // global params
-        HelenFeatureType helenFeatureType, BamChunker *trueReferenceBamChunker,
+        HelenFeatureType helenFeatureType,
         int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
         char *trueReferenceBamA, char *trueReferenceBamB, Params *params,
 
@@ -490,90 +684,21 @@ void PoaFeature_handleDiploidHelenFeatures(
             st_errAbort("Unhandled HELEN feature type!\n");
     }
 
-    // necessary to annotate poa with truth (if true reference BAM has been specified)
-    stList *trueRefAlignmentToHap1 = NULL;
-    stList *trueRefAlignmentToHap2 = NULL;
-    RleString *trueRefRleStringToHap1 = NULL;
-    RleString *trueRefRleStringToHap2 = NULL;
+    // annotate poa with truth (if true reference BAM has been specified)
     bool validReferenceAlignment = FALSE;
+    stList *truthAlignmentsToHap1 = NULL;
+    stList *truthAlignmentsToHap2 = NULL;
 
     // get reference chunk
     if (trueReferenceBamA != NULL && trueReferenceBamB != NULL) {
-        // get alignment of true ref to assembly
-        stList *trueRefReadsA = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        stList *trueRefReadsB = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        stList *unusedA = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        stList *unusedB = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        // construct new chunk
-        BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
-        trueRefBamChunk->parent = trueReferenceBamChunker;
-        // get true ref as "read"
-        uint32_t trueAlignmentCountA = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReadsA, unusedA);
-        uint32_t trueAlignmentCountB = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReadsB, unusedB);
+        truthAlignmentsToHap1 = stList_construct3(0, HelenFeatureTruthAlignment_destruct);
+        truthAlignmentsToHap2 = stList_construct3(0, HelenFeatureTruthAlignment_destruct);
 
-        // poor man's "do we have a unique alignment"
-        if (trueAlignmentCountA != 1 || trueAlignmentCountB != 1) {
-            st_logInfo(" %s Found %"PRId64", %"PRId64" true reference alignments for feature generation.\n",
-                       logIdentifier, trueAlignmentCountA, trueAlignmentCountB);
-            //todo maybe wrap in a if loglevel <= debug?
-            stList *alignmentDesc = stList_construct3(0, free);
-            for (int i = 0; i < stList_length(unusedA); i++) {
-                stList *truthAlign = stList_get(unusedA, i);
-                stList_append(alignmentDesc, stList_length(truthAlign) == 0 ? stString_copy("A,0-0,0") :
-                                             stString_print("A,%"PRId64"-%"PRId64",%"PRId64,
-                                                            stIntTuple_get(stList_get(truthAlign,0), 0),
-                                                            stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
-                                                            ((BamChunkRead*)stList_get(trueRefReadsA, i))->rleRead->length));
-            }
-            for (int i = 0; i < stList_length(unusedB); i++) {
-                stList *truthAlign = stList_get(unusedB, i);
-                stList_append(alignmentDesc, stList_length(truthAlign) == 0 ? stString_copy("B,0-0,0") :
-                                             stString_print("B,%"PRId64"-%"PRId64",%"PRId64,
-                                                            stIntTuple_get(stList_get(truthAlign,0), 0),
-                                                            stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
-                                                            ((BamChunkRead*)stList_get(trueRefReadsB, i))->rleRead->length));
-            }
-            char *alnSum = stString_join2("; ", alignmentDesc);
-            st_logInfo(" %s   Alignment summary: %s\n", logIdentifier, alnSum);
-            free(alnSum);
-            stList_destruct(alignmentDesc);
+        // assign truth reads to hap1 and hap2: alignmentsToHapX's are populated now
+        validReferenceAlignment = PoaFeature_handleDiploidHelenTruthAlignment(trueReferenceBamA, trueReferenceBamB,
+                bamChunk, originalReference, polishedRleConsensusH1, polishedRleConsensusH2,
+                truthAlignmentsToHap1, truthAlignmentsToHap2, params, logIdentifier);
 
-        } else {
-            // get reads
-            BamChunkRead *trueRefReadA = stList_get(trueRefReadsA, 0);
-            BamChunkRead *trueRefReadB = stList_get(trueRefReadsB, 0);
-
-            RleString *trueRefRleStringA = trueRefReadA->rleRead;
-            RleString *trueRefRleStringB = trueRefReadB->rleRead;
-
-            // assign correct haplotypes to the trueRefXXXToHapX
-            getDiploidHaplotypeAlignmentsRLE(polishedRleConsensusH1, polishedRleConsensusH2, trueRefRleStringA, trueRefRleStringB,
-                    &trueRefRleStringToHap1, &trueRefRleStringToHap2, &trueRefAlignmentToHap1, &trueRefAlignmentToHap2,
-                    params, logIdentifier);
-
-            // we found a single alignment of reference
-            double refLengthRatio = 1.0 * (trueRefRleStringA->length + trueRefRleStringB->length) /
-                    (polishedRleConsensusH1->length + polishedRleConsensusH2->length);
-            double alnLengthRatio = 1.0 * (stList_length(trueRefAlignmentToHap1) + stList_length(trueRefAlignmentToHap2)) /
-                    (polishedRleConsensusH1->length + polishedRleConsensusH2->length);
-            int refLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - refLengthRatio)));
-            int alnLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - alnLengthRatio)));
-            if (stList_length(trueRefAlignmentToHap1) > 0 && stList_length(trueRefAlignmentToHap2) > 0 &&
-                    refLengthRatioHundredthsOffOne < 10 && alnLengthRatioHundredthsOffOne < 10) {
-                validReferenceAlignment = TRUE;
-            } else {
-                st_logInfo(" %s True reference alignment QC failed:  avg polished length %"PRId64", true ref length"
-                           " ratio (true/polished) %f, aligned pairs length ratio (true/polished): %f\n",
-                           logIdentifier, (polishedRleConsensusH1->length + polishedRleConsensusH2->length) / 2,
-                           refLengthRatio, alnLengthRatio);
-            }
-        }
-
-        stList_destruct(trueRefReadsA);
-        stList_destruct(unusedA);
-        stList_destruct(trueRefReadsB);
-        stList_destruct(unusedB);
-        bamChunk_destruct(trueRefBamChunk);
     }
 
     // either write it, or note that we failed to find a valid reference alignment
@@ -586,9 +711,8 @@ void PoaFeature_handleDiploidHelenFeatures(
         stSet *readIdsInH1 = bamChunkRead_to_readName(readsInH1);
         stSet *readIdsInH2 = bamChunkRead_to_readName(readsInH2);
         PoaFeature_writeDiploidHelenFeatures(helenFeatureType, bamChunkReads, helenFeatureOutfileBase,
-                                             bamChunk, poaH1, poaH2, readIdsInH1, readIdsInH2, trueRefAlignmentToHap1,
-                                             trueRefAlignmentToHap2,
-                                             trueRefRleStringToHap1, trueRefRleStringToHap2, splitWeightMaxRunLength,
+                                             bamChunk, poaH1, poaH2, readIdsInH1, readIdsInH2, truthAlignmentsToHap1,
+                                             truthAlignmentsToHap2, splitWeightMaxRunLength,
                                              (HelenFeatureHDF5FileInfo **) helenHDF5Files);
         stSet_destruct(readIdsInH1);
         stSet_destruct(readIdsInH2);
@@ -596,10 +720,8 @@ void PoaFeature_handleDiploidHelenFeatures(
 
     // cleanup
     free(helenFeatureOutfileBase);
-    if (trueRefAlignmentToHap1 != NULL) stList_destruct(trueRefAlignmentToHap1);
-    if (trueRefAlignmentToHap1 != NULL) stList_destruct(trueRefAlignmentToHap2);
-    if (trueRefRleStringToHap1 != NULL) rleString_destruct(trueRefRleStringToHap1);
-    if (trueRefRleStringToHap2 != NULL) rleString_destruct(trueRefRleStringToHap2);
+    if (truthAlignmentsToHap1 != NULL) stList_destruct(truthAlignmentsToHap1);
+    if (truthAlignmentsToHap1 != NULL) stList_destruct(truthAlignmentsToHap1);
 }
 
 stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
@@ -1631,9 +1753,7 @@ void PoaFeature_writeHelenFeatures(HelenFeatureType type, Poa *poa, stList *bamC
 
 void PoaFeature_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChunkReads, char *outputFileBase,
                                           BamChunk *bamChunk, Poa *poaH1, Poa *poaH2, stSet *readsInH1,
-                                          stSet *readsInH2,
-                                          stList *trueRefAlignmentToH1, stList *trueRefAlignmentToH2,
-                                          RleString *trueRefRleStringToH1, RleString *trueRefRleStringToH2,
+                                          stSet *readsInH2, stList *trueRefAlignmentsToH1, stList *trueRefAlignmentsToH2,
                                           int64_t maxRunLength, HelenFeatureHDF5FileInfo **helenHDF5Files) {
 
     // prep
@@ -1643,8 +1763,8 @@ void PoaFeature_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChun
     int64_t lastMatchedFeatureH2 = -1;
     stList *featuresH1 = NULL;
     stList *featuresH2 = NULL;
-    bool outputLabels = trueRefAlignmentToH1 != NULL && trueRefAlignmentToH2 != NULL &&
-            trueRefRleStringToH1 != NULL && trueRefRleStringToH1 != NULL;
+    bool outputLabels = trueRefAlignmentsToH1 != NULL && trueRefAlignmentsToH2 != NULL &&
+            (stList_length(trueRefAlignmentsToH1) > 0 || stList_length(trueRefAlignmentsToH2) > 0);
 
 # ifdef _OPENMP
     int64_t threadIdx = omp_get_thread_num();
@@ -1666,15 +1786,28 @@ void PoaFeature_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChun
 
             // get truth (if we have it)
             if (outputLabels) {
-                annotateHelenFeaturesWithTruth(featuresH1, type, trueRefAlignmentToH1, trueRefRleStringToH1,
-                                               &firstMatchedFeatureH1, &lastMatchedFeatureH1);
-                annotateHelenFeaturesWithTruth(featuresH2, type, trueRefAlignmentToH2, trueRefRleStringToH2,
-                                               &firstMatchedFeatureH2, &lastMatchedFeatureH2);
+                for (int64_t i = 0; i < stList_length(trueRefAlignmentsToH1); i++) {
+                    HelenFeatureTruthAlignment *hfta = stList_get(trueRefAlignmentsToH1, i);
+                    annotateHelenFeaturesWithTruth(featuresH1, type, hfta->alignedPairs, hfta->truthSequence,
+                                                   &firstMatchedFeatureH1, &lastMatchedFeatureH1);
+
+                    //TODO write
+                }
+
+                for (int64_t i = 0; i < stList_length(trueRefAlignmentsToH2); i++) {
+                    HelenFeatureTruthAlignment *hfta = stList_get(trueRefAlignmentsToH2, i);
+                    annotateHelenFeaturesWithTruth(featuresH2, type, hfta->alignedPairs, hfta->truthSequence,
+                                                   &firstMatchedFeatureH2, &lastMatchedFeatureH2);
+
+                    //TODO write
+                }
+            } else {
+                writeDiploidRleWeightHelenFeaturesHDF5(poaH1->alphabet, helenHDF5Files[threadIdx], outputFileBase,
+                        bamChunk, outputLabels, featuresH1, firstMatchedFeatureH1, lastMatchedFeatureH1,
+                        featuresH2, firstMatchedFeatureH2, lastMatchedFeatureH2, maxRunLength);
+
             }
 
-            writeDiploidRleWeightHelenFeaturesHDF5(poaH1->alphabet, helenHDF5Files[threadIdx], outputFileBase, bamChunk,
-                                                   outputLabels, featuresH1, firstMatchedFeatureH1, lastMatchedFeatureH1,
-                                                   featuresH2, firstMatchedFeatureH2, lastMatchedFeatureH2, maxRunLength);
 
             break;
 
@@ -1687,6 +1820,29 @@ void PoaFeature_writeDiploidHelenFeatures(HelenFeatureType type, stList *bamChun
     stList_destruct(featuresH2);
 }
 
+HelenFeatureTruthAlignment *HelenFeatureTruthAlignment_construct(int64_t startPosInclusive, int64_t endPosExclusive,
+                                                                 stList *alignedPairs, RleString *truthSequence) {
+    HelenFeatureTruthAlignment *hfta = st_calloc(1, sizeof(HelenFeatureTruthAlignment));
+    hfta->startPosIncl = startPosInclusive;
+    hfta->endPosExcl = endPosExclusive;
+    hfta->alignedPairs = alignedPairs;
+    hfta->truthSequence = truthSequence;
+    return hfta;
+}
+void HelenFeatureTruthAlignment_destruct(HelenFeatureTruthAlignment *hfta) {
+    stList_destruct(hfta->alignedPairs);
+    rleString_destruct(hfta->truthSequence);
+    free(hfta);
+}
+int HelenFeatureTruthAlignment_cmp(const HelenFeatureTruthAlignment *hfta1, const HelenFeatureTruthAlignment *hfta2) {
+    if (hfta1->startPosIncl < hfta2->startPosIncl) {
+        return -1;
+    } else if (hfta1->startPosIncl > hfta2->startPosIncl) {
+        return 1;
+    } else {
+        return hfta1->endPosExcl < hfta2->endPosExcl ? -1 : 1;
+    }
+}
 
 
 stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, double *score, PolishParams *polishParams) {
