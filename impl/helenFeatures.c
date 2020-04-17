@@ -387,7 +387,7 @@ void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, Rle
         char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
         char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
         st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
-        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n", logIdentifier, truthRawToH1);
         free(consensusRawH1);
         free(truthRawToH1);
 
@@ -396,7 +396,7 @@ void getDiploidHaplotypeAlignmentsRAW2RLE(RleString *polishedRleConsensusH1, Rle
         char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
         char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
         st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
-        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n", logIdentifier, truthRawToH2);
         free(consensusRawH2);
         free(truthRawToH2);
     }
@@ -445,7 +445,7 @@ void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleStri
         char *consensusRawH1 = rleString_expand(polishedRleConsensusH1);
         char *truthRawToH1 = rleString_expand(*trueRefRleStringToHap1);
         st_logInfo(" %s RAW Consensus Seq H1:\n    %s\n", logIdentifier, consensusRawH1);
-        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n\n", logIdentifier, truthRawToH1);
+        st_logInfo(" %s RAW Truth Seq H1:\n    %s\n", logIdentifier, truthRawToH1);
         free(consensusRawH1);
         free(truthRawToH1);
 
@@ -454,7 +454,7 @@ void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleStri
         char *consensusRawH2 = rleString_expand(polishedRleConsensusH2);
         char *truthRawToH2 = rleString_expand(*trueRefRleStringToHap1);
         st_logInfo(" %s RAW Consensus Seq H2:\n    %s\n", logIdentifier, consensusRawH2);
-        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n\n", logIdentifier, truthRawToH2);
+        st_logInfo(" %s RAW Truth Seq H2:\n    %s\n", logIdentifier, truthRawToH2);
         free(consensusRawH2);
         free(truthRawToH2);
     }
@@ -469,9 +469,87 @@ void getDiploidHaplotypeAlignmentsRLE(RleString *polishedRleConsensusH1, RleStri
     }
 }
 
-void alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleConsensusH1,
+double calculateAlignIdentity(RleString *XRLE, RleString *YRLE, stList *alignedPairs) {
+    if (stList_length(alignedPairs) == 0) {
+        return 0.0;
+    }
+    char *X = XRLE->rleString;
+    char *Y = YRLE->rleString;
+    uint64_t *Xrl = XRLE->repeatCounts;
+    uint64_t *Yrl = YRLE->repeatCounts;
+
+    // stats to track
+    int64_t matches = 0;
+    int64_t mismatches = 0;
+    int64_t xInserts = 0;
+    int64_t yInserts = 0;
+
+    // iterate over alignment
+    stListIterator *alignmentItor = stList_getIterator(alignedPairs);
+    stIntTuple *currAlign = stList_getNext(alignmentItor);
+    int64_t posX = stIntTuple_get(currAlign, 0);
+    int64_t posY = stIntTuple_get(currAlign, 1);
+
+    while (TRUE) {
+        if (currAlign == NULL) break;
+        int64_t currAlignPosX = stIntTuple_get(currAlign, 0);
+        int64_t currAlignPosY = stIntTuple_get(currAlign, 1);
+        // Y gap / X insert
+        if (posX < currAlignPosX) {
+            posX++;
+            xInserts += Xrl[posX];
+        }
+
+            // X gap / Y insert
+        else if (posY < currAlignPosY) {
+            posY++;
+            yInserts += Yrl[posY];
+        }
+
+            // match
+        else if (posX == currAlignPosX && posY == currAlignPosY) {
+            if (tolower(X[posX]) == tolower(Y[posY])) {
+                if (Xrl[posX] == Yrl[posY]) {
+                    matches += Yrl[posY];
+                } else if (Xrl[posX] > Yrl[posY]) {
+                    matches += Yrl[posY];
+                    mismatches += Xrl[posX] - Yrl[posY];
+                } else {
+                    matches += Xrl[posX];
+                    mismatches += Yrl[posY] - Xrl[posX];
+                }
+            } else {
+                if (Xrl[posX] == Yrl[posY]) {
+                    mismatches += Yrl[posY];
+                } else if (Xrl[posX] > Yrl[posY]) {
+                    mismatches += Yrl[posY];
+                    xInserts += Xrl[posX] - Yrl[posY];
+                } else {
+                    mismatches += Xrl[posX];
+                    yInserts += Yrl[posY] - Xrl[posX];
+                }
+            }
+            posX++;
+            posY++;
+            currAlign = stList_getNext(alignmentItor);
+        }
+
+            // should never happen
+        else {
+            assert(FALSE);
+        }
+    }
+
+    stList_destructIterator(alignmentItor);
+
+    return 1.0 * matches / (matches + mismatches + xInserts + yInserts);
+}
+
+#define TRUTH_ALN_IDENTITY_THRESHOLD .98
+bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleConsensusH1,
         RleString *polishedRleConsensusH2, stList *truthAlignmentsH1, stList *truthAlignmentsH2,
         stList *truthAlignmentDescriptors, Params *params, char *alignmentDesc, char *logIdentifier) {
+    bool foundMatch = FALSE;
 
     // align to both haplotypes
     double score_consensusH1, score_consensusH2;
@@ -491,55 +569,136 @@ void alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
 
     } else if (score_consensusH1 > score_consensusH2) {
         // alignment better to h1
-        if (st_getLogLevel() >= TRUTH_ALIGN_LOG_LEVEL) {
-            char *truthRaw = rleString_expand(trueRefRleString);
-            st_logInfo(" %s RAW Truth:\n    %s\n\n", logIdentifier, truthRaw);
-            st_logInfo(" %s Alignment of truth to Hap1:\n", logIdentifier);
-            printMEAAlignment2(polishedRleConsensusH1, trueRefRleString, alignToH1);
-            free(truthRaw);
-        }
+        stList_destruct(alignToH2);
+        double alnIdentity = calculateAlignIdentity(polishedRleConsensusH1, trueRefRleString, alignToH1);
 
-        double alnLengthRatio = 1.0 * stList_length(alignToH1) / trueRefRleString->length;
-        if (alnLengthRatio < .95) {
-            st_logInfo(" %s True reference alignment failed for -1_%s, aligned pairs to length ratio : %f\n",
-                       logIdentifier, alignmentDesc, alnLengthRatio);
+        if (alnIdentity < TRUTH_ALN_IDENTITY_THRESHOLD) {
+            st_logInfo(" %s True reference alignment failed for -1_%s, align identity : %f\n",
+                       logIdentifier, alignmentDesc, alnIdentity);
             newAlignmentDesc = stString_print("-1_%s", alignmentDesc);
-            stList_destruct(alignToH1);
         } else {
             newAlignmentDesc = stString_print("+1_%s", alignmentDesc);
             int64_t startAlign = stIntTuple_get(stList_get(alignToH1, 0), 0);
             int64_t endAlign = stIntTuple_get(stList_get(alignToH1, stList_length(alignToH1) - 1), 0);
             stList_append(truthAlignmentsH1, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH1,
                                                                                   rleString_copy(trueRefRleString)));
+            foundMatch = TRUE;
         }
-        stList_destruct(alignToH2);
-
-    } else {
-        // alignment better to h2
         if (st_getLogLevel() >= TRUTH_ALIGN_LOG_LEVEL) {
             char *truthRaw = rleString_expand(trueRefRleString);
-            st_logInfo(" %s RAW Truth:\n    %s\n\n", logIdentifier, truthRaw);
-            st_logInfo(" %s Alignment of truth to Hap2:\n", logIdentifier);
-            printMEAAlignment2(polishedRleConsensusH2, trueRefRleString, alignToH2);
+            st_logInfo(" %s RAW Truth %s:\n    %s\n", logIdentifier, newAlignmentDesc, truthRaw);
+            st_logInfo(" %s Alignment of truth %s to Hap1:\n", logIdentifier, newAlignmentDesc);
+            printMEAAlignment2(polishedRleConsensusH1, trueRefRleString, alignToH1);
             free(truthRaw);
         }
 
-        double alnLengthRatio = 1.0 * stList_length(alignToH2) / trueRefRleString->length;
-        if (alnLengthRatio < .95) {
-            st_logInfo(" %s True reference alignment failed for -2_%s, aligned pairs to length ratio : %f\n",
-                       logIdentifier, alignmentDesc, alnLengthRatio);
+        if (!foundMatch) stList_destruct(alignToH1);
+
+    } else {
+        // alignment better to h2
+        stList_destruct(alignToH1);
+        double alnIdentity = calculateAlignIdentity(polishedRleConsensusH2, trueRefRleString, alignToH2);
+        if (alnIdentity < TRUTH_ALN_IDENTITY_THRESHOLD) {
+            st_logInfo(" %s True reference alignment failed for -2_%s, align identity : %f\n",
+                       logIdentifier, alignmentDesc, alnIdentity);
+
             newAlignmentDesc = stString_print("-2_%s", alignmentDesc);
-            stList_destruct(alignToH2);
         } else {
             newAlignmentDesc = stString_print("+2_%s", alignmentDesc);
             int64_t startAlign = stIntTuple_get(stList_get(alignToH2, 0), 0);
             int64_t endAlign = stIntTuple_get(stList_get(alignToH2, stList_length(alignToH2) - 1), 0);
-            stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign,
-                                                                                  alignToH2,
+            stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH2,
                                                                                   rleString_copy(trueRefRleString)));
+            foundMatch = TRUE;
         }
 
-        stList_destruct(alignToH1);
+        if (st_getLogLevel() >= TRUTH_ALIGN_LOG_LEVEL) {
+            char *truthRaw = rleString_expand(trueRefRleString);
+            st_logInfo(" %s RAW Truth %s:\n    %s\n", logIdentifier, newAlignmentDesc, truthRaw);
+            st_logInfo(" %s Alignment of truth %s to Hap2:\n", logIdentifier, newAlignmentDesc);
+            printMEAAlignment2(polishedRleConsensusH2, trueRefRleString, alignToH2);
+            free(truthRaw);
+        }
+
+        if (!foundMatch) stList_destruct(alignToH2);
+    }
+
+
+    // hickey hackey
+    if (!foundMatch) {
+        uint16_t scoreH1, scoreH2;
+        char *rawConsensusH1 = rleString_expand(polishedRleConsensusH1);
+        char *rawConsensusH2 = rleString_expand(polishedRleConsensusH2);
+        char *rawTruth = rleString_expand(trueRefRleString);
+        alignToH1 = alignConsensusAndTruthSSW(rawConsensusH1, rawTruth, &scoreH1);
+        alignToH2 = alignConsensusAndTruthSSW(rawConsensusH2, rawTruth, &scoreH2);
+        free(rawConsensusH1);
+        free(rawConsensusH2);
+        free(rawTruth);
+        if (scoreH1 == scoreH2) {
+            stList_destruct(alignToH1);
+            stList_destruct(alignToH2);
+        } else if (scoreH1 > scoreH2) {
+            // alignment better to h1
+            stList_destruct(alignToH2);
+            uint64_t *polishedRleConsensus_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH1);
+            uint64_t *trueRefRleString_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleString);
+            stList *alignedPairsRawSSWToRLE = runLengthEncodeAlignment(alignToH1,
+                                                                       polishedRleConsensus_nonRleToRleCoordinateMap, trueRefRleString_nonRleToRleCoordinateMap);
+            stList_destruct(alignToH1);
+            alignToH1 = alignedPairsRawSSWToRLE;
+
+            double alnIdentity = calculateAlignIdentity(polishedRleConsensusH1, trueRefRleString, alignToH1);
+            if (alnIdentity >= TRUTH_ALN_IDENTITY_THRESHOLD) {
+                st_logInfo(" %s True reference alignment succeeded with SSW after failing!\n", logIdentifier);
+                free(newAlignmentDesc);
+                newAlignmentDesc = stString_print("*1_%s", alignmentDesc);
+                int64_t startAlign = stIntTuple_get(stList_get(alignToH1, 0), 0);
+                int64_t endAlign = stIntTuple_get(stList_get(alignToH1, stList_length(alignToH1) - 1), 0);
+                stList_append(truthAlignmentsH1, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH1,
+                                                                                      rleString_copy(trueRefRleString)));
+                foundMatch = TRUE;
+            }
+            if (st_getLogLevel() >= TRUTH_ALIGN_LOG_LEVEL) {
+                char *truthRaw = rleString_expand(trueRefRleString);
+                st_logInfo(" %s Alignment of truth %s to Hap1:\n", logIdentifier, newAlignmentDesc);
+                printMEAAlignment2(polishedRleConsensusH1, trueRefRleString, alignToH1);
+                free(truthRaw);
+            }
+            if (!foundMatch) stList_destruct(alignToH1);
+            free(polishedRleConsensus_nonRleToRleCoordinateMap);
+            free(trueRefRleString_nonRleToRleCoordinateMap);
+        } else {
+            // alignment better to h2
+            stList_destruct(alignToH1);
+            uint64_t *polishedRleConsensus_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH2);
+            uint64_t *trueRefRleString_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleString);
+            stList *alignedPairsRawSSWToRLE = runLengthEncodeAlignment(alignToH2,
+                                                                       polishedRleConsensus_nonRleToRleCoordinateMap, trueRefRleString_nonRleToRleCoordinateMap);
+            stList_destruct(alignToH2);
+            alignToH2 = alignedPairsRawSSWToRLE;
+
+            double alnIdentity = calculateAlignIdentity(polishedRleConsensusH2, trueRefRleString, alignToH2);
+            if (alnIdentity >= TRUTH_ALN_IDENTITY_THRESHOLD) {
+                st_logInfo(" %s True reference alignment succeeded with SSW after failing!\n", logIdentifier);
+                free(newAlignmentDesc);
+                newAlignmentDesc = stString_print("*2_%s", alignmentDesc);
+                int64_t startAlign = stIntTuple_get(stList_get(alignToH2, 0), 0);
+                int64_t endAlign = stIntTuple_get(stList_get(alignToH2, stList_length(alignToH2) - 1), 0);
+                stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH2,
+                                                                                      rleString_copy(trueRefRleString)));
+                foundMatch = TRUE;
+            }
+            if (st_getLogLevel() >= TRUTH_ALIGN_LOG_LEVEL) {
+                char *truthRaw = rleString_expand(trueRefRleString);
+                st_logInfo(" %s Alignment of truth %s to Hap2:\n", logIdentifier, newAlignmentDesc);
+                printMEAAlignment2(polishedRleConsensusH2, trueRefRleString, alignToH2);
+                free(truthRaw);
+            }
+            if (!foundMatch) stList_destruct(alignToH2);
+            free(polishedRleConsensus_nonRleToRleCoordinateMap);
+            free(trueRefRleString_nonRleToRleCoordinateMap);
+        }
     }
 
     // save to list
@@ -621,7 +780,7 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
 
     // loggit
     char *allAlignDescriptors = stString_join2("; ", truthAlignmentDescriptors);
-    st_logInfo(" %s Found total of %"PRId64" alignments: %s\n", logIdentifier, stList_length(truthAlignmentDescriptors),
+    st_logInfo(" %s Found total of %"PRId64" truth sequences: %s\n", logIdentifier, stList_length(truthAlignmentDescriptors),
             allAlignDescriptors);
     free(allAlignDescriptors);
     stList_destruct(truthAlignmentDescriptors);
@@ -1245,12 +1404,9 @@ stList *PoaFeature_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
     return featureList;
 }
 
-
-
-
-
 void printMEAAlignment2(RleString *X, RleString *Y, stList *alignedPairs) {
     printMEAAlignment(X->rleString, Y->rleString, X->length, Y->length, alignedPairs, X->repeatCounts, Y->repeatCounts);
+    fprintf(stderr, "          AlignmentIdentity: %f\n", calculateAlignIdentity(X, Y, alignedPairs));
 }
 
 void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *alignedPairs, uint64_t *Xrl, uint64_t *Yrl) {
@@ -1288,6 +1444,8 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
     stIntTuple *currAlign = stList_getNext(alignmentItor);
     int64_t posX = stIntTuple_get(currAlign, 0);
     int64_t posY = stIntTuple_get(currAlign, 1);
+    int64_t origPosX = posX;
+    int64_t origPosY = posY;
     int64_t outStrPos = 0;
 
     while (TRUE) {
@@ -1358,21 +1516,21 @@ void printMEAAlignment(char *X, char *Y, int64_t lX, int64_t lY, stList *aligned
     }
 
     // print
-    fprintf(stderr, "\n");
-    if (handleRunLength) fprintf(stderr, "  %s\n", rlXStr);
-    fprintf(stderr, "  %s\n", alnXStr);
-    fprintf(stderr, "  %s\n", alnDesc);
-    fprintf(stderr, "  %s\n", alnYStr);
-    if (handleRunLength) fprintf(stderr, "  %s\n", rlYStr);
-    fprintf(stderr, "  Matches:    %"PRId64"\n", nuclMatches);
+//    fprintf(stderr, "\n");
+    if (handleRunLength) fprintf(stderr, "          %s\n", rlXStr);
+    fprintf(stderr, "  %7"PRId64" %s %7"PRId64"\n", origPosX, alnXStr, posX);
+    fprintf(stderr, "          %s\n", alnDesc);
+    fprintf(stderr, "  %7"PRId64" %s %7"PRId64"\n", origPosY, alnYStr, posY);
+    if (handleRunLength) fprintf(stderr, "          %s\n", rlYStr);
+    fprintf(stderr, "          Matches:    %"PRId64"\n", nuclMatches);
     if (handleRunLength) {
-        fprintf(stderr, "    RL Match: %"PRId64"\n", rlMatches);
-        fprintf(stderr, "    RL Miss:  %"PRId64"\n", rlMismatches);
+        fprintf(stderr, "            RL Match: %"PRId64"\n", rlMatches);
+        fprintf(stderr, "            RL Miss:  %"PRId64"\n", rlMismatches);
     }
-    fprintf(stderr, "  Mismatches: %"PRId64"\n", nuclMismatches);
-    fprintf(stderr, "  X Inserts:  %"PRId64"\n", nuclXInserts);
-    fprintf(stderr, "  Y Inserts:  %"PRId64"\n", nuclYInserts);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "          Mismatches: %"PRId64"\n", nuclMismatches);
+    fprintf(stderr, "          X Inserts:  %"PRId64"\n", nuclXInserts);
+    fprintf(stderr, "          Y Inserts:  %"PRId64"\n", nuclYInserts);
+//    fprintf(stderr, "\n");
 
     // cleanup
     free(alnXStr);
@@ -1955,13 +2113,21 @@ stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleStri
     stList *alignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapXPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *gapYPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
-    stList *anchorPairs = alignConsensusAndTruthSSW(consensusStr->rleString, truthStr->rleString, &apScore);
-    for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
+    stList *anchorPairsTmp = alignConsensusAndTruthSSW(consensusStr->rleString, truthStr->rleString, &apScore);
+    stList *anchorPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    if (stList_length(anchorPairs) >= 2) {
+        stIntTuple *first = stList_get(anchorPairsTmp, 0);
+        stIntTuple *last = stList_get(anchorPairsTmp, stList_length(anchorPairs) - 1);
+        stList_append(anchorPairs, stIntTuple_construct3(stIntTuple_get(first, 0), stIntTuple_get(first, 1), PAIR_ALIGNMENT_PROB_1));
+        stList_append(anchorPairs, stIntTuple_construct3(stIntTuple_get(last, 0), stIntTuple_get(last, 1), PAIR_ALIGNMENT_PROB_1));
+    }
+    /*for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
         int64_t *ap = stList_get(anchorPairs, i);
         ap[3] = PAIR_ALIGNMENT_PROB_1;
-    }
+    }*/
 
-    getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
+
+    getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairsTmp,
                                           polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
@@ -1980,6 +2146,7 @@ stList *alignConsensusAndTruthRLEWithSSWAnchors(RleString *consensusStr, RleStri
     stList_destruct(gapXPairs);
     stList_destruct(gapYPairs);
     stList_destruct(anchorPairs);
+    stList_destruct(anchorPairsTmp);
     symbolString_destruct(sX);
     symbolString_destruct(sY);
 
