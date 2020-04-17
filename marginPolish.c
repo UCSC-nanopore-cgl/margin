@@ -441,6 +441,7 @@ int main(int argc, char *argv[]) {
             if (stList_length(trueRefParts) != 2) {
                 st_errAbort("If --diploid is set, --trueReferenceBam must have two comma-separated values.");
             }
+            free(trueReferenceBam);
             trueReferenceBam = stString_copy(stList_get(trueRefParts, 0));
             trueReferenceBamHap2 = stString_copy(stList_get(trueRefParts, 1));
             stList_destruct(trueRefParts);
@@ -911,7 +912,7 @@ int main(int argc, char *argv[]) {
     stHash_destruct(referenceSequences);
     params_destruct(params);
     if (trueReferenceBam != NULL) free(trueReferenceBam);
-    if (trueReferenceBamChunker != NULL) bamChunker_destruct(trueReferenceBamChunker);
+    if (trueReferenceBamHap2 != NULL) free(trueReferenceBamHap2);
     if (regionStr != NULL) free(regionStr);
 #ifdef _HDF5
     if (helenHDF5Files != NULL) {

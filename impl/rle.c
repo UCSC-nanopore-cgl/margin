@@ -24,7 +24,7 @@ RleString *rleString_construct(char *str) {
     uint64_t j = 0, k = 1;
     for (uint64_t i = 0; i < rleString->nonRleLength; i++) {
         if (i + 1 == rleString->nonRleLength || str[i] != str[i + 1]) {
-            rleString->rleString[j] = str[i];
+            rleString->rleString[j] = (char) toupper(str[i]);
             rleString->repeatCounts[j++] = k;
             k = 1;
         } else {

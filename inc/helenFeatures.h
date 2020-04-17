@@ -198,9 +198,8 @@ void writeChannelRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
                                        int64_t featureEndIdxInclusive, const int64_t maxRunLength);
 
 void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5FileInfo* hdf5FileInfo,
-                                            char *outputFileBase, BamChunk *bamChunk, bool outputLabels,
-                                            stList *featuresH1, int64_t featureStartIdxH1, int64_t featureEndIdxInclusiveH1,
-                                            stList *featuresH2, int64_t featureStartIdxH2, int64_t featureEndIdxInclusiveH2,
-                                            int64_t maxRunLength);
+                                            char *outputFileBase, BamChunk *bamChunk, int64_t haplotype, int64_t truthIdx,
+                                            stList *features, int64_t featureStartIdx, int64_t featureEndIdxInclusive,
+                                            const int64_t maxRunLength);
 #endif //_HDF5
 #endif //MARGINPHASE_HELENFEATURES_H
