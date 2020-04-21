@@ -93,7 +93,7 @@ void test_stitching(CuTest *testCase) {
             // Build the inputs for the chunker
             RleString *rle_chunk = rleString_construct_no_rle(chunk);
             Poa *poa = poa_getReferenceGraph(rle_chunk, params->polishParams->alphabet,
-                                             params->polishParams->repeatSubMatrix->maximumRepeatLength);
+                                             params->polishParams->repeatSubMatrix->maximumRepeatLength, -1);
             stList *reads = stList_construct(); // No reads, currently
             // Output the chunk
             outputChunkers_processChunkSequence(outputChunkers, st_randomInt(0, noOfOutputChunkers), chunkOrdinal,

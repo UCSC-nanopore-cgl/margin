@@ -1428,6 +1428,11 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
 }
 
 Poa *bubbleGraph_getNewPoa(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, Params *params) {
+    return bubbleGraph_getNewPoa2(bg, consensusPath, poa, reads, -1, params);
+
+}
+Poa *bubbleGraph_getNewPoa2(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, int64_t refStartPos,
+        Params *params) {
 
     // Get new consensus string
     int64_t *poaToConsensusMap;
@@ -1439,7 +1444,7 @@ Poa *bubbleGraph_getNewPoa(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, s
                                                        params->polishParams);
 
     // Generated updated poa
-    Poa *poa2 = poa_realign(reads, anchorAlignments, newConsensusString, params->polishParams);
+    Poa *poa2 = poa_realign2(reads, anchorAlignments, newConsensusString, refStartPos, params->polishParams);
 
     // Cleanup
     free(poaToConsensusMap);

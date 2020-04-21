@@ -81,7 +81,7 @@ double poaDelete_getWeight(PoaDelete *delete) {
     //return isBalanced(delete->weightForwardStrand, delete->weightReverseStrand, 100) ? delete->weightForwardStrand + delete->weightReverseStrand : 0.0;
 }
 
-PoaNode *poaNode_construct(Poa *poa, char base, uint64_t repeatCount) {
+PoaNode *poaNode_construct(Poa *poa, char base, uint64_t repeatCount, int64_t originalRefPos) {
     PoaNode *poaNode = st_calloc(1, sizeof(PoaNode));
 
     // for when people put crazy characters in their reference
@@ -91,8 +91,9 @@ PoaNode *poaNode_construct(Poa *poa, char base, uint64_t repeatCount) {
 
     poaNode->inserts = stList_construct3(0, (void (*)(void *)) poaInsert_destruct);
     poaNode->deletes = stList_construct3(0, (void (*)(void *)) poaDelete_destruct);
-    poaNode->base = base;
+    poaNode->base = (char) toupper(base);
     poaNode->repeatCount = repeatCount;
+    poaNode->originalRefPos = originalRefPos;
     poaNode->baseWeights = st_calloc(poa->alphabet->alphabetSize, sizeof(double)); // Encoded using Symbol enum
     poaNode->repeatCountWeights = st_calloc(poa->maxRepeatCount, sizeof(double));
     poaNode->observations = stList_construct3(0, (void (*)(void *)) poaBaseObservation_destruct);
@@ -109,7 +110,8 @@ void poaNode_destruct(PoaNode *poaNode) {
     free(poaNode);
 }
 
-Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount) {
+Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount, int64_t refStartPos) {
+    bool hasRefPos = refStartPos >= 0;
     Poa *poa = st_calloc(1, sizeof(Poa));
 
     poa->alphabet = alphabet;
@@ -117,10 +119,12 @@ Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t ma
     poa->nodes = stList_construct3(0, (void (*)(void *)) poaNode_destruct);
     poa->refString = rleString_copy(reference);
 
-    stList_append(poa->nodes, poaNode_construct(poa, 'N', 1)); // Add empty prefix node
+    stList_append(poa->nodes, poaNode_construct(poa, 'N', 1, hasRefPos ? refStartPos : -1)); // Add empty prefix node
     for (int64_t i = 0; i < reference->length; i++) {
         stList_append(poa->nodes,
-                      poaNode_construct(poa, (char) toupper(reference->rleString[i]), reference->repeatCounts[i]));
+                      poaNode_construct(poa, (char) toupper(reference->rleString[i]), reference->repeatCounts[i],
+                              hasRefPos ? refStartPos : -1));
+        refStartPos += reference->repeatCounts[i];
     }
 
     return poa;
@@ -664,7 +668,12 @@ void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
     adjustAnchors(*deletes, 1, firstRefPosition);
 }
 
-Poa *poa_realign(stList *bamChunkReads, stList *anchorAlignments, RleString *reference, PolishParams *polishParams) {
+Poa *poa_realign(stList *bamChunkReads, stList *anchorAlignments, RleString *reference,
+                 PolishParams *polishParams) {
+    return poa_realign2(bamChunkReads, anchorAlignments, reference, -1, polishParams);
+}
+Poa *poa_realign2(stList *bamChunkReads, stList *anchorAlignments, RleString *reference, int64_t originalRefPos,
+                 PolishParams *polishParams) {
     // Build a reference graph with zero weights
     uint64_t maximumRepeatLength = 2; // MRL is exclusive
     if (polishParams->useRunLengthEncoding) {
@@ -674,7 +683,7 @@ Poa *poa_realign(stList *bamChunkReads, stList *anchorAlignments, RleString *ref
             maximumRepeatLength = MAXIMUM_REPEAT_LENGTH;
         }
     }
-    Poa *poa = poa_getReferenceGraph(reference, polishParams->alphabet, maximumRepeatLength);
+    Poa *poa = poa_getReferenceGraph(reference, polishParams->alphabet, maximumRepeatLength, originalRefPos);
 
     // For each read
     for (int64_t i = 0; i < stList_length(bamChunkReads); i++) {
@@ -2120,9 +2129,14 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
 }
 
 // Functions to iteratively polish a sequence
-Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
-                          PolishParams *polishParams, bool hmmMNotRealign,
+Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishParams, bool hmmMNotRealign,
                           int64_t minIterations, int64_t maxIterations) {
+    return poa_realignIterative2(poa, bamChunkReads, -1, polishParams, hmmMNotRealign, minIterations, maxIterations);
+}
+
+Poa *poa_realignIterative2(Poa *poa, stList *bamChunkReads, int64_t originalRefPos,
+                           PolishParams *polishParams, bool hmmMNotRealign,
+                           int64_t minIterations, int64_t maxIterations) {
     assert(maxIterations >= 0);
     assert(minIterations <= maxIterations);
 
@@ -2161,7 +2175,7 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
         time_t realignStartTime = time(NULL);
 
         // Generated updated poa
-        Poa *poa2 = poa_realign(bamChunkReads, anchorAlignments, reference, polishParams);
+        Poa *poa2 = poa_realign2(bamChunkReads, anchorAlignments, reference, originalRefPos, polishParams);
 
         // Get updated repeat counts
         if (polishParams->useRunLengthEncoding) {
@@ -2202,21 +2216,26 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
 
 Poa *poa_realignAll(stList *bamChunkReads, stList *anchorAlignments, RleString *reference,
                     PolishParams *polishParams) {
+    return poa_realignAll2(bamChunkReads, anchorAlignments, reference, -1, polishParams);
+
+}
+Poa *poa_realignAll2(stList *bamChunkReads, stList *anchorAlignments, RleString *reference, int64_t originalRefPos,
+                    PolishParams *polishParams) {
     time_t startTime = time(NULL);
-    Poa *poa = poa_realign(bamChunkReads, anchorAlignments, reference, polishParams);
+    Poa *poa = poa_realign2(bamChunkReads, anchorAlignments, reference, originalRefPos, polishParams);
     char *logIdentifier = getLogIdentifier();
 
     st_logInfo(" %s Took %3d seconds to generate initial POA\n", logIdentifier, (int) (time(NULL) - startTime));
     free(logIdentifier);
 
     if (polishParams->maxPoaConsensusIterations > 0) {
-        poa = poa_realignIterative(poa, bamChunkReads, polishParams, 1, polishParams->minPoaConsensusIterations,
-                                   polishParams->maxPoaConsensusIterations);
+        poa = poa_realignIterative2(poa, bamChunkReads, originalRefPos, polishParams, 1,
+                polishParams->minPoaConsensusIterations, polishParams->maxPoaConsensusIterations);
     }
 
     if (polishParams->maxRealignmentPolishIterations > 0) {
-        poa = poa_realignIterative(poa, bamChunkReads, polishParams, 0, polishParams->minRealignmentPolishIterations,
-                                   polishParams->maxRealignmentPolishIterations);
+        poa = poa_realignIterative2(poa, bamChunkReads, originalRefPos, polishParams, 0,
+                polishParams->minRealignmentPolishIterations, polishParams->maxRealignmentPolishIterations);
     }
 
     return poa;

@@ -595,6 +595,7 @@ struct _poaNode {
 	stList *deletes; // Deletes that happen immediately after this position
 	char base; // Char representing base, e.g. 'A', 'C', etc.
 	uint64_t repeatCount; // Repeat count of base
+	int64_t originalRefPos; // Original reference position (informative)
 	double *baseWeights; // Weight given to each possible base
 	double *repeatCountWeights; // Weight given to each possible repeat count
 	stList *observations; // Individual events representing event, a list of PoaObservations
@@ -632,7 +633,7 @@ double poaDelete_getWeight(PoaDelete *toDelete);
  * Creates a POA representing the given RLE reference sequence, with one node for each reference base and a
  * prefix 'N'/1 base to represent place to add inserts/deletes that precede the first position of the reference.
  */
-Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount);
+Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount, int64_t refStartPos);
 
 /*
  * Adds to given POA the matches, inserts and deletes from the alignment of the given read to the reference.
@@ -649,6 +650,7 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
  * poa_getAnchorAlignments. The anchorAlignments can be null, in which case no anchors are used.
  */
 Poa *poa_realign(stList *bamChunkReads, stList *alignments, RleString *reference, PolishParams *polishParams);
+Poa *poa_realign2(stList *bamChunkReads, stList *alignments, RleString *reference, int64_t originalRefPos, PolishParams *polishParams);
 
 /*
  * Generates a set of anchor alignments for the reads aligned to a consensus sequence derived from the poa.
@@ -788,8 +790,11 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
  * Allows the specification of the min and max number of realignment cycles.
  */
 Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
-						  PolishParams *polishParams, bool hmmMNotRealign,
-						  int64_t minIterations, int64_t maxIterations);
+                          PolishParams *polishParams, bool hmmMNotRealign,
+                          int64_t minIterations, int64_t maxIterations);
+Poa *poa_realignIterative2(Poa *poa, stList *bamChunkReads, int64_t originalRefPos,
+                          PolishParams *polishParams, bool hmmMNotRealign,
+                          int64_t minIterations, int64_t maxIterations);
 
 /*
  * Convenience function that iteratively polishes sequence using poa_getConsensus and then poa_polish for
@@ -797,6 +802,8 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
  */
 Poa *poa_realignAll(stList *bamChunkReads, stList *anchorAlignments, RleString *reference,
 					PolishParams *polishParams);
+Poa *poa_realignAll2(stList *bamChunkReads, stList *anchorAlignments, RleString *reference, int64_t originalRefPos,
+                     PolishParams *polishParams);
 
 /*
  * Greedily evaluate the top scoring indels.
@@ -1242,6 +1249,8 @@ bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, P
  * Get Poa from bubble graph.
  */
 Poa *bubbleGraph_getNewPoa(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, Params *params);
+Poa *bubbleGraph_getNewPoa2(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, int64_t refStartPos,
+                            Params *params);
 
 /*
  * Gets the strand support skew for each allele.

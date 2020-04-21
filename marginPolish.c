@@ -724,7 +724,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Generate partial order alignment (POA) (destroys rleAlignments in the process)
-        poa = poa_realignAll(reads, alignments, rleReference, params->polishParams);
+        poa = poa_realignAll2(reads, alignments, rleReference, bamChunk->chunkBoundaryStart, params->polishParams);
 
         // Log info about the POA
         if (st_getLogLevel() >= info) {
