@@ -142,7 +142,7 @@ void test_splitRleWeightFeatureGeneration(CuTest *testCase) {
 void test_simpleWeightIndex(CuTest *testCase) {
 
     int idx;
-    PoaFeatureSimpleWeight *feature = PoaFeature_SimpleWeight_construct(0, 0);
+    PoaFeatureSimpleWeight *feature = PoaFeature_SimpleWeight_construct(0, 0, -1);
 
     for (int64_t c = 0; c < SYMBOL_NUMBER_NO_N; c++) {
         idx = PoaFeature_SimpleWeight_charIndex((Symbol) c, TRUE);
@@ -176,7 +176,7 @@ void test_splitRleWeightIndex(CuTest *testCase) {
     int idx;
     int maxRunLength = POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT;
     int maxIndex = ((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2;
-    PoaFeatureSplitRleWeight *feature = PoaFeature_SplitRleWeight_construct(0, 0, 0, maxRunLength);
+    PoaFeatureSplitRleWeight *feature = PoaFeature_SplitRleWeight_construct(0, 0, 0, maxRunLength, -1);
 
     for (int64_t c = 0; c < SYMBOL_NUMBER - 1; c++) {
         for (int64_t l = 0; l <= maxRunLength; l++) {
@@ -218,7 +218,7 @@ void test_channelRleWeightIndex(CuTest *testCase) {
     int maxRunLength = POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT;
     int maxNuclIndex = (SYMBOL_NUMBER) * 2;
     int maxRLIndex = (SYMBOL_NUMBER - 1) * (1 + maxRunLength) * 2;
-    PoaFeatureChannelRleWeight *feature = PoaFeature_ChannelRleWeight_construct(0, 0, 0, maxRunLength);
+    PoaFeatureChannelRleWeight *feature = PoaFeature_ChannelRleWeight_construct(0, 0, 0, maxRunLength, 0);
 
     for (int64_t c = 0; c < SYMBOL_NUMBER - 1; c++) {
         idx = PoaFeature_ChannelRleWeight_charNuclIndex(c, TRUE);
@@ -269,7 +269,7 @@ void test_diploidRleWeightIndex(CuTest *testCase) {
     int idx;
     int maxRunLength = POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT;
     int maxIndex = ((SYMBOL_NUMBER - 1) * (1 + maxRunLength) + 1) * 2;
-    PoaFeatureDiploidRleWeight *feature = PoaFeature_DiploidRleWeight_construct(0, 0, 0, maxRunLength);
+    PoaFeatureDiploidRleWeight *feature = PoaFeature_DiploidRleWeight_construct(0, 0, 0, maxRunLength, 0);
 
     for (int64_t c = 0; c < SYMBOL_NUMBER - 1; c++) {
         for (int64_t l = 0; l <= maxRunLength; l++) {

@@ -780,8 +780,8 @@ int main(int argc, char *argv[]) {
             uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
             uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
 
-            Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
-            Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
+            Poa *poa_hap1 = bubbleGraph_getNewPoa2(bg, hap1, poa, reads, bamChunk->chunkBoundaryStart, params);
+            Poa *poa_hap2 = bubbleGraph_getNewPoa2(bg, hap2, poa, reads, bamChunk->chunkBoundaryStart, params);
 
             if(params->polishParams->useRunLengthEncoding) {
                 st_logInfo(" %s Using read phasing to reestimate repeat counts in phased manner\n", logIdentifier);
