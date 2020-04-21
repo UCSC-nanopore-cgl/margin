@@ -143,7 +143,7 @@ void PoaFeature_handleDiploidHelenFeatures(HelenFeatureType helenFeatureType,
                                            RleString *originalReference);
 
 bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *trueReferenceBamB, BamChunk *bamChunk,
-                                                 RleString *originalReference,
+                                                 RleString *originalReference, Poa *poaH1, Poa *poaH2,
                                                  RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
                                                  stList *finalAlignmentsToH1, stList *finalAlignmentsToH2,
                                                  Params *params, char *logIdentifier);
@@ -172,6 +172,10 @@ HelenFeatureTruthAlignment *HelenFeatureTruthAlignment_construct(int64_t startPo
                                                                  stList *alignedPairs, RleString *truthSequence);
 void HelenFeatureTruthAlignment_destruct(HelenFeatureTruthAlignment *hfta);
 int HelenFeatureTruthAlignment_cmp(const HelenFeatureTruthAlignment *hfta1, const HelenFeatureTruthAlignment *hfta2);
+
+void shiftAlignmentCoords(stList *alignedPairs, int64_t tupleIdx, int64_t shift);
+RleString *substringConsensusByOrigRefPos(Poa *poa, RleString *consensus, int64_t *startPos,
+                                          int64_t origRefStartPos, int64_t origRefEndPos);
 
 stList *alignConsensusAndTruthSSW(char *consensusStr, char *truthStr, uint16_t *score);
 stList *alignConsensusAndTruthCPECAN(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams);

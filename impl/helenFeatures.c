@@ -551,7 +551,8 @@ double calculateAlignIdentity(RleString *XRLE, RleString *YRLE, stList *alignedP
 
 #define TRUTH_ALN_IDENTITY_THRESHOLD .98
 bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleConsensusH1,
-        RleString *polishedRleConsensusH2, stList *truthAlignmentsH1, stList *truthAlignmentsH2,
+        RleString *polishedRleConsensusH2, int64_t consensusAlnShiftH1, int64_t consensusAlnShiftH2,
+        stList *truthAlignmentsH1, stList *truthAlignmentsH2,
         stList *truthAlignmentDescriptors, Params *params, char *alignmentDesc, char *logIdentifier) {
     bool foundMatch = FALSE;
 
@@ -561,6 +562,8 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
                                                                  &score_consensusH1, params->polishParams);
     stList *alignToH2 = alignConsensusAndTruthRLEWithKmerAnchors(polishedRleConsensusH2, trueRefRleString,
                                                                  &score_consensusH2, params->polishParams);
+
+    shiftAlignmentCoords(alignToH2, 0, consensusAlnShiftH2);
 
     // for logging
     char *newAlignmentDesc;
@@ -582,6 +585,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
             newAlignmentDesc = stString_print("-1_%s", alignmentDesc);
         } else {
             newAlignmentDesc = stString_print("+1_%s", alignmentDesc);
+            shiftAlignmentCoords(alignToH1, 0, consensusAlnShiftH1);
             int64_t startAlign = stIntTuple_get(stList_get(alignToH1, 0), 0);
             int64_t endAlign = stIntTuple_get(stList_get(alignToH1, stList_length(alignToH1) - 1), 0);
             stList_append(truthAlignmentsH1, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH1,
@@ -609,6 +613,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
             newAlignmentDesc = stString_print("-2_%s", alignmentDesc);
         } else {
             newAlignmentDesc = stString_print("+2_%s", alignmentDesc);
+            shiftAlignmentCoords(alignToH2, 0, consensusAlnShiftH2);
             int64_t startAlign = stIntTuple_get(stList_get(alignToH2, 0), 0);
             int64_t endAlign = stIntTuple_get(stList_get(alignToH2, stList_length(alignToH2) - 1), 0);
             stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH2,
@@ -657,6 +662,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
                 st_logInfo(" %s True reference alignment succeeded with SSW after failing!\n", logIdentifier);
                 free(newAlignmentDesc);
                 newAlignmentDesc = stString_print("*1_%s", alignmentDesc);
+                shiftAlignmentCoords(alignToH1, 0, consensusAlnShiftH1);
                 int64_t startAlign = stIntTuple_get(stList_get(alignToH1, 0), 0);
                 int64_t endAlign = stIntTuple_get(stList_get(alignToH1, stList_length(alignToH1) - 1), 0);
                 stList_append(truthAlignmentsH1, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH1,
@@ -687,6 +693,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
                 st_logInfo(" %s True reference alignment succeeded with SSW after failing!\n", logIdentifier);
                 free(newAlignmentDesc);
                 newAlignmentDesc = stString_print("*2_%s", alignmentDesc);
+                shiftAlignmentCoords(alignToH2, 0, consensusAlnShiftH2);
                 int64_t startAlign = stIntTuple_get(stList_get(alignToH2, 0), 0);
                 int64_t endAlign = stIntTuple_get(stList_get(alignToH2, stList_length(alignToH2) - 1), 0);
                 stList_append(truthAlignmentsH2, HelenFeatureTruthAlignment_construct(startAlign, endAlign, alignToH2,
@@ -709,8 +716,40 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
     stList_append(truthAlignmentDescriptors, newAlignmentDesc);
 }
 
+RleString *substringConsensusByOrigRefPos(Poa *poa, RleString *consensus, int64_t *startPos,
+        int64_t origRefStartPos, int64_t origRefEndPos) {
+    int64_t length = -1;
+    *startPos = -1;
+    for (int64_t i = 0; i < stList_length(poa->nodes); i++) {
+        PoaNode *node = stList_get(poa->nodes, i);
+        if (node->originalRefPos >= origRefStartPos && startPos < 0) {
+            *startPos = i == 0 ? 0 : i - 1;
+        }
+        if (node->originalRefPos >= origRefEndPos ) {
+            length = i - *startPos;
+            break;
+        }
+    }
+
+    // sanity check
+    if (*startPos < 0 || length < 0) {
+        *startPos = 0;
+        length = consensus->length;
+    }
+    RleString *truncatedConsensus = rleString_copySubstring(consensus, (uint64_t) *startPos, (uint64_t) length);
+
+    return truncatedConsensus;
+}
+
+void shiftAlignmentCoords(stList *alignedPairs, int64_t tupleIdx, int64_t shift) {
+    for (int64_t i = 0; i < stList_length(alignedPairs); i++) {
+        int64_t *tuple = stList_get(alignedPairs, i);
+        tuple[tupleIdx + 1] += shift;
+    }
+}
+
 bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *trueReferenceBamB, BamChunk *bamChunk,
-        RleString *originalReference,
+        RleString *originalReference, Poa *poaH1, Poa *poaH2,
         RleString *polishedRleConsensusH1, RleString *polishedRleConsensusH2,
         stList *finalAlignmentsToH1, stList *finalAlignmentsToH2,
         Params *params, char *logIdentifier) {
@@ -758,9 +797,22 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
                                              stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
                                              trueRefRleStringA->length);
 
+        // get consensus seq for original positions
+        int64_t originalRefStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0) + bamChunk->chunkBoundaryStart;
+        int64_t originalRefEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0) +
+                                    bamChunk->chunkBoundaryEnd;
+        int64_t consensusH1StartPos = 0;
+        int64_t consensusH2StartPos = 0;
+        RleString *consensusRegionH1 = substringConsensusByOrigRefPos(poaH1, polishedRleConsensusH1, &consensusH1StartPos,
+                                                                      originalRefStartPos, originalRefEndPos);
+        RleString *consensusRegionH2 = substringConsensusByOrigRefPos(poaH2, polishedRleConsensusH2, &consensusH2StartPos,
+                                                                      originalRefStartPos, originalRefEndPos);
+        assert(consensusH1StartPos >= 0 && consensusH2StartPos >= 0);
+
         // save alignment
-        alignToBestConsensus(trueRefRleStringA, polishedRleConsensusH1, polishedRleConsensusH2,
+        alignToBestConsensus(trueRefRleStringA, consensusRegionH1, consensusRegionH2, consensusH1StartPos, consensusH2StartPos,
                              truthAlignmentsH1, truthAlignmentsH2, truthAlignmentDescriptors, params, alignmentDesc, logIdentifier);
+
         free(alignmentDesc); //copied in a2BC before saving
     }
 
@@ -776,8 +828,20 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
                                              stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0),
                                              trueRefRleStringB->length);
 
+        // get consensus seq for original positions
+        int64_t originalRefStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0) + bamChunk->chunkBoundaryStart;
+        int64_t originalRefEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0) +
+                                    bamChunk->chunkBoundaryEnd;
+        int64_t consensusH1StartPos = 0;
+        int64_t consensusH2StartPos = 0;
+        RleString *consensusRegionH1 = substringConsensusByOrigRefPos(poaH1, polishedRleConsensusH1, &consensusH1StartPos,
+                                                                      originalRefStartPos, originalRefEndPos);
+        RleString *consensusRegionH2 = substringConsensusByOrigRefPos(poaH2, polishedRleConsensusH2, &consensusH2StartPos,
+                                                                      originalRefStartPos, originalRefEndPos);
+        assert(consensusH1StartPos >= 0 && consensusH2StartPos >= 0);
+
         // save alignment
-        alignToBestConsensus(trueRefRleStringB, polishedRleConsensusH1, polishedRleConsensusH2,
+        alignToBestConsensus(trueRefRleStringB, consensusRegionH1, consensusRegionH2, consensusH1StartPos, consensusH2StartPos,
                              truthAlignmentsH1, truthAlignmentsH2, truthAlignmentDescriptors, params, alignmentDesc, logIdentifier);
         free(alignmentDesc); //copied in a2BC before saving
     }
@@ -867,7 +931,7 @@ void PoaFeature_handleDiploidHelenFeatures(
 
         // assign truth reads to hap1 and hap2: alignmentsToHapX's are populated now
         validReferenceAlignment = PoaFeature_handleDiploidHelenTruthAlignment(trueReferenceBamA, trueReferenceBamB,
-                bamChunk, originalReference, polishedRleConsensusH1, polishedRleConsensusH2,
+                bamChunk, originalReference, poaH1, poaH2, polishedRleConsensusH1, polishedRleConsensusH2,
                 truthAlignmentsToHap1, truthAlignmentsToHap2, params, logIdentifier);
 
     }
