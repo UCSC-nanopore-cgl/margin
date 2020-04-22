@@ -43,6 +43,7 @@ void usage() {
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
     fprintf(stderr, "    -2 --diploid             : Will perform diploid phasing.\n");
+    fprintf(stderr, "    -k --tempFilesToDisk     : Write temporary files to disk (for --diploid or supplementary output).\n");
 
 # ifdef _HDF5
     fprintf(stderr, "\nHELEN feature generation options:\n");
@@ -274,13 +275,13 @@ int main(int argc, char *argv[]) {
     int numThreads = 1;
     int64_t maxDepth = -1;
     bool diploid = FALSE;
+    bool inMemory = TRUE;
 
     // for feature generation
     HelenFeatureType helenFeatureType = HFEAT_NONE;
     bool setDefaultHelenFeature = false;
     char *trueReferenceBam = NULL;
     char *trueReferenceBamHap2 = NULL;
-    BamChunker *trueReferenceChunker = NULL;
     bool fullFeatureOutput = FALSE;
     int64_t splitWeightMaxRunLength = 0;
     void **helenHDF5Files = NULL;
@@ -328,10 +329,11 @@ int main(int argc, char *argv[]) {
 				{ "outputPoaDot", no_argument, 0, 'd'},
 				{ "outputHaplotypeBAM", no_argument, 0, 'm'},
 				{ "outputHaplotypeReads", no_argument, 0, 'n'},
+                { "tempFilesToDisk", no_argument, 0, 'k'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmn", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmnk", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -395,6 +397,9 @@ int main(int argc, char *argv[]) {
         case '2':
             diploid = TRUE;
             break;
+        case 'k':
+            inMemory = FALSE;
+            break;
         case 'c':
             writeChunkSupplementaryOutput = TRUE;
             break;
@@ -436,6 +441,7 @@ int main(int argc, char *argv[]) {
             if (stList_length(trueRefParts) != 2) {
                 st_errAbort("If --diploid is set, --trueReferenceBam must have two comma-separated values.");
             }
+            free(trueReferenceBam);
             trueReferenceBam = stString_copy(stList_get(trueRefParts, 0));
             trueReferenceBamHap2 = stString_copy(stList_get(trueRefParts, 1));
             stList_destruct(trueRefParts);
@@ -450,19 +456,30 @@ int main(int argc, char *argv[]) {
             st_errAbort("BAM does not appear to be indexed: %s\n", bamInFile);
         }
         free(idx);
-    } else if (access(referenceFastaFile, R_OK) != 0) {
+    }
+    if (access(referenceFastaFile, R_OK) != 0) {
         st_errAbort("Could not read from reference fastafile: %s\n", referenceFastaFile);
-    } else if (access(paramsFile, R_OK) != 0) {
+    }
+    if (access(paramsFile, R_OK) != 0) {
         st_errAbort("Could not read from params file: %s\n", paramsFile);
-    } else if (trueReferenceBam != NULL && access(trueReferenceBam, R_OK) != 0) {
-        st_errAbort("Could not read from truth file: %s\n", trueReferenceBam);
+    }
+    if (trueReferenceBam != NULL) {
+        if (access(trueReferenceBam, R_OK) != 0) {
+            st_errAbort("Could not read from truth file: %s\n", trueReferenceBam);
+        }
         char *idx = stString_print("%s.bai", trueReferenceBam);
         if (access(idx, R_OK) != 0) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBam);
         }
         free(idx);
-    } else if (trueReferenceBamHap2 != NULL && access(trueReferenceBamHap2, R_OK ) != 0 ) {
-        st_errAbort("Could not read from truth h2 file: %s\n", trueReferenceBamHap2);
+    }
+    if (trueReferenceBamHap2 != NULL) {
+        if (access(trueReferenceBamHap2, R_OK ) != 0 ) {
+            st_errAbort("Could not read from truth h2 file: %s\n", trueReferenceBamHap2);
+        }
+        if (stString_eq(trueReferenceBam, trueReferenceBamHap2)) {
+            st_errAbort("Truth H1 and H2 files are the same: %", trueReferenceBam);
+        }
         char *idx = stString_print("%s.bai", trueReferenceBamHap2);
         if (access(idx, R_OK ) != 0 ) {
             st_errAbort("BAM does not appear to be indexed: %s\n", trueReferenceBamHap2);
@@ -544,12 +561,13 @@ int main(int argc, char *argv[]) {
     }
 
     // for feature generation
-    BamChunker *trueReferenceBamChunker = NULL;
-    if (trueReferenceBam != NULL) {
-        trueReferenceBamChunker = bamChunker_copyConstruct(bamChunker);
-        free(trueReferenceBamChunker->bamFile);
-        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
-    }
+    //TODO remove
+//    BamChunker *trueReferenceBamChunker = NULL;
+//    if (trueReferenceBam != NULL) {
+//        trueReferenceBamChunker = bamChunker_copyConstruct(bamChunker);
+//        free(trueReferenceBamChunker->bamFile);
+//        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
+//    }
 #ifdef _HDF5
     if (helenFeatureType != HFEAT_NONE) {
         helenHDF5Files = (void **) openHelenFeatureHDF5FilesByThreadCount(outputBase, numThreads);
@@ -570,7 +588,7 @@ int main(int argc, char *argv[]) {
                                                               ? outputReadCsvFile : NULL,
                                                               outputRepeatCounts && !writeChunkSupplementaryOutputOnly
                                                               ? outputRepeatCountFile : NULL,
-                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL, 0);
+                                                              diploid ? ".hap1" : "", diploid ? ".hap2" : NULL, inMemory);
 
     // (may) need to shuffle chunks
     stList *chunkOrder = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
@@ -797,11 +815,14 @@ int main(int argc, char *argv[]) {
             // helen
             #ifdef _HDF5
             if (helenFeatureType != HFEAT_NONE) {
-                handleDiploidHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
-                        helenHDF5Files, fullFeatureOutput, trueReferenceBam, trueReferenceBamHap2, params,
-                        logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2, readsBelongingToHap1,
-                        readsBelongingToHap2, polishedConsensusStringH1, polishedConsensusStringH2,
-                        polishedRleConsensusH1, polishedRleConsensusH2);
+                PoaFeature_handleDiploidHelenFeatures(helenFeatureType,
+                                                      splitWeightMaxRunLength,
+                                                      helenHDF5Files, fullFeatureOutput, trueReferenceBam,
+                                                      trueReferenceBamHap2, params,
+                                                      logIdentifier, chunkIdx, bamChunk, reads, poa_hap1, poa_hap2,
+                                                      readsBelongingToHap1,
+                                                      readsBelongingToHap2, polishedRleConsensusH1,
+                                                      polishedRleConsensusH2, rleReference);
             }
             #endif
 
@@ -838,9 +859,10 @@ int main(int argc, char *argv[]) {
             RleString *polishedRleConsensus = rleString_copy(poa->refString);
             polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
-                handleHelenFeatures(helenFeatureType, trueReferenceBamChunker, splitWeightMaxRunLength,
-                                    helenHDF5Files, fullFeatureOutput, trueReferenceBam, params, logIdentifier, chunkIdx,
-                                    bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
+                PoaFeature_handleHelenFeatures(helenFeatureType, splitWeightMaxRunLength,
+                                               helenHDF5Files, fullFeatureOutput, trueReferenceBam, params,
+                                               logIdentifier, chunkIdx,
+                                               bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
 
             }
             free(polishedConsensusString);
@@ -890,7 +912,7 @@ int main(int argc, char *argv[]) {
     stHash_destruct(referenceSequences);
     params_destruct(params);
     if (trueReferenceBam != NULL) free(trueReferenceBam);
-    if (trueReferenceBamChunker != NULL) bamChunker_destruct(trueReferenceBamChunker);
+    if (trueReferenceBamHap2 != NULL) free(trueReferenceBamHap2);
     if (regionStr != NULL) free(regionStr);
 #ifdef _HDF5
     if (helenHDF5Files != NULL) {
