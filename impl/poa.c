@@ -303,7 +303,7 @@ int64_t getMaxCommonSuffixLength(RleString *str1, int64_t length1, RleString *st
      * that is the same as a suffix of str.
      */
     int64_t i = 0;
-    while (length1 - i - 1 >= 0 && str2->length - i - 1 >= 0) {
+    while (length1 - i - 1 >= 0 && (int64_t) str2->length - i - 1 >= 0) {
         if (str1->rleString[length1 - 1 - i] != str2->rleString[str2->length - 1 - i] ||
             (compareRepeatCounts && str1->repeatCounts[length1 - 1 - i] != str2->repeatCounts[str2->length - 1 - i])) {
             break;
