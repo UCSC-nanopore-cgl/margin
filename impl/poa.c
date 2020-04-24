@@ -642,12 +642,13 @@ void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
     adjustAnchors(anchorPairs, 0, -firstRefPosition);
 
     // Get symbol strings
+    uint64_t maxRL = polishParams->useRunLengthEncoding ? (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength : 2;
     SymbolString sX = rleString_constructSymbolString(reference, firstRefPosition, endRefPosition - firstRefPosition,
                                                       polishParams->alphabet, polishParams->useRepeatCountsInAlignment,
-                                                      (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      maxRL);
     SymbolString sY = rleString_constructSymbolString(read, 0, read->length, polishParams->alphabet,
                                                       polishParams->useRepeatCountsInAlignment,
-                                                      (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      maxRL);
 
     // Get alignment
     getAlignedPairsWithIndelsUsingAnchors(readStrand ? polishParams->stateMachineForForwardStrandRead :

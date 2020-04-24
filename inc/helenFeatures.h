@@ -127,7 +127,7 @@ stList *PoaFeature_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
 
 void PoaFeature_handleHelenFeatures(HelenFeatureType helenFeatureType,
                                     int64_t splitWeightMaxRunLength, void **helenHDF5Files, bool fullFeatureOutput,
-                                    char *trueReferenceBam,
+                                    char *trueReferenceBam, RleString *originalReference,
                                     Params *params, char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, Poa *poa,
                                     stList *bamChunkReads,
                                     char *polishedConsensusString, RleString *polishedRleConsensus);
@@ -173,6 +173,7 @@ HelenFeatureTruthAlignment *HelenFeatureTruthAlignment_construct(int64_t startPo
 void HelenFeatureTruthAlignment_destruct(HelenFeatureTruthAlignment *hfta);
 int HelenFeatureTruthAlignment_cmp(const HelenFeatureTruthAlignment *hfta1, const HelenFeatureTruthAlignment *hfta2);
 
+double calculateAlignIdentity(RleString *XRLE, RleString *YRLE, stList *alignedPairs);
 void shiftAlignmentCoords(stList *alignedPairs, int64_t tupleIdx, int64_t shift);
 RleString *substringConsensusByOrigRefPos(Poa *poa, RleString *consensus, int64_t *startPos,
                                           int64_t origRefStartPos, int64_t origRefEndPos);

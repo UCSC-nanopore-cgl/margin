@@ -860,7 +860,7 @@ int main(int argc, char *argv[]) {
             polishedConsensusString = rleString_expand(polishedRleConsensus);
             if (helenFeatureType != HFEAT_NONE) {
                 PoaFeature_handleHelenFeatures(helenFeatureType, splitWeightMaxRunLength,
-                                               helenHDF5Files, fullFeatureOutput, trueReferenceBam, params,
+                                               helenHDF5Files, fullFeatureOutput, trueReferenceBam, rleReference, params,
                                                logIdentifier, chunkIdx,
                                                bamChunk, poa, reads, polishedConsensusString, polishedRleConsensus);
 

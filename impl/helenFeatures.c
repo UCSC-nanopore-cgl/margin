@@ -169,7 +169,7 @@ int PoaFeature_DiploidRleWeight_gapIndex(int64_t maxRunLength, bool forward) {
 void PoaFeature_handleHelenFeatures(
         // global params
         HelenFeatureType helenFeatureType, int64_t splitWeightMaxRunLength, void **helenHDF5Files,
-        bool fullFeatureOutput, char *trueReferenceBam, Params *params,
+        bool fullFeatureOutput, char *trueReferenceBam, RleString *originalReference, Params *params,
 
         // chunk params
         char *logIdentifier, int64_t chunkIdx, BamChunk *bamChunk, Poa *poa, stList *bamChunkReads,
@@ -210,7 +210,7 @@ void PoaFeature_handleHelenFeatures(
     if (trueReferenceBam != NULL) {
         // get alignment of true ref to assembly
         stList *trueRefReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        stList *unused = stList_construct3(0, (void (*)(void *)) stList_destruct);
+        stList *trueRefAligns = stList_construct3(0, (void (*)(void *)) stList_destruct);
         // construct new chunk
         BamChunk *trueRefBamChunk = bamChunk_copyConstruct(bamChunk);
         BamChunker *trueReferenceBamChunker = bamChunker_copyConstruct(bamChunk->parent);
@@ -218,68 +218,69 @@ void PoaFeature_handleHelenFeatures(
         trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
         trueRefBamChunk->parent = trueReferenceBamChunker;
         // get true ref as "read"
-        uint32_t trueAlignmentCount = convertToReadsAndAlignments(trueRefBamChunk, NULL, trueRefReads, unused);
+        uint32_t trueAlignmentCount = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReads, trueRefAligns);
 
-        // poor man's "do we have a unique alignment"
         if (trueAlignmentCount == 1) {
             BamChunkRead *trueRefRead = stList_get(trueRefReads, 0);
-            char *trueRefExpanded = rleString_expand(trueRefRead->rleRead);
+            stList *truthAlign = stList_get(trueRefAligns, 0);
+            trueRefRleString = rleString_copy(trueRefRead->rleRead);
 
-            uint16_t score;
-            stList *trueRefAlignmentRawSpace = alignConsensusAndTruthSSW(polishedConsensusString, trueRefExpanded,
-                                                                         &score);
+            // get consensus seq for original positions
+            uint64_t *originalReferenceRLEMap = rleString_getRleToNonRleCoordinateMap(originalReference);
+            int64_t originalRefRleChunkStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0);
+            int64_t originalRefRawChunkStartPos = originalReferenceRLEMap[originalRefRleChunkStartPos];
+            int64_t originalRefStartPos = originalRefRawChunkStartPos + bamChunk->chunkBoundaryStart;
+            int64_t originalRefRleChunkEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0);
+            int64_t originalRefRawChunkEndPos = originalReferenceRLEMap[originalRefRleChunkEndPos];
+            int64_t originalRefEndPos =  originalRefRawChunkEndPos + bamChunk->chunkBoundaryStart;
+            free(originalReferenceRLEMap);
+            int64_t consensusAlnShift = -1;
+            RleString *consensusRegion = substringConsensusByOrigRefPos(poa, polishedRleConsensus, &consensusAlnShift,
+                    originalRefStartPos, originalRefEndPos);
+            assert(consensusAlnShift >= 0);
+
+            // get alignment
+            double score_consensus, alignIdentity;
+            trueRefAlignment = alignConsensusAndTruthRLEWithKmerAnchors(consensusRegion, trueRefRleString,
+                    &score_consensus, params->polishParams);
+            shiftAlignmentCoords(trueRefAlignment, 0, consensusAlnShift);
+            rleString_destruct(consensusRegion);
+
+            // quick fail
+            if (stList_length(trueRefAlignment) <= TRUTH_ALN_MIN_MATCHES) {
+                alignIdentity = -1;
+            } else {
+                // trim edges, calculate identity
+                stList_removeInterval(trueRefAlignment, stList_length(trueRefAlignment) - 10, 10);
+                stList_removeInterval(trueRefAlignment, 0, 10);
+                alignIdentity = calculateAlignIdentity(polishedRleConsensus, trueRefRleString, trueRefAlignment);
+            }
+
+            // loggit
             if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
-                printMEAAlignment(polishedConsensusString, trueRefExpanded,
-                                  strlen(polishedConsensusString), strlen(trueRefExpanded),
-                                  trueRefAlignmentRawSpace, NULL, NULL);
+                char *consensusRaw = rleString_expand(polishedRleConsensus);
+                char *truthRaw = rleString_expand(trueRefRleString);
+                st_logInfo("\n");
+                st_logInfo(" %s RAW Consensus (length %d):\n    %s\n", logIdentifier, strlen(consensusRaw), consensusRaw);
+                st_logInfo(" %s RAW Truth (length %d):\n    %s\n", logIdentifier, strlen(truthRaw), truthRaw);
+                st_logInfo(" %s Alignment of truth consensus:\n", logIdentifier);
+                printMEAAlignment2(polishedRleConsensus, trueRefRleString, trueRefAlignment);
+                st_logInfo("\n");
+                free(consensusRaw);
+                free(truthRaw);
             }
 
-
-            // convert to rleSpace if appropriate
-            if (params->polishParams->useRunLengthEncoding) {
-                trueRefRleString = rleString_construct(trueRefExpanded);
-
-                uint64_t *polishedRleConsensus_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensus);
-                uint64_t *trueRefRleString_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(trueRefRleString);
-                trueRefAlignment = runLengthEncodeAlignment(trueRefAlignmentRawSpace, polishedRleConsensus_nonRleToRleCoordinateMap,
-                                                            trueRefRleString_nonRleToRleCoordinateMap);
-                free(polishedRleConsensus_nonRleToRleCoordinateMap);
-                free(trueRefRleString_nonRleToRleCoordinateMap);
-
-                if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
-                    printMEAAlignment(polishedRleConsensus->rleString, trueRefRleString->rleString,
-                                      strlen(polishedRleConsensus->rleString),
-                                      strlen(trueRefRleString->rleString),
-                                      trueRefAlignment, polishedRleConsensus->repeatCounts,
-                                      trueRefRleString->repeatCounts);
-                }
-                stList_destruct(trueRefAlignmentRawSpace);
+            if (alignIdentity < TRUTH_ALN_IDENTITY_THRESHOLD) {
+                st_logInfo(" %s True reference alignment failed with %d matches and align identity %f\n", logIdentifier,
+                           stList_length(trueRefAlignment), alignIdentity);
             } else {
-                trueRefRleString = rleString_construct_no_rle(trueRefExpanded);
-                trueRefAlignment = trueRefAlignmentRawSpace;
-            }
-
-
-            // we found a single alignment of reference
-            double refLengthRatio = 1.0 * strlen(trueRefExpanded) / strlen(polishedConsensusString);
-            double alnLengthRatio = 1.0 * stList_length(trueRefAlignment) / polishedRleConsensus->length;
-            int refLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - refLengthRatio)));
-            int alnLengthRatioHundredthsOffOne = abs((int) (100 * (1.0 - alnLengthRatio)));
-            if (stList_length(trueRefAlignment) > 0 && refLengthRatioHundredthsOffOne < 10 &&
-                alnLengthRatioHundredthsOffOne < 10) {
                 validReferenceAlignment = TRUE;
-            } else {
-                st_logInfo(" %s True reference alignment QC failed:  polished length %"PRId64", true ref length"
-                           " ratio (true/polished) %f, aligned pairs length ratio (true/polished): %f\n",
-                           logIdentifier, polishedRleConsensus->length, refLengthRatio, alnLengthRatio);
             }
 
-            //cleanup
-            free(trueRefExpanded);
         }
 
         stList_destruct(trueRefReads);
-        stList_destruct(unused);
+        stList_destruct(trueRefAligns);
         bamChunk_destruct(trueRefBamChunk);
         bamChunker_destruct(trueReferenceBamChunker);
     }
@@ -1083,7 +1084,8 @@ stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
     // initialize feature list
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_SimpleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
-        stList_append(featureList, PoaFeature_SimpleWeight_construct(i - 1, 0, ((PoaNode*)poa->nodes)->originalRefPos));
+        stList_append(featureList, PoaFeature_SimpleWeight_construct(i - 1, 0,
+                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
     }
 
     // for logging (of errors)
@@ -1145,7 +1147,7 @@ stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
                     // get current feature (or create if necessary)
                     PoaFeatureSimpleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_SimpleWeight_construct(i, k + 1, ((PoaNode*)node->inserts)->originalRefPos);
+                        currFeature = PoaFeature_SimpleWeight_construct(i, k + 1, -1);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -1231,7 +1233,7 @@ stList *PoaFeature_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, in
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_SplitRleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
         stList_append(featureList, PoaFeature_SplitRleWeight_construct(i - 1, 0, 0, maxRunLength,
-                ((PoaNode*)poa->nodes)->originalRefPos));
+                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
     }
 
     // for logging (of errors)
@@ -1286,7 +1288,7 @@ stList *PoaFeature_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, in
                     // get feature iterator
                     PoaFeatureSplitRleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_SplitRleWeight_construct(i, o + 1, 0, maxRunLength, currFeature->originalRefPosition);
+                        currFeature = PoaFeature_SplitRleWeight_construct(i, o + 1, 0, maxRunLength, -1);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -1368,7 +1370,7 @@ stList *PoaFeature_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_ChannelRleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
         stList_append(featureList, PoaFeature_ChannelRleWeight_construct(i - 1, 0, 0, maxRunLength,
-                ((PoaNode*)poa->nodes)->originalRefPos));
+                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
     }
 
     // for logging (of errors)
@@ -2249,10 +2251,11 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
 
 
     // Symbol strings
+    uint64_t maxRL = polishParams->useRunLengthEncoding ? (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength : 2;
     SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,
-                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      TRUE, maxRL);
     SymbolString sY = rleString_constructSymbolString(truthStr, 0, truthStr->length, polishParams->alphabet,
-                                                      TRUE, (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength);
+                                                      TRUE, maxRL);
     uint16_t apScore = 0;
 
     // Run the alignment
