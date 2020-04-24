@@ -12,7 +12,7 @@
 #include "helenFeatures.h"
 
 static char *FEATURE_TEST_PARAMS = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
-static char *FEATURE_TEST_NO_RLE_PARAMS = "../params/ont/r9.4/allParams.np.no_rle.json";
+static char *FEATURE_TEST_NO_RLE_PARAMS = "../params/misc/allParams.no_rle.json";
 static char *FEATURE_TEST_BAM = "../tests/data/featureTest/featureTest.bam";
 static char *FEATURE_TEST_FA = "../tests/data/featureTest/featureTest.fa";
 static char *FEATURE_TEST_TRUTH_BAM = "../tests/data/featureTest/featureTestTruth.bam";
@@ -363,7 +363,7 @@ void test_truthAlignments(CuTest *testCase) {
 
 CuSuite* featureTestSuite(void) {
     CuSuite* suite = CuSuiteNew();
-
+//
 //    SUITE_ADD_TEST(suite, test_simpleWeightIndex);
 //    SUITE_ADD_TEST(suite, test_splitRleWeightIndex);
 //    SUITE_ADD_TEST(suite, test_channelRleWeightIndex);

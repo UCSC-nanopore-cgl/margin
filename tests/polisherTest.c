@@ -1097,7 +1097,7 @@ void test_polishParams(CuTest *testCase) {
     CuAssertDblEquals(testCase, polishParams->minPosteriorProbForAlignmentAnchors[5], 0, 0);
 
     CuAssertDblEquals(testCase, polishParams->p->threshold, 0.01, 0);
-    CuAssertDblEquals(testCase, polishParams->p->minDiagsBetweenTraceBack, 10000, 0);
+    CuAssertDblEquals(testCase, polishParams->p->minDiagsBetweenTraceBack, 5000, 0);
     CuAssertDblEquals(testCase, polishParams->p->traceBackDiagonals, 40, 0);
     CuAssertDblEquals(testCase, polishParams->p->diagonalExpansion, 10, 0);
     CuAssertDblEquals(testCase, polishParams->p->constraintDiagonalTrim, 0, 0);
