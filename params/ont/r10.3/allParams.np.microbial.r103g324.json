@@ -20,74 +20,57 @@
 					0.021, 0.007, 0.967, 0.006, 
 					0.008, 0.008, 0.004, 0.980,
 		  			
-		  			1.0, 1.0, 1.0, 1.0, 
-		  			
-		  			0.25, 0.25, 0.25, 0.25 ]
-		  },
-		
-		  "useRunLengthEncoding" : true,
-		  
-		  "useRepeatCountsInAlignment" : true,
-		
-		  "includeSoftClipping" : false,
-		
-		  "chunkSize" : 5000,
-		
-		  "chunkBoundary" : 50,
-
-		  "maxDepth" : 128,
-		
-		  "referenceBasePenalty" : 0.5,
-		  
-		  "poaConstructCompareRepeatCounts" : true,
-		  
-		  "minPosteriorProbForAlignmentAnchors" : [ 0.9, 10, 0.95, 4, 0.99, 0 ],
-		  
-		  "candidateVariantWeight" : 0.18,
-		  
-		  "columnAnchorTrim" : 5,
-		  
-		  "maxConsensusStrings" : 100,
-		  
-		  "maxPoaConsensusIterations" : 0, 
-		  
-		  "minPoaConsensusIterations" : 0,
-			
-		  "maxRealignmentPolishIterations" : 1,
-		
-		  "minRealignmentPolishIterations" : 1, 
-		  
-		  "minReadsToCallConsensus" : 5,
-		  
-		  "filterReadsWhileHaveAtLeastThisCoverage" : 15,
-		  
-		  "hetSubstitutionProbability" : 0.0001,
-		  
-		  "hetRunLengthSubstitutionProbability" : 0.01,
-		  
-		  "useReadAlleles" : true,
-		  
-		  "useReadAllelesInPhasing" : false,
-		  
-		  "minAvgBaseQuality" : 10,
-		  
-		  "filterAlignmentsWithMapQBelowThisThreshold" : 60,
-		  
-		  "includeSecondaryAlignments" : false,
-		  
-		  "includeSupplementaryAlignments" : false,
-		  
-		  "pairwiseAlignmentParameters" : {
-			    "threshold" : 0.01,
-			    "minDiagsBetweenTraceBack" : 10000,
-			    "traceBackDiagonals" : 40,
-			    "diagonalExpansion" : 10,
-			    "constraintDiagonalTrim" : 0,
-			    "splitMatrixBiggerThanThis" : 250000000,
-			    "alignAmbiguityCharacters" : false,
-			    "dynamicAnchorExpansion" : true,
-			    "gapGamma" : 0.5
-		  },
+		  			1.0, 1.0, 1.0, 1.0,
+                  0.25,
+                  0.25,
+                  0.25,
+                  0.25
+                ]
+          },
+      "useRunLengthEncoding": true,
+      "useRepeatCountsInAlignment": true,
+      "includeSoftClipping": false,
+      "chunkSize": 200000,
+      "chunkBoundary": 5000,
+      "maxDepth": 128,
+      "referenceBasePenalty": 0.5,
+      "poaConstructCompareRepeatCounts": true,
+      "minPosteriorProbForAlignmentAnchors": [
+        0.9,
+        10,
+        0.95,
+        4,
+        0.99,
+        0
+      ],
+      "candidateVariantWeight": 0.18,
+      "columnAnchorTrim": 5,
+      "maxConsensusStrings": 100,
+      "maxPoaConsensusIterations": 0,
+      "minPoaConsensusIterations": 0,
+      "maxRealignmentPolishIterations": 1,
+      "minRealignmentPolishIterations": 1,
+      "skipHaploidPolishingIfDiploid": true,
+      "filterReadsWhileHaveAtLeastThisCoverage": 15,
+      "hetSubstitutionProbability": 0.0001,
+      "hetRunLengthSubstitutionProbability": 0.01,
+      "useReadAlleles": true,
+      "useReadAllelesInPhasing": true,
+      "minAvgBaseQuality": 10,
+      "filterAlignmentsWithMapQBelowThisThreshold": 60,
+      "includeSecondaryAlignments": false,
+      "includeSupplementaryAlignments": false,
+      "pairwiseAlignmentParameters": {
+        "threshold": 0.01,
+        "minDiagsBetweenTraceBack": 5000,
+        "traceBackDiagonals": 40,
+        "diagonalExpansion": 10,
+        "constraintDiagonalTrim": 0,
+        "splitMatrixBiggerThanThis": 250000000,
+        "alignAmbiguityCharacters": false,
+        "dynamicAnchorExpansion": true,
+        "gapGamma": 0.5
+      },
 		  
 		  "repeatCountSubstitutionMatrix" : {
 			  "repeatCountLogProbabilities_A_F": [

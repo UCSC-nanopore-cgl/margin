@@ -24,7 +24,7 @@ def main():
     # and y gaps are deletions with respect to the true assembly
     # read = read[:30000] + "GATTACAGATTACA" + read[30000:]
 
-    print("Read len:", len(read))
+    print("Read len:", len(read), file=sys.stderr)
     # read = read[:70000]
     fh = open("temp.fa", 'w')
     fh.write(">hello\n%s\n" % read)
@@ -49,8 +49,8 @@ def main():
 
             trueAssemblyAlignmentStart = int(axt[j].split()[2])
             predictedAssemblyAlignmentStart = int(axt[j].split()[5])
-            x = axt[j + 1]
-            y = axt[j + 2]
+            x = axt[j + 1].upper()
+            y = axt[j + 2].upper()
 
             def getAlignmentToSequenceCoordinateMap(alignedSeq):
                 toSeqCoordinate = {}
@@ -68,6 +68,11 @@ def main():
             yLen = len([i for i in y if i != '-'])
 
             if xLen > 50000 and yLen > 50000:
+                # x = x[10000:-10000]
+                # y = y[10000:-10000]
+                # xLen = len([i for i in x if i != '-'])
+                # yLen = len([i for i in y if i != '-'])
+
                 xGaps = len(x) - xLen
                 yGaps = len(y) - yLen
                 xGapEvents = len([i for i in range(1, len(x)) if x[i] == '-' and x[i - 1] != '-'])
@@ -96,29 +101,30 @@ def main():
 
     for xLen, yLen, matches, identity, mismatches, xGaps, yGaps, mismatchLocations in identities:
         print("xLen: %s, yLen: %s, matches: %s, identity: %s, mismatches: %s, xGaps: %s, yGaps: %s" % (
-            xLen, yLen, matches, identity, mismatches, xGaps, yGaps))
+            xLen, yLen, matches, identity, mismatches, xGaps, yGaps), file=sys.stderr)
         if verbose:
             for trueAssemblyIndex, predictedAssemblyIndex, xString, yString in mismatchLocations:
                 print(" Mismatch", trueAssemblyIndex, predictedAssemblyIndex, xString, yString)
 
-    qv = lambda x: -10.0 * math.log10(1.0 - x)
+    qv = lambda x: -10.0 * math.log10(1.0 - x) if x < 1.0 else 1000
 
     print(
         "total-xLen: %s, total-yLen: %s, total-matches: %s, total-identity: %s, "
         "qv: %s, qv-matches: %s, qv-inserts: %s, qv-deletes: %s, qv-indels: %s, "
         "total-mismatches: %s, total-xGaps (inserts): %s, total-yGaps (deletes): %s, total-xGapEvents (insert events): %s, total-yGapEvents (delete events): %s" %
         (totalXLen, totalYLen, totalMatches,
-         totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches),  # identity
-         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches)),  # overall qv
-         qv(totalMatches / (totalMatches + totalMismatches)),  # mismatch qv
-         qv(totalMatches / (totalXGaps + totalMatches)),  # insert qv
-         qv(totalMatches / (totalYGaps + totalMatches)),  # delete qv
-         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps)),  # delete qv
-         totalMismatches, totalXGaps, totalYGaps, totalXGapEvents, totalYGapEvents))
+         totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches + 0.0001),  # identity
+         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps + totalMismatches + 0.0001)),  # overall qv
+         qv(totalMatches / (totalMatches + totalMismatches + 0.0001)),  # mismatch qv
+         qv(totalMatches / (totalXGaps + totalMatches + 0.0001)),  # insert qv
+         qv(totalMatches / (totalYGaps + totalMatches + 0.0001)),  # delete qv
+         qv(totalMatches / (totalMatches + totalXGaps + totalYGaps + 0.0001)),  # delete qv
+         totalMismatches, totalXGaps, totalYGaps, totalXGapEvents, totalYGapEvents), file=sys.stderr)
 
     # Cleanup
     os.remove("temp.fa")
     os.remove("temp.axt")
+
 
 if __name__ == '__main__':
     main()
