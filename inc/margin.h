@@ -921,6 +921,8 @@ SymbolString rleString_constructSymbolString(RleString *s, int64_t start, int64_
  */
 uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString);
 
+uint64_t *rleString_getRleToNonRleCoordinateMap(RleString *rleString);
+
 uint8_t *rleString_rleQualities(RleString *rleString, const uint8_t *qualities);
 
 // Data structure for storing log-probabilities of observing

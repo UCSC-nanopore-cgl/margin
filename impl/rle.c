@@ -207,6 +207,19 @@ uint64_t *rleString_getNonRleToRleCoordinateMap(RleString *rleString) {
     return nonRleToRleCoordinateMap;
 }
 
+uint64_t *rleString_getRleToNonRleCoordinateMap(RleString *rleString) {
+    uint64_t *rleToNonRleCoordinateMap = st_malloc(sizeof(uint64_t) * rleString->length);
+
+    uint64_t j = 0;
+    for (uint64_t i = 0; i < rleString->length; i++) {
+        rleToNonRleCoordinateMap[i] = j;
+        j += rleString->repeatCounts[i];
+    }
+    assert(j == rleString->nonRleLength);
+
+    return rleToNonRleCoordinateMap;
+}
+
 stList *runLengthEncodeAlignment(stList *alignment,
                                  const uint64_t *seqXNonRleToRleCoordinateMap,
                                  const uint64_t *seqYNonRleToRleCoordinateMap) {
