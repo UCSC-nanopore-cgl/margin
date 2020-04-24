@@ -739,7 +739,8 @@ stHash *groupRleStrings(stList *rleStrings) {
      * compressed RLE string.
      */
 
-    stHash *h = stHash_construct3(rleString_stringKey, rleString_expandedStringEqualKey, // rleString_stringEqualKey, //
+    stHash *h = stHash_construct3(rleString_stringKey,
+                                  rleString_expandedStringEqualKey, //rleString_stringEqualKey, //rleString_expandedStringEqualKey, //rleString_stringEqualKey, //
                                   NULL, (void (*)(void *)) stList_destruct);
 
     for (uint64_t i = 0; i < stList_length(rleStrings); i++) {
@@ -1104,12 +1105,12 @@ stHash *bubbleGraph_getProfileSeqs(BubbleGraph *bg, stReference *ref) {
                 totalLogProb = stMath_logAddExact(totalLogProb, b->alleleReadSupports[b->readNo * k + j]);
             }
 
-            // Set prob as diff to most probable allele
+            // Normalize prob by totalLogProb
             uint64_t alleleOffset = b->alleleOffset - pSeq->alleleOffset;
             for (uint64_t k = 0; k < b->alleleNo; k++) {
                 float logProb = b->alleleReadSupports[b->readNo * k + j];
                 assert(logProb <= totalLogProb);
-                int64_t l = roundf(30.0 * (totalLogProb - logProb));
+                int64_t l = roundf(PROFILE_PROB_SCALAR * (totalLogProb - logProb));
                 assert(l >= 0);
                 pSeq->profileProbs[alleleOffset + k] = l > 255 ? 255 : l;
             }
@@ -1143,7 +1144,8 @@ stReference *bubbleGraph_getReference(BubbleGraph *bg, char *refName, Params *pa
         for (uint64_t j = 0; j < b->alleleNo; j++) {
             for (uint64_t k = 0; k < b->alleleNo; k++) {
                 s->substitutionLogProbs[j * b->alleleNo + k] =
-                        j == k ? 0 : roundf(-log(params->polishParams->hetSubstitutionProbability) * 30.0); //l;
+                        j == k ? 0 : roundf(
+                                -log(params->polishParams->hetSubstitutionProbability) * PROFILE_PROB_SCALAR); //l;
             }
         }
     }
@@ -1393,7 +1395,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
     // Set any homozygous alts back to being homozygous reference
     // This is really a hack because sometimes the phasing algorithm picks a non-reference allele for a homozygous
     // position
-    for (uint64_t i = 0; i < gF->length; i++) {
+    /*for (uint64_t i = 0; i < gF->length; i++) {
         Bubble *b = &bg->bubbles[gF->refStart + i];
 
         if (gF->haplotypeString1[i] == gF->haplotypeString2[i]) {
@@ -1404,7 +1406,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
                 gF->haplotypeString2[i] = refAlleleIndex;
             }
         }
-    }
+    }*/
 
     // Check / log the result
     bubbleGraph_logPhasedBubbleGraph(bg, hmm, path, *readsToPSeqs, profileSeqs, gF);

@@ -4,14 +4,19 @@
  * Released under the MIT license, see LICENSE.txt
  *
  * Plan:
- * ***> Sort out data and tests dir
+ * ***> Sort out external data
+ * ***> fix tests
+ * ***> remove params file duplication
+ * ***> cleanup stitch code
+ * ***> improve / cleanup allele selection code
+ * ***> merge margin/marginPolish
+ * ***> allow 128bit read phasing depth
  * ***> Cleanup / delete crufty code
- * ***> Investigate indel bias
+ * ***> allow vcf input to determine phasing sites / make vcf output compatible with whatshap
  */
 
 #include <getopt.h>
 #include <stdio.h>
-#include <memory.h>
 #include <hashTableC.h>
 
 #include "marginVersion.h"
@@ -62,7 +67,7 @@ int main(int argc, char *argv[]) {
     char *referenceFastaFile = NULL;
     char *outputBase = stString_copy("output");
     char *regionStr = NULL;
-    int numThreads = 1;
+    int64_t numThreads = 1;
     int64_t verboseBitstring = -1;
     bool outputPoaCsv = 0;
     bool outputRepeatCounts = 0;
@@ -134,7 +139,7 @@ int main(int argc, char *argv[]) {
                 outputReadPhasing = !outputReadPhasing;
                 break;
             case 't':
-                numThreads = atoi(optarg);
+                numThreads = strtol(optarg, NULL, 10);
                 if (numThreads <= 0) {
                     st_errAbort("Invalid thread count: %d", numThreads);
                 }
@@ -218,19 +223,29 @@ int main(int argc, char *argv[]) {
         // Now run the polishing method
 
         // Generate the haploid, polished partial order alignment (POA)
-        Poa *poa = poa_realignAll(reads, alignments, reference, params->polishParams);
+        time_t startTime = time(NULL);
+        Poa *poa = (diploid &&
+                    params->polishParams->skipHaploidPolishingIfDiploid) // If diploid check flag to see if bothering with haploid polish
+                   ? poa_realign(reads, alignments, reference,
+                                 params->polishParams) // This option just generates a POA against the input reference backgroun
+                   : poa_realignAll(reads, alignments, reference, params->polishParams); // This option refines the POA
+        time_t totalTime = time(NULL) - startTime;
+        st_logInfo("Took %f seconds to do haploid polishing step.\n", (float) totalTime);
 
         // If diploid
         if (diploid) {
             // Get the bubble graph representation
-            bool useReadAlleles = params->polishParams->useReadAlleles;
-            params->polishParams->useReadAlleles = params->polishParams->useReadAllelesInPhasing;
-            BubbleGraph *bg = bubbleGraph_constructFromPoa(poa, reads, params->polishParams);
-            params->polishParams->useReadAlleles = useReadAlleles;
+            startTime = time(NULL);
+            BubbleGraph *bg = bubbleGraph_constructFromPoa2(poa, reads, params->polishParams, 1);
+            totalTime = time(NULL) - startTime;
+            st_logInfo("Took %f seconds to build phasing bubble graph\n", (float) totalTime);
 
             // Now make a POA for each of the haplotypes
             stHash *readsToPSeqs;
+            startTime = time(NULL);
             stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
+            totalTime = time(NULL) - startTime;
+            st_logInfo("Took %f seconds to phase bubble graph\n", (float) totalTime);
 
             stSet *readsBelongingToHap1, *readsBelongingToHap2;
             stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
@@ -258,11 +273,13 @@ int main(int argc, char *argv[]) {
                        (int) gf->length, (float) totalHets / gf->length);
 
             st_logInfo("Building POA for each haplotype\n");
+            startTime = time(NULL);
             uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
             uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
-
             Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
             Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
+            totalTime = time(NULL) - startTime;
+            st_logInfo("Took %f seconds to build haplotype specific poas\n", (float) totalTime);
 
             // This does not help, so commenting out - may remove
             /*st_logInfo("Using read phasing to reestimate bases in phased manner\n");
@@ -273,6 +290,7 @@ int main(int argc, char *argv[]) {
                                 readsBelongingToHap2, readsBelongingToHap1, params->polishParams);*/
 
             if (params->polishParams->useRunLengthEncoding) {
+                startTime = time(NULL);
                 st_logInfo("Using read phasing to reestimate repeat counts in phased manner\n");
                 poa_estimatePhasedRepeatCountsUsingBayesianModel(poa_hap1, reads,
                                                                  params->polishParams->repeatSubMatrix,
@@ -283,6 +301,8 @@ int main(int argc, char *argv[]) {
                                                                  params->polishParams->repeatSubMatrix,
                                                                  readsBelongingToHap2, readsBelongingToHap1,
                                                                  params->polishParams);
+                totalTime = time(NULL) - startTime;
+                st_logInfo("Took %f seconds to re-estimate repeat counts\n", (float) totalTime);
             }
 
             // Output
@@ -314,7 +334,7 @@ int main(int argc, char *argv[]) {
     // Now stitch together the chunks
     st_logInfo("Stitching together final output\n");
     time_t startTime = time(NULL);
-    outputChunkers_stitchOld(outputChunkers, diploid); //, bamChunker->chunkCount);
+    outputChunkers_stitchLinear(outputChunkers, diploid); //, bamChunker->chunkCount);
     time_t totalTime = time(NULL) - startTime;
     st_logInfo("Took %f seconds to stitch together final output\n", (float) totalTime);
 

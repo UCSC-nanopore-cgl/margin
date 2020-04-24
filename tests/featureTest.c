@@ -11,8 +11,8 @@
 #include "margin.h"
 #include "helenFeatures.h"
 
-static char *FEATURE_TEST_PARAMS = "../params/allParams.np.json";
-static char *FEATURE_TEST_NO_RLE_PARAMS = "../params/allParams.np.no_rle.json";
+static char *FEATURE_TEST_PARAMS = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
+static char *FEATURE_TEST_NO_RLE_PARAMS = "../params/ont/r9.4/allParams.np.no_rle.json";
 static char *FEATURE_TEST_BAM = "../tests/data/featureTest/featureTest.bam";
 static char *FEATURE_TEST_FA = "../tests/data/featureTest/featureTest.fa";
 static char *FEATURE_TEST_TRUTH_BAM = "../tests/data/featureTest/featureTestTruth.bam";

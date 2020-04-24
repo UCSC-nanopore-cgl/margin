@@ -93,8 +93,8 @@ for i in range(args.start, end):
     for repeatCount in range(1, 51):
         PROB_REPEAT_COUNT_HAP1 = row["PROB_HAP1_REPEAT_COUNT_%i" % repeatCount]
         PROB_REPEAT_COUNT_HAP2 = row["PROB_HAP2_REPEAT_COUNT_%i" % repeatCount]
-        if PROB_REPEAT_COUNT_HAP1 >= 0.01 or PROB_REPEAT_COUNT_HAP2 >= 0.01:
-            labels.append("repeat count:{}, h1:{:.2f}, h2:{:.2f}".format(repeatCount, PROB_REPEAT_COUNT_HAP1,
+        if PROB_REPEAT_COUNT_HAP1 > 0.001 or PROB_REPEAT_COUNT_HAP2 > 0.001:
+            labels.append("repeat count:{}, h1:{:.3f}, h2:{:.3f}".format(repeatCount, PROB_REPEAT_COUNT_HAP1,
                                                                          PROB_REPEAT_COUNT_HAP2))
 
     dot.node(str(i), "\n".join(labels), shape="rectangle", fontcolor=backboneColor, color=backboneColor,
