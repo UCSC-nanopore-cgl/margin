@@ -9,7 +9,7 @@
 #include "margin.h"
 
 #define INPUT_BAM "../tests/data/chunkingTest/chunkingTest.bam"
-#define INPUT_PARAMS "../params/allParams.np.json"
+#define INPUT_PARAMS "../params/ont/r9.4/allParams.np.human.r94-g344.json"
 
 static PolishParams *getParameters(uint64_t chunkSize, uint64_t chunkBoundary, bool includeSoftClipping) {
     PolishParams *params = st_calloc(1, sizeof(PolishParams));

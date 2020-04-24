@@ -312,11 +312,6 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
                 st_errAbort("ERROR: minRealignmentPolishIterations parameter must zero or greater\n");
             }
             params->minRealignmentPolishIterations = (uint64_t) stJson_parseInt(js, tokens, tokenIndex);
-        } else if (strcmp(keyString, "minReadsToCallConsensus") == 0) {
-            if (stJson_parseInt(js, tokens, ++tokenIndex) < 0) {
-                st_errAbort("ERROR: minReadsToCallConsensus parameter must zero or greater\n");
-            }
-            params->minReadsToCallConsensus = (uint64_t) stJson_parseInt(js, tokens, tokenIndex);
         } else if (strcmp(keyString, "filterReadsWhileHaveAtLeastThisCoverage") == 0) {
             if (stJson_parseInt(js, tokens, ++tokenIndex) < 0) {
                 st_errAbort("ERROR: filterReadsWhileHaveAtLeastThisCoverage parameter must zero or greater\n");
@@ -339,6 +334,8 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
             params->hetRunLengthSubstitutionProbability = stJson_parseFloat(js, tokens, tokenIndex);
         } else if (strcmp(keyString, "useReadAlleles") == 0) {
             params->useReadAlleles = stJson_parseBool(js, tokens, ++tokenIndex);
+        } else if (strcmp(keyString, "skipHaploidPolishingIfDiploid") == 0) {
+            params->skipHaploidPolishingIfDiploid = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "useReadAllelesInPhasing") == 0) {
             params->useReadAllelesInPhasing = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "alphabet") == 0) {

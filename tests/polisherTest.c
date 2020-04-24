@@ -7,8 +7,7 @@
 #include "CuTest.h"
 #include "margin.h"
 
-static char *polishParamsFile = "../params/allParams.np.json";
-static char *polishParamsNoRleFile = "../params/allParams.np.no_rle.json";
+static char *polishParamsFile = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
 #define TEST_POLISH_FILES_DIR "../tests/data/polishTestExamples/"
 
 Params *getParams() {
@@ -1215,12 +1214,20 @@ void test_polish5kb_no_rle(CuTest *testCase) {
     char *region = "chr3:2150000-2155000";
 
     st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsNoRleFile, region, verbose, FALSE);
+
+    // Make a temporary params file with smaller default chunk sizes
+    char *tempParamsFile = "params.temp";
+    st_system("cat %s | sed 's/\"useRunLengthEncoding\": true,/\"useRunLengthEncoding\": false,/' > %s",
+              polishParamsFile, tempParamsFile);
+
+
+    int64_t i = polishingTest(bamFile, referenceFile, tempParamsFile, region, verbose, FALSE);
     CuAssertTrue(testCase, i == 0);
 
     st_logInfo("\n\nTesting diploid polishing on %s\n", bamFile);
     i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, TRUE);
     CuAssertTrue(testCase, i == 0);
+    stFile_rmrf(tempParamsFile);
 }
 
 void test_polish5kb_no_region(CuTest *testCase) {

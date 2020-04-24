@@ -550,27 +550,27 @@ struct _polishParams {
 	uint64_t maxDepth;
 	bool includeSecondaryAlignments;
 	bool includeSupplementaryAlignments;
-	uint64_t filterAlignmentsWithMapQBelowThisThreshold;
-	// other configuration
-	double candidateVariantWeight; // The fraction (from 0 to 1) of the average position coverage needed to define a candidate variant
-	uint64_t columnAnchorTrim; // The min distance between a column anchor and a candidate variant
-	uint64_t maxConsensusStrings; // The maximum number of different consensus strings to consider for a substring.
-	uint64_t maxPoaConsensusIterations; // Maximum number of poa_consensus / realignment iterations
-	uint64_t minPoaConsensusIterations; // Minimum number of poa_consensus / realignment iterations
-	uint64_t maxRealignmentPolishIterations; // Maximum number of poa_polish iterations
-	uint64_t minRealignmentPolishIterations; // Minimum number of poa_polish iterations
-	uint64_t minReadsToCallConsensus; // Min reads to choose between consensus sequences for a region
-	uint64_t filterReadsWhileHaveAtLeastThisCoverage; // Only filter read substrings if we have at least this coverage
-	// at a locus
-	double minAvgBaseQuality; // Minimum average base quality to include a substring for consensus finding
-	double hetSubstitutionProbability; // The probability of a heterozygous variant
-	double hetRunLengthSubstitutionProbability; // The probability of a heterozygous run length
+    uint64_t filterAlignmentsWithMapQBelowThisThreshold;
+    // other configuration
+    double candidateVariantWeight; // The fraction (from 0 to 1) of the average position coverage needed to define a candidate variant
+    uint64_t columnAnchorTrim; // The min distance between a column anchor and a candidate variant
+    uint64_t maxConsensusStrings; // The maximum number of different consensus strings to consider for a substring.
+    uint64_t maxPoaConsensusIterations; // Maximum number of poa_consensus / realignment iterations
+    uint64_t minPoaConsensusIterations; // Minimum number of poa_consensus / realignment iterations
+    uint64_t maxRealignmentPolishIterations; // Maximum number of poa_polish iterations
+    uint64_t minRealignmentPolishIterations; // Minimum number of poa_polish iterations
+    uint64_t filterReadsWhileHaveAtLeastThisCoverage; // Only filter read substrings if we have at least this coverage
+    bool skipHaploidPolishingIfDiploid; // If doing diploid polishing, flag specifies if to skip initial diploid polish
+    // at a locus
+    double minAvgBaseQuality; // Minimum average base quality to include a substring for consensus finding
+    double hetSubstitutionProbability; // The probability of a heterozygous variant
+    double hetRunLengthSubstitutionProbability; // The probability of a heterozygous run length
 
-	// Poa parameters
-	bool poaConstructCompareRepeatCounts; // use the repeat counts in deciding if an indel can be shifted
-	double referenceBasePenalty; // used by poa_getConsensus to weight against picking the reference base
-	double *minPosteriorProbForAlignmentAnchors; // used by by poa_getAnchorAlignments to determine which alignment pairs
-	// to use for alignment anchors during poa_realignIterative, of the form of even-length array of form
+    // Poa parameters
+    bool poaConstructCompareRepeatCounts; // use the repeat counts in deciding if an indel can be shifted
+    double referenceBasePenalty; // used by poa_getConsensus to weight against picking the reference base
+    double *minPosteriorProbForAlignmentAnchors; // used by by poa_getAnchorAlignments to determine which alignment pairs
+    // to use for alignment anchors during poa_realignIterative, of the form of even-length array of form
 	// [ min_posterio_anchor_prob_1, diagonal_expansion_1,  min_posterio_anchor_prob_2, diagonal_expansion_2, ... ]
 	int64_t minPosteriorProbForAlignmentAnchorsLength;  // Length of array minPosteriorProbForAlignmentAnchors
 };
@@ -1298,7 +1298,7 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
 
-void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased);
+void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased);
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers);
 

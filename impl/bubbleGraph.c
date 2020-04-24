@@ -739,7 +739,8 @@ stHash *groupRleStrings(stList *rleStrings) {
      * compressed RLE string.
      */
 
-    stHash *h = stHash_construct3(rleString_stringKey, rleString_expandedStringEqualKey, // rleString_stringEqualKey, //
+    stHash *h = stHash_construct3(rleString_stringKey,
+                                  rleString_expandedStringEqualKey, //rleString_stringEqualKey, //rleString_expandedStringEqualKey, //rleString_stringEqualKey, //
                                   NULL, (void (*)(void *)) stList_destruct);
 
     for (uint64_t i = 0; i < stList_length(rleStrings); i++) {
@@ -1394,7 +1395,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
     // Set any homozygous alts back to being homozygous reference
     // This is really a hack because sometimes the phasing algorithm picks a non-reference allele for a homozygous
     // position
-    for (uint64_t i = 0; i < gF->length; i++) {
+    /*for (uint64_t i = 0; i < gF->length; i++) {
         Bubble *b = &bg->bubbles[gF->refStart + i];
 
         if (gF->haplotypeString1[i] == gF->haplotypeString2[i]) {
@@ -1405,7 +1406,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
                 gF->haplotypeString2[i] = refAlleleIndex;
             }
         }
-    }
+    }*/
 
     // Check / log the result
     bubbleGraph_logPhasedBubbleGraph(bg, hmm, path, *readsToPSeqs, profileSeqs, gF);

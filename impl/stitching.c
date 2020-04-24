@@ -1076,10 +1076,9 @@ void writeReadPartition(stHash *readsInHap, FILE *fh) {
     stHash_destructIterator(it);
 }
 
-//TODO remove
-void outputChunkers_stitchOld(OutputChunkers *outputChunkers, bool phased) {
+void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased) {
     /*
-     * Stitch together the outputs
+     * Stitch together the outputs using a single thread, but very minimal memory.
      */
 
     // Setup to write out the chunks

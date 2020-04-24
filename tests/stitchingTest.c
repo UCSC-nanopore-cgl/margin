@@ -5,7 +5,7 @@
 #include "CuTest.h"
 #include "margin.h"
 
-static char *paramsFile = "../params/allParams.np.json";
+static char *paramsFile = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
 static char *outputSequenceFile = "./testStitchingSequenceFile.fa";
 static char *outputPoaFile = "./testStitchingPoaFile.csv";
 static char *outputRepeatCountFile = "./testStitchingRepeatCountFile.csv";
