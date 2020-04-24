@@ -22,16 +22,16 @@ time ../margin ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/*.b
 
 # Calculate identity
 echo Comparing predicated haplotype1 to true haplotype1
-time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa output.fa.hap1 verbose > th1_ph1_mismatches.txt
+time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa output.fa.hap1 verbose >th1_ph1_mismatches.txt
 
 echo Comparing predicated haplotype2 to true haplotype1
-time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa output.fa.hap2 verbose > th1_ph2_mismatches.txt
+time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa output.fa.hap2 verbose >th1_ph2_mismatches.txt
 
 echo Comparing predicated haplotype1 to true haplotype2
-time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa output.fa.hap1 verbose > th2_ph1_mismatches.txt
+time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa output.fa.hap1 verbose >th2_ph1_mismatches.txt
 
 echo Comparing predicated haplotype2 to true haplotype2
-time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa output.fa.hap2 verbose > th2_ph2_mismatches.txt
+time python3 ../../scripts/dirty_assembly_compare.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa output.fa.hap2 verbose >th2_ph2_mismatches.txt
 
 # Build collection of differences
 time python3 ../../scripts/dirty_assembly_compare.py output.fa.hap1 output.fa.hap2 verbose >predictedMismatches.txt
@@ -42,8 +42,7 @@ echo Comparing predicted hets
 time python3 ../../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt >validatedMismatches.txt
 cat validatedMismatches.txt
 
-if [ ${makePlots} = TRUE ]
-then
+if [ ${makePlots} = TRUE ]; then
   # Make POA visualizations of each difference
   echo Making POA graph visualizations of difference
   mkdir visualizations

@@ -1,4 +1,3 @@
-
 makePlots=$1
 
 pathToData=/Users/benedictpaten/CLionProjects/MarginPolish/tests/data/externalData
