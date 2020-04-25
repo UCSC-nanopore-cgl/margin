@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 project(marginPhase VERSION 1.1.0)
 
 #set(CMAKE_CXX_STANDARD 14)
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt ")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG -fsanitize=address -static-libasan")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt ")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG -fsanitize=address -static-libasan")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG")
 
 project(marginPhase LANGUAGES C)
@@ -299,6 +299,11 @@ target_link_libraries(hts pthread z)
 # Build margin library
 add_library(marginLib ${SOURCE_FILES} ${CORE_SOURCE_FILES} ${SSW_SOURCES})
 target_link_libraries(marginLib son hts)
+
+if (OPENMP_FOUND)
+    target_link_libraries(marginLib OpenMP::OpenMP_CXX)
+endif ()
+
 if (HDF5_FOUND)
     target_link_libraries(marginLib ${HDF5_C_LIBRARIES})
 endif ()
