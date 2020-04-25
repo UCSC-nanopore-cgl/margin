@@ -1320,22 +1320,31 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
     outputChunkers_openForStitching(outputChunkers);
 
     // Create a cache to hold the chunks, ordered by their ordinal
-    int64_t foundChunks = 0;
     ChunkToStitch **chunks = st_calloc(chunkCount, sizeof(ChunkToStitch *));
+    int64_t *foundChunksPerThread = st_calloc(outputChunkers->noOfOutputChunkers, sizeof(int64_t));
 
     /// get all chunks
+    # ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic,1)
+    # endif
     for (int64_t i = 0; i < outputChunkers->noOfOutputChunkers; i++) {
+        foundChunksPerThread[i] = 0;
         ChunkToStitch *chunk = NULL;
         while ((chunk = outputChunker_readChunk(stList_get(outputChunkers->tempFileChunkers, i), phased)) != NULL) {
             if (chunks[chunk->chunkOrdinal] != NULL) {
                 st_errAbort("Encountered chunk %"PRId64" twice while reading from temp files!");
             }
             chunks[chunk->chunkOrdinal] = chunk;
-            foundChunks++;
+            foundChunksPerThread[i]++;
         }
     }
 
     // sanity check debugging
+    int64_t foundChunks = 0;
+    for (int64_t i = 0; i < outputChunkers->noOfOutputChunkers; i++) {
+        foundChunks += foundChunksPerThread[i];
+    }
+    free(foundChunksPerThread);
     if (foundChunks != chunkCount) {
         int64_t i = 0;
         stList *missingChunks = stList_construct3(0, free);
@@ -1345,7 +1354,6 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
         if (stList_length(missingChunks) == 10 && i != outputChunkers->noOfOutputChunkers) stList_append(missingChunks, "..");
         st_errAbort("Missing %"PRId64" chunks: %s\n", chunkCount - foundChunks, stString_join2(", ", missingChunks));
     }
-
 
     // prep for merging
     int64_t contigStartIdx = 0;

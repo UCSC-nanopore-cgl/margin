@@ -892,7 +892,19 @@ int main(int argc, char *argv[]) {
     } else {
         handleMerge(bamChunker, chunkResults, numThreads, params, polishedReferenceOutFh);
     }*/
-    outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
+
+    time_t mergeStartTime = time(NULL);
+    if (params->polishParams->shuffleChunks) {
+        st_logCritical("> Starting merge\n");
+        outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
+    } else {
+        st_logCritical("> Starting linear merge\n");
+        outputChunkers_stitchLinear(outputChunkers, diploid);
+    }
+    time_t mergeEndTime = time(NULL);
+    st_logCritical("> Merging took %s\n", getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime));
+    outputChunkers_destruct(outputChunkers);
+    st_logCritical("> Merge cleanup took %s\n", getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime));
 
     // everything has been written, cleanup merging infrastructure
     /*fclose(polishedReferenceOutFh);
@@ -907,7 +919,6 @@ int main(int argc, char *argv[]) {
     }*/
 
     // Cleanup
-    outputChunkers_destruct(outputChunkers);
     bamChunker_destruct(bamChunker);
     stHash_destruct(referenceSequences);
     params_destruct(params);

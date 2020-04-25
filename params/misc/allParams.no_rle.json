@@ -1,0 +1,110 @@
+{
+	"polish": {
+
+		"alphabet" : "nucleotide",
+
+		"hmmForwardStrandReadGivenReference" : {
+				"type" : 2,
+
+				"emissionsType" : 0,
+
+				"transitions": [
+					0.80000, 0.10000, 0.10000,
+					0.500000, 0.500000, 0.000000,
+					0.500000, 0.000000, 0.500000
+				],
+
+				"emissions": [
+					0.969, 0.005, 0.017, 0.009,
+					0.008, 0.973, 0.007, 0.012,
+					0.021, 0.007, 0.967, 0.006,
+					0.008, 0.008, 0.004, 0.980,
+
+					1.0, 1.0, 1.0, 1.0,
+
+					0.25, 0.25, 0.25, 0.25 ]
+		},
+
+		"useRunLengthEncoding" : false,
+
+		"useRepeatCountsInAlignment" : false,
+
+		"includeSoftClipping" : false,
+
+		"chunkSize" : 200000,
+
+		"chunkBoundary" : 50,
+
+		"maxDepth" : 64,
+
+		"shuffleChunks" : false,
+
+		"referenceBasePenalty" : 0.5,
+
+		"poaConstructCompareRepeatCounts" : true,
+
+		"minPosteriorProbForAlignmentAnchors" : [ 0.9, 10, 0.95, 4, 0.99, 0 ],
+
+		"candidateVariantWeight" : 0.18,
+
+		"columnAnchorTrim" : 5,
+
+		"maxConsensusStrings" : 100,
+
+		"maxPoaConsensusIterations" : 0,
+
+		"minPoaConsensusIterations" : 0,
+
+		"maxRealignmentPolishIterations" : 1,
+
+		"minRealignmentPolishIterations" : 1,
+		
+		"useReadAlleles" : true,
+
+		"filterReadsWhileHaveAtLeastThisCoverage" : 15,
+
+		"hetSubstitutionProbability" : 0.0001,
+		  
+		"hetRunLengthSubstitutionProbability" : 0.0001,
+		  
+		"useReadAllelesInPhasing" : false,
+
+		"minAvgBaseQuality" : 10,
+		
+		"filterAlignmentsWithMapQBelowThisThreshold" : 60,
+		  
+		"includeSecondaryAlignments" : false,
+		  
+		"includeSupplementaryAlignments" : false,
+
+		"pairwiseAlignmentParameters" : {
+			"threshold" : 0.01,
+			"minDiagsBetweenTraceBack" : 10000,
+			"traceBackDiagonals" : 40,
+			"diagonalExpansion" : 10,
+			"constraintDiagonalTrim" : 0,
+			"splitMatrixBiggerThanThis" : 250000000,
+			"alignAmbiguityCharacters" : false,
+			"dynamicAnchorExpansion" : true,
+			"gapGamma" : 0.5
+		}
+	},
+	"phase" : {
+
+		"maxNotSumTransitions" : true,
+
+		"minPartitionsInAColumn" : 200,
+
+		"maxPartitionsInAColumn" : 200,
+
+		"minPosteriorProbabilityForPartition" : 0.0,
+
+		"maxCoverageDepth" : 64,
+
+		"minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 2,
+
+		"roundsOfIterativeRefinement": 10,
+
+		"verbose" : 0
+	}
+}
