@@ -23,8 +23,8 @@ cp ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa tr
 
 # If truth is reverse complement of region, reverse complement
 if [ ${reverseComplement} = TRUE ]; then
-  python3 ../../scripts/reverseComp.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa > true_h1.fa
-  python3 ../../scripts/reverseComp.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa > true_h2.fa
+  python3 ../../scripts/reverseComp.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h1*.fa >true_h1.fa
+  python3 ../../scripts/reverseComp.py ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/HG002_h2*.fa >true_h2.fa
 fi
 
 # Run margin
@@ -50,7 +50,7 @@ time python3 ../../scripts/dirty_assembly_compare.py true_h1.fa true_h2.fa verbo
 
 # Compare differences
 echo Comparing predicted hets
-time python3 ../../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt > validatedMismatches.txt
+time python3 ../../scripts/compareHets.py trueMismatches.txt predictedMismatches.txt >validatedMismatches.txt
 cat validatedMismatches.txt
 
 if [ ${makePlots} = TRUE ]; then
