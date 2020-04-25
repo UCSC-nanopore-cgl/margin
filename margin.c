@@ -4,9 +4,9 @@
  * Released under the MIT license, see LICENSE.txt
  *
  * Plan:
+ * ***> remove params file duplication
  * ***> Sort out external data
  * ***> fix tests
- * ***> remove params file duplication
  * ***> cleanup stitch code
  * ***> improve / cleanup allele selection code
  * ***> merge margin/marginPolish
