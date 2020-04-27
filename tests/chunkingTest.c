@@ -974,6 +974,13 @@ static void test_readAlignmentsWithSoftclippingChunkEnd(CuTest *testCase) {
     bamChunker_destruct(chunker);
 }
 
+ChunkToStitch **getChunksToStitchFromStrings(char **strings, int len) {
+    ChunkToStitch **chunks = st_calloc(len, sizeof(ChunkToStitch*));
+    for (int i = 0; i < len ; i++) {
+        chunks[i] = chunkToStitch_construct(stString_print("R%d",i),i,FALSE, FALSE, FALSE);
+        stList_append(chunks[i]->readsHap1Lines, strings[i]);
+    }
+}
 
 void test_mergeContigChunks(CuTest *testCase) {
     Params *params = params_readParams(INPUT_PARAMS);
@@ -982,8 +989,9 @@ void test_mergeContigChunks(CuTest *testCase) {
     chunks[1] = stString_copy("AACCCCCCCCGG");
     chunks[2] = stString_copy("CCGGGGGGGGTT");
     chunks[3] = stString_copy("GGTTTTTTTT");
-    char* contig = mergeContigChunks(chunks, 0, 4, params);
-    CuAssertTrue(testCase, strcmp(contig, "AAAAAAAACCCCCCCCGGGGGGGGTTTTTTTT") == 0);
+    ChunkToStitch **chunksToStitch = getChunksToStitchFromStrings(chunks, 4);
+    ChunkToStitch *result = mergeContigChunkz(chunksToStitch, 0, 4, FALSE, params);
+    CuAssertTrue(testCase, strcmp(result->seqHap1, "AAAAAAAACCCCCCCCGGGGGGGGTTTTTTTT") == 0);
 }
 
 
@@ -1009,21 +1017,23 @@ void test_mergeContigChunksThreaded(CuTest *testCase) {
     chunks[15] = stString_copy("GGTTTTTTTT");
     char *truth = "AAAAAAAACCCCCCCCGGGGGGGGTTTTTTTTAAAAAAAACCCCCCCCGGGGGGGGTTTTTTTTAAAAAAAACCCCCCCCGGGGGGGGTTTTTTTTAAAAAAAACCCCCCCCGGGGGGGGTTTTTTTT";
     char* contig;
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 1, params, "testContig");
+
+    ChunkToStitch **chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 1, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 2, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 2, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 3, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 3, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 4, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 4, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 5, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 5, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 6, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 6, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 7, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 7, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0 );
-    contig = mergeContigChunksThreaded(chunks, 0, 16, 8, params, "testContig");
+    contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 8, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0 );
 }
 
