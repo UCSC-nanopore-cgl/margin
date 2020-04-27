@@ -12,7 +12,7 @@ coverage=${6}
 set -o xtrace
 
 # Create temp dir for output results
-tempDir=${region}_${company}_${seq}_unphaseTest
+tempDir=${region}_${company}_${seq}_${coverage}_unphaseTest
 mkdir ${tempDir}
 cd ${tempDir}
 

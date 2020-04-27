@@ -7,12 +7,20 @@ if len(sys.argv) != 3:
 trueHetsFile = sys.argv[1]
 predictedHetsFile = sys.argv[2]
 
+
 def rle(s):
     # Makes RLE string
     return [s[i] for i in range(len(s)) if i == 0 or s[i] != s[i - 1]]
 
+
 def compareRLEs(str1, str2):
     return rle(str1[5:-5]) != rle(str2[5:-5])
+
+
+def rc(s):
+    c = {"A": "T", "C": "G", "G": "C", "T": "A"}
+    return "".join([c[i] for i in s[::-1]])
+
 
 def getMismatches(mismatchFile):
     mismatches = {}
@@ -22,6 +30,9 @@ def getMismatches(mismatchFile):
             tokens = line.split()
             if len(tokens) > 0 and tokens[0] == "Mismatch":
                 mismatchLines.append((tokens[-2], tokens[-1], int(tokens[1]), int(tokens[2])))
+                minStr = lambda x: x if x < rc(x) else rc(x)
+                # tokens[-1] = minStr(tokens[-1])
+                # tokens[-2] = minStr(tokens[-2])
                 if tokens[-1] > tokens[-2]:
                     mismatches[tokens[-2]] = (tokens[-1], int(tokens[1]), int(tokens[2]))
                 else:
