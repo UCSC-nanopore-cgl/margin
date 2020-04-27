@@ -53,5 +53,20 @@ int64_t getAlignedReadLength3(bam1_t *aln, int64_t *start_softclip, int64_t *end
 void countIndels(uint32_t *cigar, uint32_t ncigar, int64_t *numInsertions, int64_t *numDeletions);
 
 
+/*
+ * Writes all supplemental information for a chunk
+ */
+void poa_writeSupplementalChunkInformation(char *outputBase, int64_t chunkIdx,
+                                            BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
+                                            bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts);
+void poa_writeSupplementalChunkInformation2(char *outputBase, char *haplotypeIdentifier, int64_t chunkIdx,
+                                            BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
+                                            bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts);
+void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chunkIdx,
+        BamChunk *bamChunk, stGenomeFragment *genomeFragment, Poa *poaH1, Poa *poaH2, stList *bamChunkReads,
+        stSet *readsInHap1, stSet *readsInHap2, Params *params, bool outputPoaDOT, bool outputPoaCSV,
+        bool outputRepeatCounts, bool outputHaplotypedReadIdCsv, bool outputHaplotypedBam, char *logIdentifier);
+
+
 #define MARGINPHASE_EXTERNAL_INTEGRATION_H
 #endif //MARGINPHASE_EXTERNAL_INTEGRATION_H

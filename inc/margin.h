@@ -773,6 +773,7 @@ void poa_printRepeatCountsCSV(Poa *poa, FILE *fH, stList *bamChunkReads);
  */
 void poa_printSummaryStats(Poa *poa, FILE *fH);
 
+
 /*
  * Creates a consensus reference sequence from the POA. poaToConsensusMap is a pointer to an
  * array of integers of length poa->refString->length, giving the index of the reference positions
@@ -1092,13 +1093,14 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
 					  int64_t approxOverlap, PolishParams *polishParams,
 					  int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
 
-char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-								Params *params, char *referenceSequenceName);
-char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, Params *params);
-char **mergeContigChunksDiploidThreaded(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
-		int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads, Params *params, char *referenceSequenceName);
-char **mergeContigChunksDiploid(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
-		stSet **lastReadsH1, stSet **lastReadsH2, int64_t startIdx, int64_t endIdxExclusive, Params *params);
+//TODO remove
+//char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
+//								Params *params, char *referenceSequenceName);
+//char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, Params *params);
+//char **mergeContigChunksDiploidThreaded(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+//		int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads, Params *params, char *referenceSequenceName);
+//char **mergeContigChunksDiploid(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+//		stSet **lastReadsH1, stSet **lastReadsH2, int64_t startIdx, int64_t endIdxExclusive, Params *params);
 
 /*
  * View functions

@@ -76,193 +76,6 @@ void usage() {
 }
 
 
-/*void handleMerge(BamChunker *bamChunker, char **chunkResults, int numThreads, Params *params, FILE *polishedReferenceOutFh) {
-
-    // prep for merge
-    assert(bamChunker->chunkCount > 0);
-    int64_t contigStartIdx = 0;
-    char *referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, 0)->refSeqName);
-    int64_t  lastReportedPercentage = 0;
-    time_t mergeStartTime = time(NULL);
-
-    // merge chunks
-    st_logCritical("> Merging polished reference strings from %"PRIu64" chunks.\n", bamChunker->chunkCount);
-
-    // find which chunks belong to each contig, merge each contig threaded, write out
-    for (int64_t chunkIdx = 1; chunkIdx <= bamChunker->chunkCount; chunkIdx++) {
-
-        // we encountered the last chunk in the contig (end of list or new refSeqName)
-        if (chunkIdx == bamChunker->chunkCount || !stString_eq(referenceSequenceName,
-                                                               bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName)) {
-
-            // generate and save sequence
-            char *contigSequence = mergeContigChunksThreaded(chunkResults, contigStartIdx, chunkIdx, numThreads,
-                                                             params, referenceSequenceName);
-            fastaWrite(contigSequence, referenceSequenceName, polishedReferenceOutFh);
-
-            // log progress
-            int64_t currentPercentage = (int64_t) (100 * chunkIdx / bamChunker->chunkCount);
-            if (currentPercentage != lastReportedPercentage) {
-                lastReportedPercentage = currentPercentage;
-                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
-                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
-                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
-                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                               currentPercentage, chunkIdx, bamChunker->chunkCount, timeDescriptor);
-                free(timeDescriptor);
-            }
-
-            // Clean up
-            free(contigSequence);
-            free(referenceSequenceName);
-
-            // Reset for next reference sequence
-            if (chunkIdx != bamChunker->chunkCount) {
-                contigStartIdx = chunkIdx;
-                referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName);
-            }
-        }
-        // nothing to do otherwise, just wait until end or new contig
-    }
-
-}
-
-
-void handleDiploidMerge(BamChunker *bamChunker, char **chunkResultsH1, char **chunkResultsH2, stSet **readsInH1,
-        stSet **readsInH2, int numThreads, Params *params, FILE *polishedReferenceOutFhH1,
-        FILE *polishedReferenceOutFhH2) {
-
-    // prep for merge
-    assert(bamChunker->chunkCount > 0);
-    int64_t contigStartIdx = 0;
-    char *referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, 0)->refSeqName);
-    int64_t  lastReportedPercentage = 0;
-    time_t mergeStartTime = time(NULL);
-
-    // merge chunks
-    st_logCritical("> Merging diploid polished reference strings from %"PRIu64" chunks.\n", bamChunker->chunkCount);
-
-    // find which chunks belong to each contig, merge each contig threaded, write out
-    for (int64_t chunkIdx = 1; chunkIdx <= bamChunker->chunkCount; chunkIdx++) {
-
-        // we encountered the last chunk in the contig (end of list or new refSeqName)
-        if (chunkIdx == bamChunker->chunkCount || !stString_eq(referenceSequenceName,
-                                                               bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName)) {
-
-            // generate and save sequence
-            char **contigSequences = mergeContigChunksDiploidThreaded(chunkResultsH1, chunkResultsH2,
-                    readsInH1, readsInH2, contigStartIdx, chunkIdx, numThreads, params, referenceSequenceName);
-            fastaWrite(contigSequences[0], referenceSequenceName, polishedReferenceOutFhH1);
-            fastaWrite(contigSequences[1], referenceSequenceName, polishedReferenceOutFhH2);
-
-            // log progress
-            int64_t currentPercentage = (int64_t) (100 * chunkIdx / bamChunker->chunkCount);
-            if (currentPercentage != lastReportedPercentage) {
-                lastReportedPercentage = currentPercentage;
-                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
-                int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
-                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
-                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                               currentPercentage, chunkIdx, bamChunker->chunkCount, timeDescriptor);
-                free(timeDescriptor);
-            }
-
-            // Clean up
-            free(contigSequences[0]);
-            free(contigSequences[1]);
-            free(contigSequences);
-            free(referenceSequenceName);
-
-            // Reset for next reference sequence
-            if (chunkIdx != bamChunker->chunkCount) {
-                contigStartIdx = chunkIdx;
-                referenceSequenceName = stString_copy(bamChunker_getChunk(bamChunker, chunkIdx)->refSeqName);
-            }
-        }
-        // nothing to do otherwise, just wait until end or new contig
-    }
-
-}*/
-
-
-void poa_writeSupplementalChunkInformation(char *outputBase, char *haplotypeIdentifier, int64_t chunkIdx,
-                                           BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
-                                           bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts) {
-
-    if (outputPoaDOT) {
-        char *outputPoaDotFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.dot",
-                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
-                                                    haplotypeIdentifier);
-        FILE *outputPoaTsvFileHandle = fopen(outputPoaDotFilename, "w");
-        poa_printDOT(poa, outputPoaTsvFileHandle, reads);
-        fclose(outputPoaTsvFileHandle);
-        free(outputPoaDotFilename);
-    }
-    if (outputPoaCSV) {
-        char *outputPoaCsvFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
-                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
-                                                    haplotypeIdentifier);
-        FILE *outputPoaCsvFileHandle = fopen(outputPoaCsvFilename, "w");
-        poa_printCSV(poa, outputPoaCsvFileHandle, reads, params->polishParams->repeatSubMatrix, 5);
-        fclose(outputPoaCsvFileHandle);
-        free(outputPoaCsvFilename);
-    }
-    if (outputRepeatCounts) {
-        char *outputRepeatCountFilename = stString_print("%s.repeatCount.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
-                                                         outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
-                                                         haplotypeIdentifier);
-        FILE *outputRepeatCountFileHandle = fopen(outputRepeatCountFilename, "w");
-        poa_printRepeatCountsCSV(poa, outputRepeatCountFileHandle, reads);
-        fclose(outputRepeatCountFileHandle);
-        free(outputRepeatCountFilename);
-    }
-}
-
-void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chunkIdx,
-        BamChunk *bamChunk, stGenomeFragment *genomeFragment, Poa *poaH1, Poa *poaH2, stList *bamChunkReads,
-        stSet *readsInHap1, stSet *readsInHap2, Params *params, bool outputPoaDOT, bool outputPoaCSV,
-        bool outputRepeatCounts, bool outputHaplotypedReadIdCsv, bool outputHaplotypedBam, char *logIdentifier) {
-
-    poa_writeSupplementalChunkInformation(outputBase, ".hap1", chunkIdx, bamChunk, poaH1, bamChunkReads,
-                                          params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
-    poa_writeSupplementalChunkInformation(outputBase, ".hap2", chunkIdx, bamChunk, poaH2, bamChunkReads,
-                                          params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
-
-    if (outputHaplotypedReadIdCsv) {
-        char *readIdsHap1Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap1.csv",
-                outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-        FILE *readIdsHap1File = fopen(readIdsHap1Filename, "w");
-        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap1File, TRUE);
-        fclose(readIdsHap1File);
-
-        char *readIdsHap2Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap2.csv",
-                outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
-        FILE *readIdsHap2File = fopen(readIdsHap2Filename, "w");
-        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap2File, FALSE);
-        fclose(readIdsHap2File);
-
-        free(readIdsHap1Filename);
-        free(readIdsHap2Filename);
-    }
-
-    if (outputHaplotypedBam) {
-        // setup
-        stSet *readIdsInHap1 = bamChunkRead_to_readName(readsInHap1);
-        stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
-
-        // write it
-        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, logIdentifier);
-
-        // cleanup
-        stSet_destruct(readIdsInHap1);
-        stSet_destruct(readIdsInHap2);
-    }
-
-}
-
-
 int main(int argc, char *argv[]) {
 
     // Parameters / arguments
@@ -561,18 +374,11 @@ int main(int argc, char *argv[]) {
     }
 
     // for feature generation
-    //TODO remove
-//    BamChunker *trueReferenceBamChunker = NULL;
-//    if (trueReferenceBam != NULL) {
-//        trueReferenceBamChunker = bamChunker_copyConstruct(bamChunker);
-//        free(trueReferenceBamChunker->bamFile);
-//        trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
-//    }
-#ifdef _HDF5
+    #ifdef _HDF5
     if (helenFeatureType != HFEAT_NONE) {
         helenHDF5Files = (void **) openHelenFeatureHDF5FilesByThreadCount(outputBase, numThreads);
     }
-#endif
+    #endif
 
     // output info
     char *outputSequenceFile = stString_print("%s.fa", outputBase);
@@ -603,9 +409,9 @@ int main(int argc, char *argv[]) {
     int64_t lastReportedPercentage = 0;
     time_t polishStartTime = time(NULL);
 
-# ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic,1)
-# endif
+    # ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic,1)
+    # endif
     for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
         int64_t chunkIdx = stIntTuple_get(stList_get(chunkOrder, i), 0);
         // Time all chunks
@@ -737,7 +543,7 @@ int main(int argc, char *argv[]) {
 
         // Write any optional outputs about repeat count and POA, etc.
         if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
-            poa_writeSupplementalChunkInformation(outputBase, "", chunkIdx, bamChunk, poa, reads, params,
+            poa_writeSupplementalChunkInformation(outputBase, chunkIdx, bamChunk, poa, reads, params,
                                                   outputPoaDOT, outputPoaCSV, outputRepeatCounts);
         }
 
@@ -800,11 +606,6 @@ int main(int argc, char *argv[]) {
             char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);
             char *polishedConsensusStringH2 = rleString_expand(polishedRleConsensusH2);
 
-            /*chunkResultsH1[chunkIdx] = polishedConsensusStringH1;
-            chunkResultsH2[chunkIdx] = polishedConsensusStringH2;
-            readSetsH1[chunkIdx] = readsBelongingToHap1;
-            readSetsH2[chunkIdx] = readsBelongingToHap2;*/
-
             //ancillary files
             if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
                 poa_writeSupplementalChunkInformationDiploid(outputBase, chunkIdx, bamChunk, gf, poa_hap1, poa_hap2,
@@ -854,6 +655,13 @@ int main(int argc, char *argv[]) {
             // output
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 
+
+            //ancillary files
+            if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
+                poa_writeSupplementalChunkInformation(outputBase, chunkIdx, bamChunk, poa, reads, params,
+                        outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+            }
+
             // HELEN feature outputs
             #ifdef _HDF5
             RleString *polishedRleConsensus = rleString_copy(poa->refString);
@@ -886,15 +694,8 @@ int main(int argc, char *argv[]) {
     }
 
     // merge chunks
-    /*if (diploid) {
-        handleDiploidMerge(bamChunker, chunkResultsH1, chunkResultsH2, readSetsH1, readSetsH2, numThreads,
-                params, polishedReferenceOutFh, polishedReferenceOutFhH2);
-    } else {
-        handleMerge(bamChunker, chunkResults, numThreads, params, polishedReferenceOutFh);
-    }*/
-
     time_t mergeStartTime = time(NULL);
-    if (params->polishParams->shuffleChunks) {
+    if (params->polishParams->shuffleChunks || inMemory) {
         st_logCritical("> Starting merge\n");
         outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
     } else {
@@ -905,18 +706,6 @@ int main(int argc, char *argv[]) {
     st_logCritical("> Merging took %s\n", getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime));
     outputChunkers_destruct(outputChunkers);
     st_logCritical("> Merge cleanup took %s\n", getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime));
-
-    // everything has been written, cleanup merging infrastructure
-    /*fclose(polishedReferenceOutFh);
-    if (polishedReferenceOutFhH2 != NULL) fclose(polishedReferenceOutFhH2);
-    for (int64_t chunkIdx = 0; chunkIdx < bamChunker->chunkCount; chunkIdx++) {
-        free(chunkResults[chunkIdx]);
-        if (diploid) {
-            free(chunkResultsH2[chunkIdx]);
-            stSet_destruct(readSetsH1[chunkIdx]);
-            stSet_destruct(readSetsH2[chunkIdx]);
-        }
-    }*/
 
     // Cleanup
     bamChunker_destruct(bamChunker);

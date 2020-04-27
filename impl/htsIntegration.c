@@ -839,3 +839,86 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     free(haplotype2BamOutFile);
     free(unmatchedBamOutFile);
 }
+
+
+void poa_writeSupplementalChunkInformation2(char *outputBase, char *haplotypeIdentifier, int64_t chunkIdx,
+                                            BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
+                                            bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts) {
+
+    if (outputPoaDOT) {
+        char *outputPoaDotFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.dot",
+                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                    haplotypeIdentifier);
+        FILE *outputPoaTsvFileHandle = fopen(outputPoaDotFilename, "w");
+        poa_printDOT(poa, outputPoaTsvFileHandle, reads);
+        fclose(outputPoaTsvFileHandle);
+        free(outputPoaDotFilename);
+    }
+    if (outputPoaCSV) {
+        char *outputPoaCsvFilename = stString_print("%s.poa.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
+                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                    haplotypeIdentifier);
+        FILE *outputPoaCsvFileHandle = fopen(outputPoaCsvFilename, "w");
+        poa_printCSV(poa, outputPoaCsvFileHandle, reads, params->polishParams->repeatSubMatrix, 5);
+        fclose(outputPoaCsvFileHandle);
+        free(outputPoaCsvFilename);
+    }
+    if (outputRepeatCounts) {
+        char *outputRepeatCountFilename = stString_print("%s.repeatCount.C%05"PRId64".%s-%"PRId64"-%"PRId64"%s.csv",
+                                                         outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd,
+                                                         haplotypeIdentifier);
+        FILE *outputRepeatCountFileHandle = fopen(outputRepeatCountFilename, "w");
+        poa_printRepeatCountsCSV(poa, outputRepeatCountFileHandle, reads);
+        fclose(outputRepeatCountFileHandle);
+        free(outputRepeatCountFilename);
+    }
+}
+
+void poa_writeSupplementalChunkInformation(char *outputBase, int64_t chunkIdx,
+                                           BamChunk *bamChunk, Poa *poa, stList *reads, Params *params,
+                                           bool outputPoaDOT, bool outputPoaCSV, bool outputRepeatCounts) {
+    poa_writeSupplementalChunkInformation2(outputBase, "", chunkIdx, bamChunk, poa, reads, params,
+                                           outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+}
+
+void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chunkIdx,
+                                                  BamChunk *bamChunk, stGenomeFragment *genomeFragment, Poa *poaH1, Poa *poaH2, stList *bamChunkReads,
+                                                  stSet *readsInHap1, stSet *readsInHap2, Params *params, bool outputPoaDOT, bool outputPoaCSV,
+                                                  bool outputRepeatCounts, bool outputHaplotypedReadIdCsv, bool outputHaplotypedBam, char *logIdentifier) {
+
+    poa_writeSupplementalChunkInformation2(outputBase, ".hap1", chunkIdx, bamChunk, poaH1, bamChunkReads,
+                                           params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+    poa_writeSupplementalChunkInformation2(outputBase, ".hap2", chunkIdx, bamChunk, poaH2, bamChunkReads,
+                                           params, outputPoaDOT, outputPoaCSV, outputRepeatCounts);
+
+    if (outputHaplotypedReadIdCsv) {
+        char *readIdsHap1Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap1.csv",
+                                                   outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+        FILE *readIdsHap1File = fopen(readIdsHap1Filename, "w");
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap1File, TRUE);
+        fclose(readIdsHap1File);
+
+        char *readIdsHap2Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap2.csv",
+                                                   outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
+        FILE *readIdsHap2File = fopen(readIdsHap2Filename, "w");
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap2File, FALSE);
+        fclose(readIdsHap2File);
+
+        free(readIdsHap1Filename);
+        free(readIdsHap2Filename);
+    }
+
+    if (outputHaplotypedBam) {
+        // setup
+        stSet *readIdsInHap1 = bamChunkRead_to_readName(readsInHap1);
+        stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
+
+        // write it
+        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, logIdentifier);
+
+        // cleanup
+        stSet_destruct(readIdsInHap1);
+        stSet_destruct(readIdsInHap2);
+    }
+
+}
