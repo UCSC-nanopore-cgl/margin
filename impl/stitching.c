@@ -7,37 +7,7 @@
 #include "margin.h"
 #include "htsIntegration.h"
 
-/*
- * ChunkToStitch
- */
 
-typedef struct _chunkToStitch {
-    /*
-     * Object for managing the output of a polished sequence.
-     */
-    bool startOfSequence; // Indicates if it is the first chunk in a sequence
-    int64_t chunkOrdinal; // The index of the chunk in the sequence of chunks
-
-    char *seqName; // The name of the sequence being polished
-
-    char *seqHap1; // The primary sequence
-    char *seqHap2; // The secondary haplotype, may be null.
-
-    // Following from the output CSV files, each line corresponds to a position in the sequences
-    // Each can be null.
-
-    // Lines (strings) from the POA:
-    stList *poaHap1StringsLines; // If not diploid, this is used to store the POA lines
-    stList *poaHap2StringsLines;
-
-    // Lines from the repeat count file
-    stList *repeatCountLinesHap1; // If not diploid, this is used to store the POA lines
-    stList *repeatCountLinesHap2;
-
-    // Both these will be present if phasing
-    stList *readsHap1Lines; // Reads from primary sequence
-    stList *readsHap2Lines; // Reads from the secondary sequence
-} ChunkToStitch;
 
 int chunkToStitch_cmp(ChunkToStitch *chunk1, ChunkToStitch *chunk2) {
     /*

@@ -19,7 +19,6 @@ typedef struct _poaFeatureSimpleWeight PoaFeatureSimpleWeight;
 struct _poaFeatureSimpleWeight {
     int64_t refPosition;
     int64_t insertPosition;
-    int64_t originalRefPosition;
     char label;
     double weights[POAFEATURE_SIMPLE_WEIGHT_TOTAL_SIZE];
     PoaFeatureSimpleWeight *nextInsert; //so we can model all inserts after a position
@@ -30,7 +29,6 @@ struct _poaFeatureSplitRleWeight {
     int64_t refPosition;
     int64_t insertPosition;
     int64_t runLengthPosition;
-    int64_t originalRefPosition;
     char labelChar;
     int64_t labelRunLength;
     PoaFeatureSplitRleWeight *nextRunLength; //so we can model all inserts after a position
@@ -44,7 +42,6 @@ struct _poaFeatureChannelRleWeight {
     int64_t refPosition;
     int64_t insertPosition;
     int64_t runLengthPosition;
-    int64_t originalRefPosition;
     char labelChar;
     int64_t labelRunLength;
     PoaFeatureChannelRleWeight *nextRunLength; //so we can model all inserts after a position
@@ -59,8 +56,6 @@ struct _poaFeatureDiploidRleWeight {
     int64_t refPosition;
     int64_t insertPosition;
     int64_t runLengthPosition;
-    int64_t referencePosition;
-    int64_t originalRefPosition;
     char labelChar;
     int64_t labelRunLength;
     PoaFeatureDiploidRleWeight* nextRunLength;
@@ -102,19 +97,19 @@ int PoaFeature_ChannelRleWeight_charRLIndex(int64_t maxRunLength, Symbol charact
 int PoaFeature_DiploidRleWeight_charIndex(int64_t maxRunLength, Symbol character, int64_t runLength, bool forward);
 int PoaFeature_DiploidRleWeight_gapIndex(int64_t maxRunLength, bool forward);
 
-PoaFeatureSimpleWeight *PoaFeature_SimpleWeight_construct(int64_t refPos, int64_t insPos, int64_t originalRefPos);
+PoaFeatureSimpleWeight *PoaFeature_SimpleWeight_construct(int64_t refPos, int64_t insPos);
 void PoaFeature_SimpleWeight_destruct(PoaFeatureSimpleWeight *feature);
 
 PoaFeatureSplitRleWeight *PoaFeature_SplitRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-        int64_t maxRunLength, int64_t originalRefPos);
+        int64_t maxRunLength);
 void PoaFeature_SplitRleWeight_destruct(PoaFeatureSplitRleWeight *feature);
 
 PoaFeatureChannelRleWeight * PoaFeature_ChannelRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-        int64_t maxRunLength, int64_t originalRefPos);
+        int64_t maxRunLength);
 void PoaFeature_ChannelRleWeight_destruct(PoaFeatureChannelRleWeight *feature);
 
 PoaFeatureDiploidRleWeight *PoaFeature_DiploidRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-        int64_t maxRunLength, int64_t originalRefPos);
+        int64_t maxRunLength);
 void PoaFeature_DiploidRleWeight_destruct(PoaFeatureDiploidRleWeight *feature);
 
 stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads);
@@ -175,8 +170,9 @@ int HelenFeatureTruthAlignment_cmp(const HelenFeatureTruthAlignment *hfta1, cons
 
 double calculateAlignIdentity(RleString *XRLE, RleString *YRLE, stList *alignedPairs);
 void shiftAlignmentCoords(stList *alignedPairs, int64_t tupleIdx, int64_t shift);
-RleString *substringConsensusByOrigRefPos(Poa *poa, RleString *consensus, int64_t *startPos,
-                                          int64_t origRefStartPos, int64_t origRefEndPos);
+RleString *getConsensusByEstimatedOriginalReferencePositions(RleString *originalReference, RleString *consensus,
+        RleString *trueRefRleString, int64_t originalRefRleChunkStartPos, int64_t originalRefRleChunkEndPos,
+        int64_t *rleEstimatedConsensusStartPos);
 
 stList *alignConsensusAndTruthSSW(char *consensusStr, char *truthStr, uint16_t *score);
 stList *alignConsensusAndTruthCPECAN(char *consensusStr, char *truthStr, double *score, PolishParams *polishParams);

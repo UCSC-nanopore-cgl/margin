@@ -172,6 +172,7 @@ int main(int argc, char *argv[]) {
             if (maxDepth < 0) {
                 st_errAbort("Invalid maxDepth: %s", optarg);
             }
+            break;
         case 'F':
             if (stString_eqcase(optarg, "simpleWeight") || stString_eqcase(optarg, "simple")) {
                 helenFeatureType = HFEAT_SIMPLE_WEIGHT;
@@ -530,7 +531,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Generate partial order alignment (POA) (destroys rleAlignments in the process)
-        poa = poa_realignAll2(reads, alignments, rleReference, bamChunk->chunkBoundaryStart, params->polishParams);
+        poa = poa_realignAll(reads, alignments, rleReference, params->polishParams);
 
         // Log info about the POA
         if (st_getLogLevel() >= info) {
@@ -586,8 +587,8 @@ int main(int argc, char *argv[]) {
             uint64_t *hap1 = getPaddedHaplotypeString(gf->haplotypeString1, gf, bg, params);
             uint64_t *hap2 = getPaddedHaplotypeString(gf->haplotypeString2, gf, bg, params);
 
-            Poa *poa_hap1 = bubbleGraph_getNewPoa2(bg, hap1, poa, reads, bamChunk->chunkBoundaryStart, params);
-            Poa *poa_hap2 = bubbleGraph_getNewPoa2(bg, hap2, poa, reads, bamChunk->chunkBoundaryStart, params);
+            Poa *poa_hap1 = bubbleGraph_getNewPoa(bg, hap1, poa, reads, params);
+            Poa *poa_hap2 = bubbleGraph_getNewPoa(bg, hap2, poa, reads, params);
 
             if(params->polishParams->useRunLengthEncoding) {
                 st_logInfo(" %s Using read phasing to reestimate repeat counts in phased manner\n", logIdentifier);
@@ -703,9 +704,13 @@ int main(int argc, char *argv[]) {
         outputChunkers_stitchLinear(outputChunkers, diploid);
     }
     time_t mergeEndTime = time(NULL);
-    st_logCritical("> Merging took %s\n", getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime));
+    char *tds = getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime);
+    st_logCritical("> Merging took %s\n", tds);
     outputChunkers_destruct(outputChunkers);
-    st_logCritical("> Merge cleanup took %s\n", getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime));
+    free(tds);
+    tds = getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime);
+    st_logCritical("> Merge cleanup took %s\n", tds);
+    free(tds);
 
     // Cleanup
     bamChunker_destruct(bamChunker);
