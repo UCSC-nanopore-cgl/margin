@@ -216,7 +216,7 @@ set(SONLIB_SOURCES
         externalTools/sonLib/externalTools/quicktree_1.1/src/sequence.c
         externalTools/sonLib/externalTools/quicktree_1.1/src/tree.c
         externalTools/sonLib/externalTools/quicktree_1.1/src/util.c
-        )
+        externalTools/sonLib/C/inc/sort_r.h)
 
 
 set(SSW_SOURCES
