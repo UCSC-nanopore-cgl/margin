@@ -882,6 +882,7 @@ outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outpu
             st_errAbort("Hap1 and hap2 suffixes are identical, can not open distinct files for output\n");
         }
         // Make temporary read phasing file if not specified
+        //TODO if inMemoryBuffers and !shouldOutputReadPartition, this results in shouldOutputReadPartition
         if (outputReadPartitionFile == NULL) {
             outputReadPartitionFile = "temp_read_phasing_file.csv";
             st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
