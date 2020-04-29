@@ -597,7 +597,6 @@ struct _poaNode {
 	stList *deletes; // Deletes that happen immediately after this position
 	char base; // Char representing base, e.g. 'A', 'C', etc.
 	uint64_t repeatCount; // Repeat count of base
-	int64_t originalRefPos; // Original reference position (informative)
 	double *baseWeights; // Weight given to each possible base
 	double *repeatCountWeights; // Weight given to each possible repeat count
 	stList *observations; // Individual events representing event, a list of PoaObservations
@@ -635,7 +634,7 @@ double poaDelete_getWeight(PoaDelete *toDelete);
  * Creates a POA representing the given RLE reference sequence, with one node for each reference base and a
  * prefix 'N'/1 base to represent place to add inserts/deletes that precede the first position of the reference.
  */
-Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount, int64_t refStartPos);
+Poa *poa_getReferenceGraph(RleString *reference, Alphabet *alphabet, uint64_t maxRepeatCount);
 
 /*
  * Adds to given POA the matches, inserts and deletes from the alignment of the given read to the reference.
@@ -652,7 +651,6 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
  * poa_getAnchorAlignments. The anchorAlignments can be null, in which case no anchors are used.
  */
 Poa *poa_realign(stList *bamChunkReads, stList *alignments, RleString *reference, PolishParams *polishParams);
-Poa *poa_realign2(stList *bamChunkReads, stList *alignments, RleString *reference, int64_t originalRefPos, PolishParams *polishParams);
 
 /*
  * Generates a set of anchor alignments for the reads aligned to a consensus sequence derived from the poa.
@@ -773,6 +771,7 @@ void poa_printRepeatCountsCSV(Poa *poa, FILE *fH, stList *bamChunkReads);
  */
 void poa_printSummaryStats(Poa *poa, FILE *fH);
 
+
 /*
  * Creates a consensus reference sequence from the POA. poaToConsensusMap is a pointer to an
  * array of integers of length poa->refString->length, giving the index of the reference positions
@@ -794,9 +793,6 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
 Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
                           PolishParams *polishParams, bool hmmMNotRealign,
                           int64_t minIterations, int64_t maxIterations);
-Poa *poa_realignIterative2(Poa *poa, stList *bamChunkReads, int64_t originalRefPos,
-                          PolishParams *polishParams, bool hmmMNotRealign,
-                          int64_t minIterations, int64_t maxIterations);
 
 /*
  * Convenience function that iteratively polishes sequence using poa_getConsensus and then poa_polish for
@@ -804,8 +800,6 @@ Poa *poa_realignIterative2(Poa *poa, stList *bamChunkReads, int64_t originalRefP
  */
 Poa *poa_realignAll(stList *bamChunkReads, stList *anchorAlignments, RleString *reference,
 					PolishParams *polishParams);
-Poa *poa_realignAll2(stList *bamChunkReads, stList *anchorAlignments, RleString *reference, int64_t originalRefPos,
-                     PolishParams *polishParams);
 
 /*
  * Greedily evaluate the top scoring indels.
@@ -1092,13 +1086,14 @@ int64_t removeOverlap(char *prefixString, int64_t prefixStringLength, char *suff
 					  int64_t approxOverlap, PolishParams *polishParams,
 					  int64_t *prefixStringCropEnd, int64_t *suffixStringCropStart);
 
-char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
-								Params *params, char *referenceSequenceName);
-char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, Params *params);
-char **mergeContigChunksDiploidThreaded(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
-		int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads, Params *params, char *referenceSequenceName);
-char **mergeContigChunksDiploid(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
-		stSet **lastReadsH1, stSet **lastReadsH2, int64_t startIdx, int64_t endIdxExclusive, Params *params);
+//TODO remove
+//char *mergeContigChunksThreaded(char **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
+//								Params *params, char *referenceSequenceName);
+//char *mergeContigChunks(char **chunks, int64_t startIdx, int64_t endIdxExclusive, Params *params);
+//char **mergeContigChunksDiploidThreaded(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+//		int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads, Params *params, char *referenceSequenceName);
+//char **mergeContigChunksDiploid(char **chunksH1, char **chunksH2, stSet **readsH1, stSet **readsH2,
+//		stSet **lastReadsH1, stSet **lastReadsH2, int64_t startIdx, int64_t endIdxExclusive, Params *params);
 
 /*
  * View functions
@@ -1253,8 +1248,6 @@ bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, P
  * Get Poa from bubble graph.
  */
 Poa *bubbleGraph_getNewPoa(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, Params *params);
-Poa *bubbleGraph_getNewPoa2(BubbleGraph *bg, uint64_t *consensusPath, Poa *poa, stList *reads, int64_t refStartPos,
-                            Params *params);
 
 /*
  * Gets the strand support skew for each allele.
@@ -1289,8 +1282,45 @@ char *getLogIdentifier();
 Emissions *rleNucleotideEmissions_construct(Emissions *emissions, RepeatSubMatrix *repeatSubMatrix, bool strand);
 
 /*
+ * ChunkToStitch
+ */
+
+typedef struct _chunkToStitch {
+    /*
+     * Object for managing the output of a polished sequence.
+     */
+    bool startOfSequence; // Indicates if it is the first chunk in a sequence
+    int64_t chunkOrdinal; // The index of the chunk in the sequence of chunks
+
+    char *seqName; // The name of the sequence being polished
+
+    char *seqHap1; // The primary sequence
+    char *seqHap2; // The secondary haplotype, may be null.
+
+    // Following from the output CSV files, each line corresponds to a position in the sequences
+    // Each can be null.
+
+    // Lines (strings) from the POA:
+    stList *poaHap1StringsLines; // If not diploid, this is used to store the POA lines
+    stList *poaHap2StringsLines;
+
+    // Lines from the repeat count file
+    stList *repeatCountLinesHap1; // If not diploid, this is used to store the POA lines
+    stList *repeatCountLinesHap2;
+
+    // Both these will be present if phasing
+    stList *readsHap1Lines; // Reads from primary sequence
+    stList *readsHap2Lines; // Reads from the secondary sequence
+} ChunkToStitch;
+
+ChunkToStitch *chunkToStitch_construct(char *seqName, int64_t chunkOrdinal, bool phased,
+                                       bool initRepeatCounts, bool initPoa);
+void chunkToStitch_destruct(ChunkToStitch *chunkToStitch);
+
+/*
  * Stitching code
  */
+
 
 OutputChunkers *
 outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outputSequenceFile, char *outputPoaFile,
@@ -1308,10 +1338,17 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
 											   stGenomeFragment *gF);
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
+void outputChunkers_stitchAndTrackReadIds(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,
+										  stList *readIdsHap1, stList *readIdsHap2);
 
-void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased);
+		void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased);
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers);
+
+ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, bool phased,
+                                 Params *params);
+ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
+                                         bool phased, Params *params, char *referenceSequenceName);
 
 /*
  * Misc

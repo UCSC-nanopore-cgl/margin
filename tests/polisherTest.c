@@ -24,7 +24,7 @@ static void test_poa_getReferenceGraph(CuTest *testCase) {
 
     Alphabet *alphabet = alphabet_constructNucleotide();
     Params *p = getParams();
-    Poa *poa = poa_getReferenceGraph(reference, alphabet, p->polishParams->repeatSubMatrix->maximumRepeatLength, -1);
+    Poa *poa = poa_getReferenceGraph(reference, alphabet, p->polishParams->repeatSubMatrix->maximumRepeatLength);
 
     CuAssertTrue(testCase, stList_length(poa->nodes) == reference->length + 1);
     for (int64_t i = 0; i < reference->length; i++) {
@@ -169,7 +169,7 @@ static void test_poa_augment_example(CuTest *testCase) {
 
     Params *p = getParams();
     Alphabet *alphabet = alphabet_constructNucleotide();
-    Poa *poa = poa_getReferenceGraph(reference, alphabet, p->polishParams->repeatSubMatrix->maximumRepeatLength, -1);
+    Poa *poa = poa_getReferenceGraph(reference, alphabet, p->polishParams->repeatSubMatrix->maximumRepeatLength);
 
     RleString *read = rleString_construct_no_rle("GATACGGT");
 

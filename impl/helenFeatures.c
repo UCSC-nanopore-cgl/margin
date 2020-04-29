@@ -14,11 +14,10 @@
 #define TRUTH_ALN_IDENTITY_THRESHOLD .99
 #define TRUTH_ALN_MIN_MATCHES 700
 
-PoaFeatureSimpleWeight *PoaFeature_SimpleWeight_construct(int64_t refPos, int64_t insPos, int64_t originalRefPos) {
+PoaFeatureSimpleWeight *PoaFeature_SimpleWeight_construct(int64_t refPos, int64_t insPos) {
     PoaFeatureSimpleWeight *feature = st_calloc(1, sizeof(PoaFeatureSimpleWeight));
     feature->refPosition = refPos;
     feature->insertPosition = insPos;
-    feature->originalRefPosition = originalRefPos;
     feature->label = '\0';
     feature->nextInsert = NULL;
     return feature;
@@ -32,11 +31,10 @@ void PoaFeature_SimpleWeight_destruct(PoaFeatureSimpleWeight *feature) {
 }
 
 PoaFeatureSplitRleWeight *PoaFeature_SplitRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-                                                              int64_t maxRunLength, int64_t originalRefPos) {
+                                                              int64_t maxRunLength) {
     PoaFeatureSplitRleWeight *feature = st_calloc(1, sizeof(PoaFeatureSplitRleWeight));
     feature->refPosition = refPos;
     feature->insertPosition = insPos;
-    feature->originalRefPosition = originalRefPos;
     feature->runLengthPosition = rlPos;
     feature->labelChar = '\0';
     feature->labelRunLength = 0;
@@ -60,12 +58,11 @@ void PoaFeature_SplitRleWeight_destruct(PoaFeatureSplitRleWeight *feature) {
 
 
 PoaFeatureChannelRleWeight *PoaFeature_ChannelRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-                                                                  int64_t maxRunLength, int64_t originalRefPos) {
+                                                                  int64_t maxRunLength) {
     PoaFeatureChannelRleWeight *feature = st_calloc(1, sizeof(PoaFeatureChannelRleWeight));
     feature->refPosition = refPos;
     feature->insertPosition = insPos;
     feature->runLengthPosition = rlPos;
-    feature->originalRefPosition = originalRefPos;
     feature->labelChar = '\0';
     feature->labelRunLength = 0;
     feature->nextRunLength = NULL;
@@ -89,12 +86,11 @@ void PoaFeature_ChannelRleWeight_destruct(PoaFeatureChannelRleWeight *feature) {
 }
 
 PoaFeatureDiploidRleWeight *PoaFeature_DiploidRleWeight_construct(int64_t refPos, int64_t insPos, int64_t rlPos,
-        int64_t maxRunLength, int64_t originalRefPos) {
+        int64_t maxRunLength) {
     PoaFeatureDiploidRleWeight *feature = st_calloc(1, sizeof(PoaFeatureDiploidRleWeight));
     feature->refPosition = refPos;
     feature->insertPosition = insPos;
     feature->runLengthPosition = rlPos;
-    feature->originalRefPosition = originalRefPos;
     feature->labelChar = '\0';
     feature->labelRunLength = 0;
     feature->nextRunLength = NULL;
@@ -226,18 +222,14 @@ void PoaFeature_handleHelenFeatures(
             trueRefRleString = rleString_copy(trueRefRead->rleRead);
 
             // get consensus seq for original positions
-            uint64_t *originalReferenceRLEMap = rleString_getRleToNonRleCoordinateMap(originalReference);
             int64_t originalRefRleChunkStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0);
-            int64_t originalRefRawChunkStartPos = originalReferenceRLEMap[originalRefRleChunkStartPos];
-            int64_t originalRefStartPos = originalRefRawChunkStartPos + bamChunk->chunkBoundaryStart;
             int64_t originalRefRleChunkEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0);
-            int64_t originalRefRawChunkEndPos = originalReferenceRLEMap[originalRefRleChunkEndPos];
-            int64_t originalRefEndPos =  originalRefRawChunkEndPos + bamChunk->chunkBoundaryStart;
-            free(originalReferenceRLEMap);
+
             int64_t consensusAlnShift = -1;
-            RleString *consensusRegion = substringConsensusByOrigRefPos(poa, polishedRleConsensus, &consensusAlnShift,
-                    originalRefStartPos, originalRefEndPos);
-            assert(consensusAlnShift >= 0);
+            RleString *consensusRegion = getConsensusByEstimatedOriginalReferencePositions(originalReference,
+                    polishedRleConsensus, trueRefRleString, originalRefRleChunkStartPos, originalRefRleChunkEndPos,
+                    &consensusAlnShift);
+            assert(consensusAlnShift);
 
             // get alignment
             double score_consensus, alignIdentity;
@@ -786,29 +778,63 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
     stList_append(truthAlignmentDescriptors, newAlignmentDesc);
 }
 
-RleString *substringConsensusByOrigRefPos(Poa *poa, RleString *consensus, int64_t *startPos,
-        int64_t origRefStartPos, int64_t origRefEndPos) {
-    int64_t length = -1;
-    *startPos = -1;
-    for (int64_t i = 0; i < stList_length(poa->nodes); i++) {
-        PoaNode *node = stList_get(poa->nodes, i);
-        if (node->originalRefPos >= origRefStartPos && *startPos < 0) {
-            *startPos = i == 0 ? 0 : i - 1;
+RleString *getConsensusByEstimatedOriginalReferencePositions(RleString *originalReference, RleString *consensus,
+        RleString *trueRefRleString, int64_t originalRefRleChunkStartPos, int64_t originalRefRleChunkEndPos,
+        int64_t *rleEstimatedConsensusStartPos) {
+
+    // get reference coords
+    uint64_t *originalReferenceRLEMap = rleString_getRleToNonRleCoordinateMap(originalReference);
+    int64_t originalRefRawChunkStartPos = originalReferenceRLEMap[originalRefRleChunkStartPos];
+    int64_t originalRefRawChunkEndPos = originalReferenceRLEMap[originalRefRleChunkEndPos];
+    int64_t originalRefRawEstStartPos = originalRefRawChunkStartPos * consensus->nonRleLength / originalReference->nonRleLength;
+    int64_t originalRefRawEstEndPos = originalRefRawChunkEndPos * consensus->nonRleLength / originalReference->nonRleLength;
+
+    // get estimated positions
+    *rleEstimatedConsensusStartPos = -1;
+    int64_t rleEstimatedConsensusEndPos = -1;
+    int64_t pos = 0;
+    for (int64_t i = 0; i < consensus->nonRleLength; i++) {
+        if (pos <= originalRefRawEstStartPos) {
+            *rleEstimatedConsensusStartPos = i;
         }
-        if (node->originalRefPos >= origRefEndPos ) {
-            length = i - *startPos;
+        if (pos >= originalRefRawEstEndPos) {
+            rleEstimatedConsensusEndPos = i;
             break;
         }
+        pos += consensus->repeatCounts[i];
+    }
+    if (rleEstimatedConsensusEndPos < 0) {
+        rleEstimatedConsensusEndPos = consensus->length;
     }
 
-    // if not found
-    if (*startPos < 0 ) {
-        *startPos = 0;
+    //cleanup
+    free(originalReferenceRLEMap);
+
+    // sanity check
+    assert(*rleEstimatedConsensusStartPos >= 0);
+    assert(rleEstimatedConsensusEndPos >= *rleEstimatedConsensusStartPos);
+
+    // get consensus
+    RleString *truncatedConsensus = rleString_copySubstring(consensus, (uint64_t) *rleEstimatedConsensusStartPos,
+            (uint64_t) rleEstimatedConsensusEndPos - *rleEstimatedConsensusStartPos);
+
+    // loggit
+    if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
+        char *logIdentifier = getLogIdentifier();
+        st_logInfo(" %s Getting aligned region of consensus:\n", logIdentifier);
+        st_logInfo("          T  rle_start:   %9"PRId64"   raw_chunk_start:%9"PRId64"\n",
+                   originalRefRleChunkStartPos, originalRefRawChunkStartPos);
+        st_logInfo("          T  rle_end:     %9"PRId64"   raw_chunk_end:  %9"PRId64"\n",
+                   originalRefRleChunkEndPos, originalRefRawChunkEndPos);
+        st_logInfo("          T  rle_est_len: %9"PRId64"   raw_est_len:    %9"PRId64"\n",
+                   originalRefRleChunkEndPos - originalRefRleChunkStartPos,
+                   originalRefRawChunkEndPos - originalRefRawChunkStartPos);
+        st_logInfo("          T  rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", trueRefRleString->length,
+                   trueRefRleString->nonRleLength);
+        st_logInfo("          C  rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", truncatedConsensus->length,
+                   truncatedConsensus->nonRleLength);
+        free(logIdentifier);
     }
-    if (length < 0) {
-        length = consensus->length - *startPos;
-    }
-    RleString *truncatedConsensus = rleString_copySubstring(consensus, (uint64_t) *startPos, (uint64_t) length);
 
     return truncatedConsensus;
 }
@@ -871,37 +897,18 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
                                              trueRefRleStringA->length);
 
         // get consensus seq for original positions
-        uint64_t *originalReferenceRLEMap = rleString_getRleToNonRleCoordinateMap(originalReference);
         int64_t originalRefRleChunkStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0);
-        int64_t originalRefRawChunkStartPos = originalReferenceRLEMap[originalRefRleChunkStartPos];
-        int64_t originalRefStartPos = originalRefRawChunkStartPos + bamChunk->chunkBoundaryStart;
         int64_t originalRefRleChunkEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0);
-        int64_t originalRefRawChunkEndPos = originalReferenceRLEMap[originalRefRleChunkEndPos];
-        int64_t originalRefEndPos =  originalRefRawChunkEndPos + bamChunk->chunkBoundaryStart;
-        free(originalReferenceRLEMap);
         int64_t consensusH1StartPos = 0;
         int64_t consensusH2StartPos = 0;
-        RleString *consensusRegionH1 = substringConsensusByOrigRefPos(poaH1, polishedRleConsensusH1, &consensusH1StartPos,
-                                                                      originalRefStartPos, originalRefEndPos);
-        RleString *consensusRegionH2 = substringConsensusByOrigRefPos(poaH2, polishedRleConsensusH2, &consensusH2StartPos,
-                                                                      originalRefStartPos, originalRefEndPos);
+        RleString *consensusRegionH1 = getConsensusByEstimatedOriginalReferencePositions(originalReference,
+                polishedRleConsensusH1, trueRefRleStringA, originalRefRleChunkStartPos, originalRefRleChunkEndPos,
+                &consensusH1StartPos);
+        RleString *consensusRegionH2 = getConsensusByEstimatedOriginalReferencePositions(originalReference,
+                polishedRleConsensusH2, trueRefRleStringA, originalRefRleChunkStartPos, originalRefRleChunkEndPos,
+                &consensusH2StartPos);
         assert(consensusH1StartPos >= 0 && consensusH2StartPos >= 0);
-        if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
-            st_logInfo(" %s Getting aligned region of consensus for truth %s:\n", logIdentifier, alignmentDesc);
-            st_logInfo("          T  rle_start:   %9"PRId64"   raw_chunk_start:%9"PRId64"  raw_true_start:%9"PRId64"\n",
-                       originalRefRleChunkStartPos, originalRefRawChunkStartPos, originalRefStartPos);
-            st_logInfo("          T  rle_end:     %9"PRId64"   raw_chunk_end:  %9"PRId64"  raw_true_end  :%9"PRId64"\n",
-                       originalRefRleChunkEndPos, originalRefRawChunkEndPos, originalRefEndPos);
-            st_logInfo("          T  rle_est_len: %9"PRId64"   raw_est_len:    %9"PRId64"\n",
-                       originalRefRleChunkEndPos - originalRefRleChunkStartPos,
-                       originalRefRawChunkEndPos - originalRefRawChunkStartPos);
-            st_logInfo("          T  rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", trueRefRleStringA->length,
-                       trueRefRleStringA->nonRleLength);
-            st_logInfo("          C1 rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", consensusRegionH1->length,
-                       consensusRegionH1->nonRleLength);
-            st_logInfo("          C2 rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", consensusRegionH1->length,
-                       consensusRegionH1->nonRleLength);
-        }
+
 
         // save alignment
         alignToBestConsensus(trueRefRleStringA, consensusRegionH1, consensusRegionH2, consensusH1StartPos, consensusH2StartPos,
@@ -925,37 +932,17 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
                                              trueRefRleStringB->length);
 
         // get consensus seq for original positions
-        uint64_t *originalReferenceRLEMap = rleString_getRleToNonRleCoordinateMap(originalReference);
         int64_t originalRefRleChunkStartPos = stIntTuple_get(stList_get(truthAlign, 0), 0);
-        int64_t originalRefRawChunkStartPos = originalReferenceRLEMap[originalRefRleChunkStartPos];
-        int64_t originalRefStartPos = originalRefRawChunkStartPos + bamChunk->chunkBoundaryStart;
         int64_t originalRefRleChunkEndPos = stIntTuple_get(stList_get(truthAlign, stList_length(truthAlign) - 1), 0);
-        int64_t originalRefRawChunkEndPos = originalReferenceRLEMap[originalRefRleChunkEndPos];
-        int64_t originalRefEndPos =  originalRefRawChunkEndPos + bamChunk->chunkBoundaryStart;
-        free(originalReferenceRLEMap);
         int64_t consensusH1StartPos = 0;
         int64_t consensusH2StartPos = 0;
-        RleString *consensusRegionH1 = substringConsensusByOrigRefPos(poaH1, polishedRleConsensusH1, &consensusH1StartPos,
-                                                                      originalRefStartPos, originalRefEndPos);
-        RleString *consensusRegionH2 = substringConsensusByOrigRefPos(poaH2, polishedRleConsensusH2, &consensusH2StartPos,
-                                                                      originalRefStartPos, originalRefEndPos);
+        RleString *consensusRegionH1 = getConsensusByEstimatedOriginalReferencePositions(originalReference,
+                polishedRleConsensusH1, trueRefRleStringB, originalRefRleChunkStartPos, originalRefRleChunkEndPos,
+                &consensusH1StartPos);
+        RleString *consensusRegionH2 = getConsensusByEstimatedOriginalReferencePositions(originalReference,
+                polishedRleConsensusH2, trueRefRleStringB, originalRefRleChunkStartPos, originalRefRleChunkEndPos,
+                &consensusH2StartPos);
         assert(consensusH1StartPos >= 0 && consensusH2StartPos >= 0);
-        if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
-            st_logInfo(" %s Getting aligned region of consensus for truth %s:\n", logIdentifier, alignmentDesc);
-            st_logInfo("          T  rle_start:   %9"PRId64"   raw_chunk_start:%9"PRId64"  raw_true_start:%9"PRId64"\n",
-                       originalRefRleChunkStartPos, originalRefRawChunkStartPos, originalRefStartPos);
-            st_logInfo("          T  rle_end:     %9"PRId64"   raw_chunk_end:  %9"PRId64"  raw_true_end  :%9"PRId64"\n",
-                       originalRefRleChunkEndPos, originalRefRawChunkEndPos, originalRefEndPos);
-            st_logInfo("          T  rle_est_len: %9"PRId64"   raw_est_len:    %9"PRId64"\n",
-                       originalRefRleChunkEndPos - originalRefRleChunkStartPos,
-                       originalRefRawChunkEndPos - originalRefRawChunkStartPos);
-            st_logInfo("          T  rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", trueRefRleStringB->length,
-                       trueRefRleStringB->nonRleLength);
-            st_logInfo("          C1 rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", consensusRegionH1->length,
-                       consensusRegionH1->nonRleLength);
-            st_logInfo("          C2 rle_len:     %9"PRIu64"   raw_len:        %9"PRIu64"\n", consensusRegionH1->length,
-                       consensusRegionH1->nonRleLength);
-        }
 
         // save alignment
         alignToBestConsensus(trueRefRleStringB, consensusRegionH1, consensusRegionH2, consensusH1StartPos, consensusH2StartPos,
@@ -1084,8 +1071,7 @@ stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
     // initialize feature list
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_SimpleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
-        stList_append(featureList, PoaFeature_SimpleWeight_construct(i - 1, 0,
-                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
+        stList_append(featureList, PoaFeature_SimpleWeight_construct(i - 1, 0));
     }
 
     // for logging (of errors)
@@ -1147,7 +1133,7 @@ stList *PoaFeature_getSimpleWeightFeatures(Poa *poa, stList *bamChunkReads) {
                     // get current feature (or create if necessary)
                     PoaFeatureSimpleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_SimpleWeight_construct(i, k + 1, -1);
+                        currFeature = PoaFeature_SimpleWeight_construct(i, k + 1);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -1215,8 +1201,7 @@ void poa_addSplitRunLengthFeaturesForObservations(Poa *poa, PoaFeatureSplitRleWe
             } else {
                 PoaFeatureSplitRleWeight *prevFeature = currFeature;
                 currFeature = PoaFeature_SplitRleWeight_construct(baseFeature->refPosition, baseFeature->insertPosition,
-                                                                  currentRunLengthIndex, maxRunLength,
-                                                                  baseFeature->originalRefPosition);
+                                                                  currentRunLengthIndex, maxRunLength);
                 prevFeature->nextRunLength = currFeature;
                 currFeature->weights[PoaFeature_SplitRleWeight_gapIndex(maxRunLength, TRUE)] =
                         baseFeature->weights[PoaFeature_SplitRleWeight_gapIndex(maxRunLength, TRUE)];
@@ -1232,8 +1217,7 @@ stList *PoaFeature_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, in
     // initialize feature list
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_SplitRleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
-        stList_append(featureList, PoaFeature_SplitRleWeight_construct(i - 1, 0, 0, maxRunLength,
-                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
+        stList_append(featureList, PoaFeature_SplitRleWeight_construct(i - 1, 0, 0, maxRunLength));
     }
 
     // for logging (of errors)
@@ -1288,7 +1272,7 @@ stList *PoaFeature_getSplitRleWeightFeatures(Poa *poa, stList *bamChunkReads, in
                     // get feature iterator
                     PoaFeatureSplitRleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_SplitRleWeight_construct(i, o + 1, 0, maxRunLength, -1);
+                        currFeature = PoaFeature_SplitRleWeight_construct(i, o + 1, 0, maxRunLength);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -1353,8 +1337,7 @@ void poa_addChannelRunLengthFeaturesForObservations(Poa *poa, PoaFeatureChannelR
                 PoaFeatureChannelRleWeight *prevFeature = currFeature;
                 currFeature = PoaFeature_ChannelRleWeight_construct(baseFeature->refPosition,
                                                                     baseFeature->insertPosition,
-                                                                    currentRunLengthIndex, maxRunLength,
-                                                                    baseFeature->originalRefPosition);
+                                                                    currentRunLengthIndex, maxRunLength);
                 prevFeature->nextRunLength = currFeature;
                 currFeature->nucleotideWeights[PoaFeature_ChannelRleWeight_gapNuclIndex(TRUE)] =
                         baseFeature->nucleotideWeights[PoaFeature_ChannelRleWeight_gapNuclIndex(TRUE)];
@@ -1369,8 +1352,7 @@ stList *PoaFeature_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
     // initialize feature list
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_ChannelRleWeight_destruct);
     for (int64_t i = 1; i < stList_length(poa->nodes); i++) {
-        stList_append(featureList, PoaFeature_ChannelRleWeight_construct(i - 1, 0, 0, maxRunLength,
-                ((PoaNode*)stList_get(poa->nodes, i))->originalRefPos));
+        stList_append(featureList, PoaFeature_ChannelRleWeight_construct(i - 1, 0, 0, maxRunLength));
     }
 
     // for logging (of errors)
@@ -1425,7 +1407,7 @@ stList *PoaFeature_getChannelRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
                     // get feature iterator
                     PoaFeatureChannelRleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_ChannelRleWeight_construct(i, o + 1, 0, maxRunLength, -1);
+                        currFeature = PoaFeature_ChannelRleWeight_construct(i, o + 1, 0, maxRunLength);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -1491,8 +1473,7 @@ void poa_addDiploidRunLengthFeaturesForObservations(Poa *poa, PoaFeatureDiploidR
             } else {
                 PoaFeatureDiploidRleWeight *prevFeature = currFeature;
                 currFeature = PoaFeature_DiploidRleWeight_construct(baseFeature->refPosition, baseFeature->insertPosition,
-                                                                  currentRunLengthIndex, maxRunLength,
-                                                                  baseFeature->originalRefPosition);
+                                                                  currentRunLengthIndex, maxRunLength);
                 prevFeature->nextRunLength = currFeature;
 
                 currFeature->weightsHOn[PoaFeature_DiploidRleWeight_gapIndex(maxRunLength, TRUE)] =
@@ -1516,8 +1497,7 @@ stList *PoaFeature_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
     // initialize feature list
     stList *featureList = stList_construct3(0, (void (*)(void *)) PoaFeature_DiploidRleWeight_destruct);
     for(int64_t i=1; i<stList_length(poa->nodes); i++) {
-        stList_append(featureList, PoaFeature_DiploidRleWeight_construct(i - 1, 0, 0, maxRunLength,
-                ((PoaNode*) stList_get(poa->nodes, i))->originalRefPos));
+        stList_append(featureList, PoaFeature_DiploidRleWeight_construct(i - 1, 0, 0, maxRunLength));
     }
 
     // for logging (of errors)
@@ -1583,7 +1563,7 @@ stList *PoaFeature_getDiploidRleWeightFeatures(Poa *poa, stList *bamChunkReads, 
                     // get feature iterator
                     PoaFeatureDiploidRleWeight *currFeature = prevFeature->nextInsert;
                     if (currFeature == NULL) {
-                        currFeature = PoaFeature_DiploidRleWeight_construct(i, o + 1, 0, maxRunLength, -1);
+                        currFeature = PoaFeature_DiploidRleWeight_construct(i, o + 1, 0, maxRunLength);
                         prevFeature->nextInsert = currFeature;
                     }
 
@@ -3329,7 +3309,6 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
 
     // get all feature data into an array
     uint32_t **positionData = getTwoDArrayUInt32(featureCount, 3);
-    uint32_t **originalRefPositionData = getTwoDArrayUInt32(featureCount, 1);
     int64_t rleNucleotideStrandColumnCount_singleHap = ((SYMBOL_NUMBER - 1) * (maxRunLength + 1) + 1) * 2; //(nucl*(rl+0)+gap)*strand
     uint8_t **normalizationData = getTwoDArrayUInt8(featureCount, 1);
     uint8_t **imageData = getTwoDArrayUInt8(featureCount, rleNucleotideStrandColumnCount_singleHap * 2);
@@ -3350,9 +3329,11 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
         PoaFeatureDiploidRleWeight *refFeature = stList_get(features, i);
 
         // total weight is calculated for the very first refPos feature, used for all inserts and run lengths
-        double totalWeight = 0;
+        double totalWeightOn = 0;
+        double totalWeightOff = 0;
         for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
-            totalWeight += refFeature->weightsHOn[j] + refFeature->weightsHOff[j];
+            totalWeightOn += refFeature->weightsHOn[j];
+            totalWeightOff += refFeature->weightsHOff[j];
         }
 
         // iterate over all insert features
@@ -3366,17 +3347,15 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
                 positionData[featureCount][0] = (uint32_t) rlFeature->refPosition;
                 positionData[featureCount][1] = (uint32_t) rlFeature->insertPosition;
                 positionData[featureCount][2] = (uint32_t) rlFeature->runLengthPosition;
-                originalRefPositionData[featureCount][0] = rlFeature->originalRefPosition < 0 ? 0 :
-                                                           (uint32_t ) rlFeature->originalRefPosition;
 
                 // normalization
-                normalizationData[featureCount][0] = convertTotalWeightToUInt8(totalWeight);
+                normalizationData[featureCount][0] = convertTotalWeightToUInt8(totalWeightOn + totalWeightOff);
 
                 // copy weights over (into normalized uint8 space)
                 for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
-                    imageData[featureCount][j] = normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOn[j]);
+                    imageData[featureCount][j] = normalizeWeightToUInt8(totalWeightOn, rlFeature->weightsHOn[j]);
                     imageData[featureCount][j+rleNucleotideStrandColumnCount_singleHap] =
-                            normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOff[j]);
+                            normalizeWeightToUInt8(totalWeightOff, rlFeature->weightsHOff[j]);
                 }
 
                 // labels
@@ -3409,7 +3388,6 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
 
     hsize_t metadataDimension[1] = {1};
     hsize_t postionDimension[2] = {featureSize, 3};
-    hsize_t originalReferencePositionDimension[2] = {featureSize, 1};
     hsize_t labelCharacterDimension[2] = {featureSize, 1};
     hsize_t labelRunLengthDimension[2] = {featureSize, 1};
     hsize_t normalizationDimension[2] = {featureSize, 1};
@@ -3417,7 +3395,6 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
 
     hid_t metadataSpace = H5Screate_simple(1, metadataDimension, NULL);
     hid_t positionSpace = H5Screate_simple(2, postionDimension, NULL);
-    hid_t originalReferencePositionSpace = H5Screate_simple(2, originalReferencePositionDimension, NULL);
     hid_t labelCharacterSpace = H5Screate_simple(2, labelCharacterDimension, NULL);
     hid_t labelRunLengthSpace = H5Screate_simple(2, labelRunLengthDimension, NULL);
     hid_t normalizationSpace = H5Screate_simple(2, normalizationDimension, NULL);
@@ -3478,10 +3455,6 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
                                           H5P_DEFAULT, H5P_DEFAULT);
         status |= H5Dwrite(positionDataset, hdf5FileInfo->uint32Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
                            positionData[chunkFeatureStartIdx]);
-        hid_t originalReferencePositionDataset = H5Dcreate(group, "original_reference_position",
-                hdf5FileInfo->uint32Type, originalReferencePositionSpace, H5P_DEFAULT,H5P_DEFAULT, H5P_DEFAULT);
-        status |= H5Dwrite(originalReferencePositionDataset, hdf5FileInfo->uint32Type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-                           originalRefPositionData[chunkFeatureStartIdx]);
 
         // write rle data
         hid_t imageDataset = H5Dcreate(group, "image", hdf5FileInfo->uint8Type, imageSpace, H5P_DEFAULT, H5P_DEFAULT,
@@ -3517,7 +3490,6 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
         status |= H5Dclose(chunkIndexDataset);
         status |= H5Dclose(haplotypeIndexDataset);
         status |= H5Dclose(truthIndexDataset);
-        status |= H5Dclose(originalReferencePositionDataset);
         status |= H5Dclose(positionDataset);
         status |= H5Dclose(imageDataset);
         status |= H5Dclose(normalizationDataset);
@@ -3532,11 +3504,8 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
     free(normalizationData);
     free(positionData[0]);
     free(positionData);
-    free(originalRefPositionData[0]);
-    free(originalRefPositionData);
     status |= H5Sclose(metadataSpace);
     status |= H5Sclose(positionSpace);
-    status |= H5Sclose(originalReferencePositionSpace);
     status |= H5Sclose(imageSpace);
     status |= H5Sclose(normalizationSpace);
     status |= H5Sclose(labelRunLengthSpace);
