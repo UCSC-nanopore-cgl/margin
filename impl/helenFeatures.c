@@ -10,7 +10,7 @@
 #include "ssw.h"
 #include <hdf5.h>
 
-#define TRUTH_ALN_LOG_LEVEL info
+#define TRUTH_ALN_LOG_LEVEL debug
 #define TRUTH_ALN_IDENTITY_THRESHOLD .99
 #define TRUTH_ALN_MIN_MATCHES 700
 

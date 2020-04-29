@@ -1338,8 +1338,10 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
 											   stGenomeFragment *gF);
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
+void outputChunkers_stitchAndTrackReadIds(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,
+										  stList *readIdsHap1, stList *readIdsHap2);
 
-void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased);
+		void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased);
 
 void outputChunkers_destruct(OutputChunkers *outputChunkers);
 

@@ -1282,6 +1282,10 @@ ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startId
 
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount) {
+    outputChunkers_stitchAndTrackReadIds(outputChunkers, phased, chunkCount, NULL, NULL);
+}
+void outputChunkers_stitchAndTrackReadIds(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,
+        stList *readIdsHap1, stList *readIdsHap2) {
 
     // prep for merge
     assert(chunkCount > 0);
@@ -1345,6 +1349,24 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
             stitched->startOfSequence = true;
             outputChunkers_writeChunk(outputChunkers, stitched);
 
+            // to write to bam, we need to add all these
+            if (readIdsHap1 != NULL && readIdsHap2 != NULL) {
+                stHash *chunkReadToProbHap1 = getReadNames(stitched->readsHap1Lines);
+                stHash *chunkReadToProbHap2 = getReadNames(stitched->readsHap2Lines);
+                stList *chunkReadsHap1 = stHash_getKeys(chunkReadToProbHap1);
+                stList *chunkReadsHap2 = stHash_getKeys(chunkReadToProbHap2);
+                stList_appendAll(readIdsHap1, chunkReadsHap1);
+                stList_appendAll(readIdsHap2, chunkReadsHap2);
+                stHash_setDestructKeys(chunkReadToProbHap1, NULL);
+                stHash_setDestructKeys(chunkReadToProbHap2, NULL);
+                stList_setDestructor(chunkReadsHap1, NULL);
+                stList_setDestructor(chunkReadsHap2, NULL);
+                stHash_destruct(chunkReadToProbHap1);
+                stHash_destruct(chunkReadToProbHap2);
+                stList_destruct(chunkReadsHap1);
+                stList_destruct(chunkReadsHap2);
+            }
+
             // log progress
             int64_t currentPercentage = (int64_t) (100 * chunkIdx / chunkCount);
             if (currentPercentage != lastReportedPercentage) {
@@ -1381,8 +1403,13 @@ void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t 
 void outputChunkers_destruct(OutputChunkers *outputChunkers) {
     // Close the file streams and delete the temporary files of the temp file chunkers
     for (int64_t i = 0; i < stList_length(outputChunkers->tempFileChunkers); i++) {
+        time_t start = time(NULL);
         outputChunker_closeAndDeleteFiles(stList_get(outputChunkers->tempFileChunkers, i));
+        char *timeDes = getTimeDescriptorFromSeconds(time(NULL) - start);
+        st_logInfo("    Closed temp file chunker %"PRId64" in %s\n", i, timeDes);
+        free(timeDes);
     }
+    time_t start = time(NULL);
     // Now cleanup the temp file chunkers
     stList_destruct(outputChunkers->tempFileChunkers);
     // Cleanup the final output chunkers
@@ -1391,4 +1418,8 @@ void outputChunkers_destruct(OutputChunkers *outputChunkers) {
         outputChunker_destruct(outputChunkers->outputChunkerHap2);
     }
     free(outputChunkers);
+    char *timeDes = getTimeDescriptorFromSeconds(time(NULL) - start);
+    st_logInfo("    Closed remaining output chunking infrastructure in %s\n", timeDes);
+    free(timeDes);
+
 }

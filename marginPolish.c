@@ -650,9 +650,6 @@ int main(int argc, char *argv[]) {
                 poa_estimateRepeatCountsUsingBayesianModel(poa, reads, params->polishParams->repeatSubMatrix);
             }
 
-            // save polished reference string to chunk output array
-            /*chunkResults[chunkIdx] = polishedConsensusString;*/
-
             // output
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 
@@ -694,11 +691,21 @@ int main(int argc, char *argv[]) {
         free(logIdentifier);
     }
 
+    // for writing haplotyped chunks
+    stList *allReadIdsHap1 = NULL;
+    stList *allReadIdsHap2 = NULL;
+    if (outputHaplotypeBAM && !writeChunkSupplementaryOutputOnly) {
+        // setup
+        allReadIdsHap1 = stList_construct();
+        allReadIdsHap2 = stList_construct();
+    }
+
     // merge chunks
     time_t mergeStartTime = time(NULL);
     if (params->polishParams->shuffleChunks || inMemory) {
         st_logCritical("> Starting merge\n");
-        outputChunkers_stitch(outputChunkers, diploid, bamChunker->chunkCount);
+        outputChunkers_stitchAndTrackReadIds(outputChunkers, diploid, bamChunker->chunkCount,
+                allReadIdsHap1, allReadIdsHap2);
     } else {
         st_logCritical("> Starting linear merge\n");
         outputChunkers_stitchLinear(outputChunkers, diploid);
@@ -711,6 +718,48 @@ int main(int argc, char *argv[]) {
     tds = getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime);
     st_logCritical("> Merge cleanup took %s\n", tds);
     free(tds);
+
+    // maybe write final haplotyped bams
+    if (allReadIdsHap1 != NULL && allReadIdsHap2 != NULL) {
+        time_t hapBamStart = time(NULL);
+        st_logInfo("> Writing final haplotyped BAMs\n");
+
+        stSet *allReadIdsForHaplotypingHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+        stSet *allReadIdsForHaplotypingHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+
+        for(int64_t i = 0; i < stList_length(allReadIdsHap1); i++) {
+            stSet_insert(allReadIdsForHaplotypingHap1, stList_get(allReadIdsHap1, i));
+        }
+        for(int64_t i = 0; i < stList_length(allReadIdsHap2); i++) {
+            stSet_insert(allReadIdsForHaplotypingHap2, stList_get(allReadIdsHap2, i));
+        }
+
+        // write it
+        BamChunk *whbBamChunk = NULL;
+        if (regionStr != NULL) {
+            char regionContig[128] = "";
+            int regionStart = 0;
+            int regionEnd = 0;
+            int scanRet = sscanf(regionStr, "%[^:]:%d-%d", regionContig, &regionStart, &regionEnd);
+            whbBamChunk = bamChunk_construct2(regionContig, -1, regionStart, regionStart, regionEnd,
+                    regionEnd, bamChunker);
+        }
+        writeHaplotypedBams(whbBamChunk, bamChunker->bamFile, outputBase,
+                allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
+        if (whbBamChunk != NULL) {
+            bamChunk_destruct(whbBamChunk);
+        }
+
+        char *hapBamTDS = getTimeDescriptorFromSeconds(time(NULL) - hapBamStart);
+        st_logInfo("> Wrote haplotyped bams in %s\n", hapBamTDS);
+
+        // cleanup
+        stSet_destruct(allReadIdsForHaplotypingHap1);
+        stSet_destruct(allReadIdsForHaplotypingHap2);
+        stList_destruct(allReadIdsHap1);
+        stList_destruct(allReadIdsHap2);
+        free(hapBamTDS);
+    }
 
     // Cleanup
     bamChunker_destruct(bamChunker);
@@ -728,12 +777,6 @@ int main(int argc, char *argv[]) {
     }
     #endif
     stList_destruct(chunkOrder);
-    /*free(chunkResults);
-    if (diploid) {
-        free(chunkResultsH2);
-        free(readSetsH1);
-        free(readSetsH2);
-    }*/
     free(outputSequenceFile);
     if (outputPoaCsvFile != NULL) free(outputPoaCsvFile);
     if (outputReadCsvFile != NULL) free(outputReadCsvFile);

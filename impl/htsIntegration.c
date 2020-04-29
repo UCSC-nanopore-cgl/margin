@@ -710,7 +710,7 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 
 
 void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-        stSet *readsInH1, stSet *readsInH2, char *logIdentifier) {
+        stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier) {
     /*
      * Write out sam files with reads in each split based on which haplotype partition they are in.
      */
@@ -718,11 +718,14 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     // Prep
 
     char *chunkIdentifier = NULL;
-    if (bamChunk != NULL) {
-        chunkIdentifier = stString_print(".C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
+    if (bamChunk == NULL) {
+        chunkIdentifier = stString_print("");
+    } else if (bamChunk->chunkIdx == -1) {
+        chunkIdentifier = stString_print(".%s-%"PRId64"-%"PRId64, bamChunk->refSeqName,
             bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
     } else {
-        chunkIdentifier = stString_print("");
+        chunkIdentifier = stString_print(".C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
+                                         bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
     }
     char *haplotype1BamOutFile = stString_print("%s%s.hap1.bam", outputBamFileBase, chunkIdentifier);
     char *haplotype2BamOutFile = stString_print("%s%s.hap2.bam", outputBamFileBase, chunkIdentifier);
@@ -792,29 +795,42 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
         if (aln->core.n_cigar == 0) continue;
         if ((aln->core.flag & (uint16_t) 0x4) != 0)
             continue; //unaligned
-        if (!bamChunk->parent->params->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
+        if (!params->polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!bamChunk->parent->params->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
+        if (!params->polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
             continue; //supplementary
-        if(aln->core.qual < bamChunk->parent->params->filterAlignmentsWithMapQBelowThisThreshold)
+        if(aln->core.qual < params->polishParams->filterAlignmentsWithMapQBelowThisThreshold)
             continue; //low mapping quality
 
 
         char *readName = bam_get_qname(aln);
-
-        //todo tagging?
-        //if (marginPhaseTag != NULL) bam_aux_append(aln, MARGIN_PHASE_TAG, 'Z', (int)strlen(marginPhaseTag) + 1, (uint8_t*)marginPhaseTag);
-        //haplotypeString = stReadHaplotypeSequence_toStringEmpty();
-        //bam_aux_append(aln, HAPLOTYPE_TAG, 'Z', (int)strlen(haplotypeString) + 1, (uint8_t*)haplotypeString);
-
+        bool has_tag = bam_aux_get(aln, "HT") == NULL;
         if (stSet_search(readsInH1, readName)) {
+            int32_t ht = 11;
+            if (has_tag) {
+                bam_aux_update_int(aln, "HP", ht);
+            } else {
+                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
+            }
             r = sam_write1(out1, bamHdr, aln);
             h1Count++;
         } else if (stSet_search(readsInH2, readName)) {
+            int32_t ht = 12;
+            if (has_tag) {
+                bam_aux_update_int(aln, "HP", ht);
+            } else {
+                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
+            }
             r = sam_write1(out2, bamHdr, aln);
             h2Count++;
         } else {
-            r = sam_write1(out2, bamHdr, aln);
+            int32_t ht = 10;
+            if (has_tag) {
+                bam_aux_update_int(aln, "HP", ht);
+            } else {
+                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
+            }
+            r = sam_write1(outUnmatched, bamHdr, aln);
             h0Count++;
         }
     }
@@ -824,10 +840,10 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     // Cleanup
     if (bamChunk != NULL) {
         hts_itr_multi_destroy(iter);
-        hts_idx_destroy(idx);
         free(region[0]);
         bed_destroy(settings.bed);
     }
+    hts_idx_destroy(idx);
     bam_destroy1(aln);
     bam_hdr_destroy(bamHdr);
     sam_close(in);
@@ -914,7 +930,7 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
 
         // write it
-        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, logIdentifier);
+        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, params, logIdentifier);
 
         // cleanup
         stSet_destruct(readIdsInHap1);
