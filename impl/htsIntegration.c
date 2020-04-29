@@ -805,7 +805,9 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
 
         char *readName = bam_get_qname(aln);
         bool has_tag = bam_aux_get(aln, "HT") == NULL;
-        if (stSet_search(readsInH1, readName)) {
+        bool inH1 = stSet_search(readsInH1, readName);
+        bool inH2 = stSet_search(readsInH2, readName);
+        if (inH1 & !inH2) {
             int32_t ht = 1;
             if (has_tag) {
                 bam_aux_update_int(aln, "HP", ht);
@@ -814,7 +816,7 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
             }
             r = sam_write1(out1, bamHdr, aln);
             h1Count++;
-        } else if (stSet_search(readsInH2, readName)) {
+        } else if (!inH1 & inH2) {
             int32_t ht = 2;
             if (has_tag) {
                 bam_aux_update_int(aln, "HP", ht);

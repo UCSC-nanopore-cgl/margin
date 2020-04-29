@@ -3329,9 +3329,11 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
         PoaFeatureDiploidRleWeight *refFeature = stList_get(features, i);
 
         // total weight is calculated for the very first refPos feature, used for all inserts and run lengths
-        double totalWeight = 0;
+        double totalWeightOn = 0;
+        double totalWeightOff = 0;
         for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
-            totalWeight += refFeature->weightsHOn[j] + refFeature->weightsHOff[j];
+            totalWeightOn += refFeature->weightsHOn[j];
+            totalWeightOff += refFeature->weightsHOff[j];
         }
 
         // iterate over all insert features
@@ -3347,13 +3349,13 @@ void writeDiploidRleWeightHelenFeaturesHDF5(Alphabet *alphabet, HelenFeatureHDF5
                 positionData[featureCount][2] = (uint32_t) rlFeature->runLengthPosition;
 
                 // normalization
-                normalizationData[featureCount][0] = convertTotalWeightToUInt8(totalWeight);
+                normalizationData[featureCount][0] = convertTotalWeightToUInt8(totalWeightOn + totalWeightOff);
 
                 // copy weights over (into normalized uint8 space)
                 for (int64_t j = 0; j < rleNucleotideStrandColumnCount_singleHap; j++) {
-                    imageData[featureCount][j] = normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOn[j]);
+                    imageData[featureCount][j] = normalizeWeightToUInt8(totalWeightOn, rlFeature->weightsHOn[j]);
                     imageData[featureCount][j+rleNucleotideStrandColumnCount_singleHap] =
-                            normalizeWeightToUInt8(totalWeight, rlFeature->weightsHOff[j]);
+                            normalizeWeightToUInt8(totalWeightOff, rlFeature->weightsHOff[j]);
                 }
 
                 // labels
