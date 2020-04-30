@@ -1230,7 +1230,7 @@ void stRPHmm_resetColumnNumberAndDepth(stRPHmm *hmm) {
 
 stRPHmm *stRPHmm_split(stRPHmm *hmm, int64_t splitPoint) {
     /*
-     * Splits the hmm into two at the specified point, given by the reference coordinate splitPiunt. The return value
+     * Splits the hmm into two at the specified point, given by the reference coordinate splitPoint. The return value
      * is the suffix of the split, whose reference start is splitPoint.
      * The prefix of the split is the input hmm, which has its suffix cleaved off. Its length is then splitPoint-hmm->refStart.
      */

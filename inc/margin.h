@@ -771,7 +771,6 @@ void poa_printRepeatCountsCSV(Poa *poa, FILE *fH, stList *bamChunkReads);
  */
 void poa_printSummaryStats(Poa *poa, FILE *fH);
 
-
 /*
  * Creates a consensus reference sequence from the POA. poaToConsensusMap is a pointer to an
  * array of integers of length poa->refString->length, giving the index of the reference positions
