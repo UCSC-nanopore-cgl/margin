@@ -678,9 +678,8 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
         }
     }
 
-
     //TODO remove this hickey hackey business
-    /*if (!foundMatch && score_consensusH1 < TRUTH_ALN_IDENTITY_THRESHOLD) {
+    if (!foundMatch && score_consensusH1 < TRUTH_ALN_IDENTITY_THRESHOLD) {
         st_logInfo(" %s Attempting SSW truth alignment for %s.\n", logIdentifier, newAlignmentDesc);
         uint16_t scoreH1, scoreH2;
 
@@ -772,7 +771,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
                 shiftAlignmentCoords(alignToH2, 0, consensusAlnShiftH2);
             }
         }
-    }*/
+    }
 
     // save to list
     stList_append(truthAlignmentDescriptors, newAlignmentDesc);
@@ -2247,6 +2246,18 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
     for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
         int64_t *ap = stList_get(anchorPairs, i);
         ap[3] = PAIR_ALIGNMENT_PROB_1;
+    }
+
+    // quick fail
+    int64_t minLength = (consensusStr->length < truthStr->length ? consensusStr : truthStr)->length;
+    double apRatio = 1.0 * stList_length(anchorPairs) / minLength;
+    if (apRatio < .5) {
+        char *logIdentifer = getLogIdentifier();
+        st_logInfo(" %s got %"PRId64" anchor pairs for min seq len %"PRId64" (%f), not attempting alignment.\n",
+                logIdentifer, stList_length(anchorPairs), minLength, apRatio);
+        free(logIdentifer);
+        stList_destruct(anchorPairs);
+        return stList_construct();
     }
 
     getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,

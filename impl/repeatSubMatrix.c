@@ -15,8 +15,13 @@ repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool s
     // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
     if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
         char *logIdentifier = getLogIdentifier();
-        st_logCritical(" %s [repeatSubMatrix_setLogProb] base 'Nn' (%d) not supported for repeat estimation! Setting to 0\n",
-                logIdentifier, base);
+        if (base == repeatSubMatrix->alphabet->alphabetSize - 1) {
+            st_logInfo(" %s [repeatSubMatrix_setLogProb] base 'Nn' (%d) not supported for repeat estimation! "
+                       "Setting to 'A' (0)\n", logIdentifier, base);
+        } else {
+            st_errAbort(" %s [repeatSubMatrix_setLogProb] base > 'Nn' (%d) not supported for repeat estimation!\n",
+                    logIdentifier, base);
+        }
         free(logIdentifier);
         base = 0;
     }
