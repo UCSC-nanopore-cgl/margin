@@ -980,6 +980,7 @@ ChunkToStitch **getChunksToStitchFromStrings(char **strings, int len) {
         chunks[i] = chunkToStitch_construct(stString_print("R%d",i),i,FALSE, FALSE, FALSE);
         stList_append(chunks[i]->readsHap1Lines, strings[i]);
     }
+    return chunks;
 }
 
 void test_mergeContigChunks(CuTest *testCase) {

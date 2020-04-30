@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
             } else if (stString_eqcase(optarg, "channelRleWeight") || stString_eqcase(optarg, "channel")) {
                 helenFeatureType = HFEAT_CHANNEL_RLE_WEIGHT;
             } else if (stString_eqcase(optarg, "diploidRleWeight") || stString_eqcase(optarg, "diploid")) {
-                helenFeatureType = HFEAT_CHANNEL_RLE_WEIGHT;
+                helenFeatureType = HFEAT_DIPLOID_RLE_WEIGHT;
             } else {
                 fprintf(stderr, "Unrecognized featureType for HELEN: %s\n\n", optarg);
                 usage();

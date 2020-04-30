@@ -776,6 +776,7 @@ bool alignToBestConsensus(RleString *trueRefRleString, RleString *polishedRleCon
 
     // save to list
     stList_append(truthAlignmentDescriptors, newAlignmentDesc);
+    return foundMatch;
 }
 
 RleString *getConsensusByEstimatedOriginalReferencePositions(RleString *originalReference, RleString *consensus,
