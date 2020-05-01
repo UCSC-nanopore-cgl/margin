@@ -763,8 +763,11 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
      * Closes the file streams and removes the output files (used for
      * chunker output to temporary files)
      */
+    //todo remove the time logging
+    time_t start = time(NULL);
     outputChunker_close(outputChunker); // Closes file streams
 
+    time_t rmrfStart = time(NULL);
     if (!outputChunker->useMemoryBuffers) { // If not in memory need to delete underlying files
         // if in memory, buffers will be freed in destructor
 
@@ -786,6 +789,7 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
             stFile_rmrf(outputChunker->outputReadPartitionFile);
         }
     }
+    st_logInfo("  Closing temp file chunker, fclose: %"PRId64"s, rm -rf: %"PRId64"s\n", rmrfStart-start, time(NULL)-rmrfStart);
 }
 
 void writeLines(FILE *fh, stList *lines) {
@@ -1404,11 +1408,7 @@ void outputChunkers_stitchAndTrackReadIds(OutputChunkers *outputChunkers, bool p
 void outputChunkers_destruct(OutputChunkers *outputChunkers) {
     // Close the file streams and delete the temporary files of the temp file chunkers
     for (int64_t i = 0; i < stList_length(outputChunkers->tempFileChunkers); i++) {
-        time_t start = time(NULL);
         outputChunker_closeAndDeleteFiles(stList_get(outputChunkers->tempFileChunkers, i));
-        char *timeDes = getTimeDescriptorFromSeconds(time(NULL) - start);
-        st_logInfo("    Closed temp file chunker %"PRId64" in %s\n", i, timeDes);
-        free(timeDes);
     }
     time_t start = time(NULL);
     // Now cleanup the temp file chunkers

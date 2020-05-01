@@ -11,11 +11,19 @@
 inline double *
 repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool strand, int64_t observedRepeatCount,
                            int64_t underlyingRepeatCount) {
-    // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
-    if (base == repeatSubMatrix->alphabet->alphabetSize - 1) { base = 0; }
     // santiy check
+    // TODO fix this!! filter reads before this point? rely on a prior (GC AT N)?
     if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
-        st_errAbort("[repeatSubMatrix_setLogProb] base 'Nn' not supported for repeat estimation\n");
+        char *logIdentifier = getLogIdentifier();
+        if (base == repeatSubMatrix->alphabet->alphabetSize - 1) {
+            st_logInfo(" %s [repeatSubMatrix_setLogProb] base 'Nn' (%d) not supported for repeat estimation! "
+                       "Setting to 'A' (0)\n", logIdentifier, base);
+        } else {
+            st_errAbort(" %s [repeatSubMatrix_setLogProb] base > 'Nn' (%d) not supported for repeat estimation!\n",
+                    logIdentifier, base);
+        }
+        free(logIdentifier);
+        base = 0;
     }
     int64_t idx =
             (strand ? base : 3 - base) * repeatSubMatrix->maximumRepeatLength * repeatSubMatrix->maximumRepeatLength +
