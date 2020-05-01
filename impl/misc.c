@@ -81,6 +81,11 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
 
     RleString *rleRef = params->polishParams->useRunLengthEncoding ?
                         rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
+
+    //TODO is this the right spot?
+    for (int64_t i = 0; i < rleRef->length; i++) {
+        rleRef->rleString[i] = (char) toupper(rleRef->rleString[i]);
+    }
     free(referenceString);
 
     return rleRef;
