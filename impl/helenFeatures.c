@@ -819,7 +819,7 @@ RleString *getConsensusByEstimatedOriginalReferencePositions(RleString *original
             (uint64_t) rleEstimatedConsensusEndPos - *rleEstimatedConsensusStartPos);
 
     // loggit
-    if (st_getLogLevel() >= TRUTH_ALN_LOG_LEVEL) {
+    if (st_getLogLevel() >= debug/*TRUTH_ALN_LOG_LEVEL*/) {
         char *logIdentifier = getLogIdentifier();
         st_logInfo(" %s Getting aligned region of consensus:\n", logIdentifier);
         st_logInfo("          T  rle_start:   %9"PRId64"   raw_chunk_start:%9"PRId64"\n",
@@ -2260,10 +2260,16 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
         return stList_construct();
     }
 
+    time_t apTime = time(NULL);
     getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
                                           polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+    time_t meaTime = time(NULL);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
+    char *logIdentifer = getLogIdentifier();
+    st_logInfo(" %s Truth alignment (seq len %"PRId64", %.3f AP ratio) got aligned pairs in %ds and MEA in %ds\n",
+            logIdentifer, minLength, apRatio, meaTime-apTime, time(NULL)-meaTime);
+    free(logIdentifer);
 
     // refactor
     stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
