@@ -790,8 +790,8 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
  * Allows the specification of the min and max number of realignment cycles.
  */
 Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads,
-                          PolishParams *polishParams, bool hmmMNotRealign,
-                          int64_t minIterations, int64_t maxIterations);
+						  PolishParams *polishParams, bool hmmNotRealign,
+						  int64_t minIterations, int64_t maxIterations);
 
 /*
  * Convenience function that iteratively polishes sequence using poa_getConsensus and then poa_polish for
@@ -899,7 +899,7 @@ void rleString_print(RleString *rleString, FILE *f);
  * Cyclic rotatation of the rle string so that the suffix of str of rotationLength is removed and made the prefix
  * of the string.
  */
-void rleString_rotateString(RleString *str, int64_t rotationLength);
+void rleString_rotateString(RleString *str, int64_t rotationLength, bool mergeEnds);
 
 /*
  * Generates the expanded non-rle string.
@@ -1241,7 +1241,7 @@ stReference *bubbleGraph_getReference(BubbleGraph *bg, char *refName, Params *pa
  * Phase bubble graph.
  */
 stGenomeFragment *
-bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, Params *params, stHash **readsToPSeqs);
+bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref, stList *reads, Params *params, stHash **readsToPSeqs);
 
 /*
  * Get Poa from bubble graph.

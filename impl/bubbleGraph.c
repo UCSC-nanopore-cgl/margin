@@ -1288,7 +1288,7 @@ stSet *filterReadsByCoverageDepth2(stList *profileSeqs, Params *params) {
     return discardedReadsSet;
 }
 
-stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName, stList *reads, Params *params,
+stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref, stList *reads, Params *params,
                                                stHash **readsToPSeqs) {
     /*
      * Runs phasing algorithm to split the reads embedded in the bubble graph into two partitions.
@@ -1300,8 +1300,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, char *refSeqName
     // for logging
     char *logIdentifier = getLogIdentifier();
 
-    // Generate profile sequences and reference
-    stReference *ref = bubbleGraph_getReference(bg, refSeqName, params);
+    // Generate profile sequences
     assert(ref->length == bg->bubbleNo);
     *readsToPSeqs = bubbleGraph_getProfileSeqs(bg, ref);
     stList *profileSeqs = stHash_getValues(*readsToPSeqs);

@@ -258,60 +258,35 @@ static void test_poa_realign_tiny_example1(CuTest *testCase) {
     Params *params = params_readParams(polishParamsFile);
     PolishParams *polishParams = params->polishParams;
 
-    // This test used the default state machine in cPecan
-    stateMachine_destruct(polishParams->stateMachineForGenomeComparison);
-    stateMachine_destruct(polishParams->stateMachineForForwardStrandRead);
-    polishParams->stateMachineForGenomeComparison = stateMachine3_construct(threeState,
-                                                                            nucleotideEmissions_construct());
-    polishParams->stateMachineForForwardStrandRead = stateMachine3_construct(threeState,
-                                                                             nucleotideEmissions_construct());
-
-    /*
-    // Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
-    stList *matches = NULL, *inserts = NULL, *deletes = NULL;
-    getAlignedPairsWithIndels(sM, reference, read, p, &matches, &deletes, &inserts, 0, 0);
-
-    for(int64_t i=0; i<stList_length(matches); i++) {
-        stIntTuple *alignedPair = stList_get(matches, i);
-        fprintf(stderr, "Match: (x:%i) (y:%i) (weight:%f)\n", stIntTuple_get(alignedPair, 1),
-                stIntTuple_get(alignedPair, 2), ((float)stIntTuple_get(alignedPair, 0))/PAIR_ALIGNMENT_PROB_1);
-    }
-
-    for(int64_t i=0; i<stList_length(inserts); i++) {
-        stIntTuple *alignedPair = stList_get(inserts, i);
-        fprintf(stderr, "Insert: (x:%i) (y:%i) (weight:%f)\n", stIntTuple_get(alignedPair, 1),
-                stIntTuple_get(alignedPair, 2), ((float)stIntTuple_get(alignedPair, 0))/PAIR_ALIGNMENT_PROB_1);
-    }
-
-    for(int64_t i=0; i<stList_length(deletes); i++) {
-        stIntTuple *alignedPair = stList_get(deletes, i);
-        fprintf(stderr, "Delete: (x:%i) (y:%i) (weight:%f)\n", stIntTuple_get(alignedPair, 1),
-                    stIntTuple_get(alignedPair, 2), ((float)stIntTuple_get(alignedPair, 0))/PAIR_ALIGNMENT_PROB_1);
-    }*/
-
     Poa *poa = poa_realign(reads, NULL, reference, polishParams);
     // Check we get the set of inserts and deletes we expect
 
-    // . = match
-    // | = insert
-    // - = delete
-    // : = insert and match
-    // % = delete and match
+    // Basically two alignments probable:
+    // One:
+    //GAT-ACAGCGGG
+    //GATTACAGC--G
 
-    //     Reference
-    //     -1 0 1 2 3 4 5 6 7 8 9 10
-    //      N G A T A C A G C G G G
-    // -1 N .
-    //  0 G   .
-    //  1 A   | .
-    //  2 T     : . -
-    //  3 T       : . %
-    //  4 A         :   .
-    //  5 C           .   .
-    //  6 A             . - %
-    //  7 G               . - %
-    //  8 C                 . - %
-    //  9 G                   . - %
+    // Two:
+    //GAT-ACAGCGGG
+    //GATTACAGC-G-
+
+    //Read:		GATTACAGCG
+    //Reference:	GATACAGCGGG
+    //0	N total-weight:0.000000	total-pos-weight:0.000000	total-neg-weight:0.000000	Total-weight:0.000000
+    //1	G total-weight:0.999978	total-pos-weight:0.999978	total-neg-weight:0.000000	G:0.999978 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.999978
+    //2	A total-weight:0.994884	total-pos-weight:0.994884	total-neg-weight:0.000000	A:0.994884 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.994884
+    //Insert	Seq:T	Total weight:0.990160	Forward Strand Weight:0.990160	Reverse Strand Weight:0.000000
+    //3	T total-weight:0.999554	total-pos-weight:0.999554	total-neg-weight:0.000000	T:0.999554 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.999554
+    //4	A total-weight:0.994393	total-pos-weight:0.994393	total-neg-weight:0.000000	A:0.994393 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.994393
+    //5	C total-weight:0.999478	total-pos-weight:0.999478	total-neg-weight:0.000000	C:0.999478 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.999478
+    //6	A total-weight:0.999600	total-pos-weight:0.999600	total-neg-weight:0.000000	A:0.999600 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.999600
+    //7	G total-weight:0.990489	total-pos-weight:0.990489	total-neg-weight:0.000000	G:0.990489 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.990489
+    //8	C total-weight:0.986294	total-pos-weight:0.986294	total-neg-weight:0.000000	C:0.986294 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.986294
+    //Delete	Length:1	Total weight:1.045831	Forward Strand Weight:1.045831	Reverse Strand Weight:0.000000
+    //Delete	Length:2	Total weight:0.929195	Forward Strand Weight:0.929195	Reverse Strand Weight:0.000000
+    //9	G total-weight:0.464145	total-pos-weight:0.464145	total-neg-weight:0.000000	G:0.464145 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.464145
+    //10	G total-weight:0.059048	total-pos-weight:0.059048	total-neg-weight:0.000000	G:0.059048 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.059048
+    //11	G total-weight:0.476354	total-pos-weight:0.476354	total-neg-weight:0.000000	G:0.476354 (1.000000) +str:1.000000, -str:nan,	Total-weight:0.476354
 
     st_logInfo("Read:\t\t%s\n", read->rleRead->rleString);
     st_logInfo("Reference:\t%s\n", reference->rleString);
@@ -320,59 +295,34 @@ static void test_poa_realign_tiny_example1(CuTest *testCase) {
     }
 
     // Check inserts
-
-    // A after ref 0
-    checkInserts(testCase, poa, 1, 1, (const char *[]) {"A"}, (const double[]) {0.038656}, 1);
-    // T after ref 1
-    /*checkInserts(testCase, poa, 2, 1, (const char *[]){ "T" }, (const double[]){ 0.877394 }, 1);
-    // T after ref 2
-    checkInserts(testCase, poa, 3, 1, (const char *[]){ "A" }, (const double[]){ 0.038831 }, 1);
-    // A after ref 3
-    checkInserts(testCase, poa, 4, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-
-    checkInserts(testCase, poa, 0, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 5, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 6, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 7, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 8, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 9, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);
-    checkInserts(testCase, poa, 10, 0, (const char *[]){ "" }, (const double[]){ 1 }, 1);*/
+    checkInserts(testCase, poa, 0, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 1, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 2, 1, (const char *[]) {"T"}, (const double[]) {0.990160}, 1);
+    checkInserts(testCase, poa, 3, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 4, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 5, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 6, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 7, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 8, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 9, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 10, 0, (const char *[]) {""}, (const double[]) {1}, 1);
+    checkInserts(testCase, poa, 11, 0, (const char *[]) {""}, (const double[]) {1}, 1);
 
     // Check deletes
-
-    /*
-    Delete: (x:3) (y:2) (weight:0.021429)
-    Delete: (x:4) (y:3) (weight:0.011958)
-
-    Delete: (x:6) (y:6) (weight:0.039542)
-    Delete: (x:7) (y:6) (weight:0.041150)
-
-    Delete: (x:7) (y:7) (weight:0.039140)
-    Delete: (x:8) (y:7) (weight:0.038841)
-
-    Delete: (x:8) (y:8) (weight:0.440979)
-    Delete: (x:9) (y:8) (weight:0.438735)
-
-    Delete: (x:9) (y:9) (weight:0.437247)
-    Delete: (x:10) (y:9) (weight:0.440302)*/
 
     // No deletes first three positions
     checkDeletes(testCase, poa, 0, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
     checkDeletes(testCase, poa, 1, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
     checkDeletes(testCase, poa, 2, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
+    checkDeletes(testCase, poa, 3, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
+    checkDeletes(testCase, poa, 4, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
     checkDeletes(testCase, poa, 5, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
+    checkDeletes(testCase, poa, 6, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
     checkDeletes(testCase, poa, 7, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
+    checkDeletes(testCase, poa, 8, 2, (const int64_t[]) {1, 2}, (const double[]) {1.045831, 0.929195}, 1);
     checkDeletes(testCase, poa, 9, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
     checkDeletes(testCase, poa, 10, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
-
-    // L1 after ref 2
-    checkDeletes(testCase, poa, 3, 1, (const int64_t[]) {1}, (const double[]) {0.018628}, 1);
-    // L1 after ref 3
-    checkDeletes(testCase, poa, 4, 1, (const int64_t[]) {1}, (const double[]) {0.010122}, 1);
-    // L2 after ref 5
-    checkDeletes(testCase, poa, 6, 1, (const int64_t[]) {2}, (const double[]) {0.080018}, 1);
-    // L2 after ref 7
-    checkDeletes(testCase, poa, 8, 1, (const int64_t[]) {2}, (const double[]) {0.879907}, 1);
+    checkDeletes(testCase, poa, 11, 0, (const int64_t[]) {1}, (const double[]) {1}, 1);
 
     params_destruct(params);
     poa_destruct(poa);
@@ -381,98 +331,6 @@ static void test_poa_realign_tiny_example1(CuTest *testCase) {
 }
 
 static void test_poa_realign(CuTest *testCase) {
-/*<<<<<<< HEAD
-	*//*
-	 * Test poa_realign by generating lots of random examples
-	 *//*
-
-	for (int64_t test = 0; test < 100; test++) {
-
-		Params *params = params_readParams(polishParamsFile);
-		PolishParams *polishParams = params->polishParams;
-
-		//Make true reference
-		char *trueReference = getRandomSequence(st_randomInt(1, 100));
-
-		// Make starting reference
-		char *reference = evolveSequence(trueReference);
-		RleString *reference_rle = params->polishParams->useRunLengthEncoding ?
-				rleString_construct(reference) : rleString_construct_no_rle(reference);
-
-		// Reads
-		int64_t readNumber = st_randomInt(0, 20);
-		stList *reads = stList_construct3(0, (void(*)(void*)) bamChunkRead_destruct);
-		for(int64_t i=0; i<readNumber; i++) {
-			stList_append(reads, bamChunkRead_construct2(stString_print("read_%d", i), evolveSequence(trueReference),NULL,TRUE,
-					params->polishParams->useRunLengthEncoding));
-		}
-
-		Poa *poa = poa_realign(reads, NULL, reference_rle, polishParams);
-
-		// Generate the read alignments and check the matches
-		// Currently don't check the insert and deletes
-
-		double *baseWeights = st_calloc(poa->alphabet->alphabetSize*reference_rle->length, sizeof(double));
-		double *repeatCountWeights = st_calloc(poa->maxRepeatCount*reference_rle->length, sizeof(double));
-
-		for(int64_t i=0; i<readNumber; i++) {
-			BamChunkRead *bamChunkRead = stList_get(reads, i);
-			RleString *read = bamChunkRead->rleRead;
-
-			// Make symbol strings
-			SymbolString sX = rleString_constructSymbolString(reference_rle, 0, reference_rle->length, poa->alphabet,
-					polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
-			SymbolString sY = rleString_constructSymbolString(read, 0, read->length, poa->alphabet,
-					polishParams->useRepeatCountsInAlignment, MAXIMUM_REPEAT_LENGTH);
-
-			// Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
-			stList *matches = NULL, *inserts = NULL, *deletes = NULL;
-			getAlignedPairsWithIndels(bamChunkRead->forwardStrand ?
-					polishParams->stateMachineForForwardStrandRead :
-					polishParams->stateMachineForReverseStrandRead, sX, sY, polishParams->p, &matches, &deletes, &inserts, 0, 0);
-
-			// Collate matches
-			for(int64_t j=0; j<stList_length(matches); j++) {
-				stIntTuple *match = stList_get(matches, j);
-				baseWeights[stIntTuple_get(match, 1) * poa->alphabet->alphabetSize + poa->alphabet->convertCharToSymbol(read->rleString[stIntTuple_get(match, 2)])] += stIntTuple_get(match, 0);
-				repeatCountWeights[stIntTuple_get(match, 1) * poa->maxRepeatCount + read->repeatCounts[stIntTuple_get(match, 2)]] += stIntTuple_get(match, 0);
-			}
-
-			// Cleanup
-			stList_destruct(matches);
-			stList_destruct(inserts);
-			stList_destruct(deletes);
-			symbolString_destruct(sX);
-			symbolString_destruct(sY);
-		}
-
-		// Check match and repeat count weights tally
-		for(int64_t i=0; i<reference_rle->length; i++) {
-			PoaNode *poaNode = stList_get(poa->nodes, i+1);
-			for(int64_t j=0; j<poa->alphabet->alphabetSize; j++) {
-				CuAssertDblEquals(testCase, poaNode->baseWeights[j], baseWeights[i*poa->alphabet->alphabetSize + j], 0.0001);
-			}
-			for(int64_t j=0; j<poa->maxRepeatCount; j++) {
-				CuAssertDblEquals(testCase, poaNode->repeatCountWeights[j], repeatCountWeights[i*poa->maxRepeatCount + j], 0.0001);
-			}
-		}
-
-		st_logInfo("True-reference:%s\n", trueReference);
-		if (st_getLogLevel() >= info) {
-			poa_print(poa, stderr, reads, 5);
-		}
-
-		//Cleanup
-		free(baseWeights);
-		free(repeatCountWeights);
-		free(trueReference);
-		free(reference);
-		rleString_destruct(reference_rle);
-		stList_destruct(reads);
-		poa_destruct(poa);
-		params_destruct(params);
-	}
-=======*/
     /*
      * Test poa_realign by generating lots of random examples
      */
@@ -669,7 +527,7 @@ static void test_poa_realign_example(CuTest *testCase, char *trueReference, char
     params->polishParams->useRunLengthEncoding = rle;
     // Set parameters
     params->polishParams->maxPoaConsensusIterations = 100;
-    params->polishParams->minPoaConsensusIterations = 0;
+    params->polishParams->minPoaConsensusIterations = 3;
     params->polishParams->referenceBasePenalty = 0.6;
     params->polishParams->maxRealignmentPolishIterations = 3;
     params->polishParams->minRealignmentPolishIterations = 3;
@@ -775,59 +633,6 @@ static void test_poa_realign_example(CuTest *testCase, char *trueReference, char
     //stList_destruct(reads1);
     //stList_destruct(reads2);
 }
-
-//TODO I think the above function does this
-//static void test_poa_realign_example(CuTest *testCase, char *trueReference, char *reference, stList *bamChunkReads,
-//		AlignmentMetrics *alignmentMetrics) {
-//
-//	Params *params = params_readParams(polishParamsFile);
-//	PolishParams *polishParams = params->polishParams;
-//
-//	// Set parameters
-//	params->polishParams->maxPoaConsensusIterations = 100;
-//	params->polishParams->minPoaConsensusIterations = 0;
-//	params->polishParams->maxRealignmentPolishIterations = 3;
-//	params->polishParams->minRealignmentPolishIterations = 3;
-//
-//	Poa *poa = poa_realign(bamChunkReads, NULL, reference, polishParams);
-//	Poa *poaRefined = poa_realignIterative(bamChunkReads, NULL, reference, polishParams);
-//
-//	// Calculate alignments between true reference and consensus and starting reference sequences
-//	int64_t consensusMatches = calcSequenceMatches(trueReference, poaRefined->refString);
-//	int64_t referenceMatches = calcSequenceMatches(trueReference, reference);
-//
-//	// Update the running total alignment metrics
-//	if(alignmentMetrics != NULL) {
-//		alignmentMetrics->totalConsensusMatches += consensusMatches;
-//		alignmentMetrics->totalReferenceMatches += referenceMatches;
-//		alignmentMetrics->totalConsensusLength += strlen(poaRefined->refString);
-//		alignmentMetrics->totalReferenceLength += strlen(reference);
-//		alignmentMetrics->totalTrueReferenceLength += strlen(trueReference);
-//	}
-//
-//	// Log some stuff
-//	if (st_getLogLevel() >= info) {
-//		st_logInfo("Reference:     \t\t%s\n", reference);
-//		st_logInfo("True-reference:\t\t%s\n", trueReference);
-//		st_logInfo("Consensus:     \t\t%s\n", poaRefined->refString);
-//		st_logInfo("Reference stats\t");
-//		poa_printSummaryStats(poa, stderr);
-//		st_logInfo("Consensus stats\t");
-//		poa_printSummaryStats(poaRefined, stderr);
-//		st_logInfo("Consensus : true-ref identity: %f\n", 2.0*consensusMatches/(strlen(trueReference) + strlen(poaRefined->refString)));
-//		st_logInfo("Start-ref : true-ref identity: %f\n\n", 2.0*referenceMatches/(strlen(trueReference) + strlen(reference)));
-//	}
-//
-//	if (st_getLogLevel() >= debug && !stString_eq(trueReference, poaRefined->refString)) {
-//		//poa_print(poa, stderr, 5);
-//		poa_print(poaRefined, stderr, bamChunkReads, 2, 5);
-//	}
-//
-//	// Cleanup
-//	params_destruct(params);
-//	poa_destruct(poa);
-//	poa_destruct(poaRefined);
-//}
 
 static struct List *readSequences(char *fastaFile, struct List **headers) {
     struct List *seqs = constructEmptyList(0, free);
@@ -987,20 +792,30 @@ static void test_rleString_examples(CuTest *testCase) {
 
 void test_rle_rotateString(CuTest *testCase) {
     // Specific example
-    RleString *e = rleString_construct("GATACA");
-    rleString_rotateString(e, 2);
-    CuAssertStrEquals(testCase, "CAGATA", e->rleString);
+    RleString *e = rleString_construct("GATAACA");
+    rleString_rotateString(e, 2, 1);
+    RleString *e_rotated = rleString_construct("CAGATAA");
+    CuAssertTrue(testCase, rleString_eq(e, e_rotated));
     rleString_destruct(e);
+    rleString_destruct(e_rotated);
+
+    // Another example, but where the resulting rle strings are shorter because the rotation merges the first and last position
+    // of the initial string
+    e = rleString_construct("ATAA");
+    rleString_rotateString(e, 1, 1);
+    e_rotated = rleString_construct("AAAT");
+    CuAssertTrue(testCase, rleString_eq(e, e_rotated));
+    rleString_destruct(e);
+    rleString_destruct(e_rotated);
 
     for (int64_t test = 0; test < 500; test++) {
         // Generate random string and make rotation of it
         char *s = getRandomSequence(st_randomInt(0, 20));
+
         RleString *t_rotated = rleString_construct(s);
         RleString *t = rleString_construct(s);
         int64_t i = st_randomInt(0, 20);
-        rleString_rotateString(t_rotated, i);
-
-        //st_uglyf(" %s %s %i \n", t->rleString, t_rotated->rleString, (int)i);
+        rleString_rotateString(t_rotated, i, 0);
 
         // Check the result
         for (int64_t j = 0; j < t->length; j++) {
@@ -1014,51 +829,6 @@ void test_rle_rotateString(CuTest *testCase) {
         free(s);
     }
 }
-
-//TODO removed after THE MERGE
-//static void test_rleString_construct2(CuTest *testCase) {
-//    char *testString = "GATTACAGGGGTT";
-//    RleString *string1 = rleString_construct(testString);
-//    char *rleChars = string1->rleString;
-//    uint8_t *rleLengths = st_calloc(strlen(rleChars), sizeof(uint8_t));
-//    for (int64_t i = 0; i < string1->length; i++) {
-//        rleLengths[i] = (uint8_t) string1->repeatCounts[i];
-//    }
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[0] == 0);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[1] == 1);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[2] == 2);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[3] == 4);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[4] == 5);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[5] == 6);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[6] == 7);
-//    CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[7] == 11);
-//
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[0] == 0);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[1] == 1);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[2] == 2);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[3] == 2);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[4] == 3);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[5] == 4);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[6] == 5);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[7] == 6);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[8] == 6);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[9] == 6);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[10] == 6);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[11] == 7);
-//    CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[12] == 7);
-//
-//    RleString *string2 = rleString_constructPreComputed(rleChars, rleLengths);
-//    CuAssertTrue(testCase, stString_eq(string1->rleString, string2->rleString));
-//    CuAssertTrue(testCase, string1->length == string2->length);
-//    CuAssertTrue(testCase, string1->nonRleLength == string2->nonRleLength);
-//    for (int64_t i = 0; i < string1->length; i++) {
-//        CuAssertTrue(testCase, string1->rleToNonRleCoordinateMap[i] == string2->rleToNonRleCoordinateMap[i]);
-//    }
-//    for (int64_t i = 0; i < string1->nonRleLength; i++) {
-//        CuAssertTrue(testCase, string1->nonRleToRleCoordinateMap[i] == string2->nonRleToRleCoordinateMap[i]);
-//    }
-//
-//}
 
 void checkStringsAndFree(CuTest *testCase, const char *expected, char *temp) {
     CuAssertStrEquals(testCase, expected, temp);
@@ -1207,58 +977,6 @@ void test_polish5kb_rle(CuTest *testCase) {
     CuAssertTrue(testCase, i == 0);
 }
 
-void test_polish5kb_no_rle(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/realData/NA12878.np.chr3.5kb.bam";
-    char *region = "chr3:2150000-2155000";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-
-    // Make a temporary params file with smaller default chunk sizes
-    char *tempParamsFile = "params.temp";
-    st_system("cat %s | sed 's/\"useRunLengthEncoding\": true,/\"useRunLengthEncoding\": false,/' > %s",
-              polishParamsFile, tempParamsFile);
-
-
-    int64_t i = polishingTest(bamFile, referenceFile, tempParamsFile, region, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    st_logInfo("\n\nTesting diploid polishing on %s\n", bamFile);
-    i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, TRUE);
-    CuAssertTrue(testCase, i == 0);
-    stFile_rmrf(tempParamsFile);
-}
-
-void test_polish5kb_no_region(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/realData/NA12878.np.chr3.5kb.bam";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsFile, NULL, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    st_logInfo("\n\nTesting diploid polishing on %s\n", bamFile);
-    i = polishingTest(bamFile, referenceFile, polishParamsFile, NULL, verbose, TRUE);
-    CuAssertTrue(testCase, i == 0);
-}
-
-void test_polish100kb(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/realData/NA12878.np.chr3.100kb.4.bam";
-    char *region = "chr3:8100000-8200000";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, TRUE);
-    CuAssertTrue(testCase, i == 0);
-}
-
 void checkLargeGapOutput(CuTest *testCase) {
     //read output file, find non-n sequence
     char *outputFile = "output.fa";
@@ -1315,29 +1033,27 @@ void test_binomialPValue(CuTest *testCase) {
 CuSuite *polisherTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
 
-//    SUITE_ADD_TEST(suite, test_poa_getReferenceGraph);
-//    SUITE_ADD_TEST(suite, test_getShift);
-//    SUITE_ADD_TEST(suite, test_rleString_examples);
-//    SUITE_ADD_TEST(suite, test_rle_rotateString);
-//    SUITE_ADD_TEST(suite, test_poa_augment_example);
-////    SUITE_ADD_TEST(suite, test_poa_realign_tiny_example1); //todo test fails, but I think behavior is expected
-//    SUITE_ADD_TEST(suite, test_poa_realign);
-//    SUITE_ADD_TEST(suite, test_getShift);
-//    SUITE_ADD_TEST(suite, test_rleString_examples);
-//    SUITE_ADD_TEST(suite, test_addInsert);
-//    SUITE_ADD_TEST(suite, test_removeDelete);
-//    SUITE_ADD_TEST(suite, test_polishParams);
-//    SUITE_ADD_TEST(suite, test_removeOverlapExample);
-//    SUITE_ADD_TEST(suite, test_removeOverlap_RandomExamples);
-//    SUITE_ADD_TEST(suite, test_binomialPValue);
-//	SUITE_ADD_TEST(suite, test_poa_realignIterative);
+    SUITE_ADD_TEST(suite, test_poa_getReferenceGraph);
+    SUITE_ADD_TEST(suite, test_getShift);
+    SUITE_ADD_TEST(suite, test_rleString_examples);
+    SUITE_ADD_TEST(suite, test_rle_rotateString);
+    SUITE_ADD_TEST(suite, test_poa_augment_example);
+    SUITE_ADD_TEST(suite, test_poa_realign_tiny_example1);
+    SUITE_ADD_TEST(suite, test_poa_realign);
+    SUITE_ADD_TEST(suite, test_getShift);
+    SUITE_ADD_TEST(suite, test_rleString_examples);
+    SUITE_ADD_TEST(suite, test_addInsert);
+    SUITE_ADD_TEST(suite, test_removeDelete);
+    SUITE_ADD_TEST(suite, test_polishParams);
+    SUITE_ADD_TEST(suite, test_removeOverlapExample);
+    SUITE_ADD_TEST(suite, test_removeOverlap_RandomExamples);
+    SUITE_ADD_TEST(suite, test_binomialPValue);
+    SUITE_ADD_TEST(suite, test_poa_realignIterative);
     SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_rle);
     SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_no_rle);
     SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_rle);
     SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_no_rle);
     SUITE_ADD_TEST(suite, test_polish5kb_rle);
-    SUITE_ADD_TEST(suite, test_polish5kb_no_region);
-    SUITE_ADD_TEST(suite, test_polish100kb);
     SUITE_ADD_TEST(suite, test_largeGap);
     SUITE_ADD_TEST(suite, test_largeGap2);
 

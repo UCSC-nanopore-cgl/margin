@@ -24,7 +24,7 @@ void checkCSV(CuTest *testCase, char *csvFile, char *sequence) {
         if (i > 1) {
             char *refBase = stList_get(tokens, 1);
             CuAssertTrue(testCase, strlen(refBase) == 1);
-            CuAssertTrue(testCase, refBase[0] == sequence[i - 2]);
+            CuAssertTrue(testCase, toupper(refBase[0]) == toupper(sequence[i - 2]));
         }
     }
     CuAssertIntEquals(testCase, strlen(sequence) + 2, stList_length(csvLines));

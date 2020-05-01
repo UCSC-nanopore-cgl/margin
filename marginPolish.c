@@ -552,14 +552,16 @@ int main(int argc, char *argv[]) {
 
             // Now make a POA for each of the haplotypes
             stHash *readsToPSeqs;
-            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
+            stReference *ref = bubbleGraph_getReference(bg, bamChunk->refSeqName, params);
+            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, ref, reads, params, &readsToPSeqs);
 
             stSet *readsBelongingToHap1, *readsBelongingToHap2;
             stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
             st_logInfo(" %s After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned "
-                       "into hap2 (%i unphased)\n", logIdentifier, (int)stList_length(reads),
-                       (int)stSet_size(readsBelongingToHap1), (int)stSet_size(readsBelongingToHap2),
-                       (int)(stList_length(reads) - stSet_size(readsBelongingToHap1)- stSet_size(readsBelongingToHap2)));
+                       "into hap2 (%i unphased)\n", logIdentifier, (int) stList_length(reads),
+                       (int) stSet_size(readsBelongingToHap1), (int) stSet_size(readsBelongingToHap2),
+                       (int) (stList_length(reads) - stSet_size(readsBelongingToHap1) -
+                              stSet_size(readsBelongingToHap2)));
 
             // Debug report of hets
             if (st_getLogLevel() <= info) {
@@ -636,6 +638,7 @@ int main(int argc, char *argv[]) {
             free(polishedConsensusStringH2);
             bubbleGraph_destruct(bg);
             stGenomeFragment_destruct(gf);
+            stReference_destruct(ref);
             poa_destruct(poa_hap1);
             poa_destruct(poa_hap2);
             stHash_destruct(readsToPSeqs);

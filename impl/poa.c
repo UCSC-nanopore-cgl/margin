@@ -91,7 +91,7 @@ PoaNode *poaNode_construct(Poa *poa, char base, uint64_t repeatCount) {
 
     poaNode->inserts = stList_construct3(0, (void (*)(void *)) poaInsert_destruct);
     poaNode->deletes = stList_construct3(0, (void (*)(void *)) poaDelete_destruct);
-    poaNode->base = (char) toupper(base);
+    poaNode->base = base;
     poaNode->repeatCount = repeatCount;
     poaNode->baseWeights = st_calloc(poa->alphabet->alphabetSize, sizeof(double)); // Encoded using Symbol enum
     poaNode->repeatCountWeights = st_calloc(poa->maxRepeatCount, sizeof(double));
@@ -428,8 +428,9 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
                 // Finally see if can be shifted by common suffix
                 int64_t commonSuffixLength = getMaxCommonSuffixLength(poa->refString, insertPosition, insert,
                                                                       polishParams->poaConstructCompareRepeatCounts);
-                if (commonSuffixLength > 0) {
-                    rleString_rotateString(insert, commonSuffixLength);
+                // TODO: Disabling rotation for now, as doesn't seem to improve the results
+                if (commonSuffixLength > 0 && 0) {
+                    rleString_rotateString(insert, commonSuffixLength, polishParams->useRunLengthEncoding);
                     insertPosition -= commonSuffixLength;
                 }
                 assert(insertPosition >= 0);
@@ -631,14 +632,15 @@ void getAlignedPairsWithIndelsCroppingReference(RleString *reference,
         firstRefPosition = 0;
         endRefPosition = reference->length;
     }
-    assert(firstRefPosition < reference->length && firstRefPosition >= 0);
+    assert(firstRefPosition <= reference->length && firstRefPosition >= 0);
     assert(endRefPosition <= reference->length && endRefPosition >= 0);
 
     // Adjust anchor positions
     adjustAnchors(anchorPairs, 0, -firstRefPosition);
 
     // Get symbol strings
-    uint64_t maxRL = polishParams->useRunLengthEncoding ? (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength : 2;
+    uint64_t maxRL = polishParams->useRunLengthEncoding ? (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength
+                                                        : 2;
     SymbolString sX = rleString_constructSymbolString(reference, firstRefPosition, endRefPosition - firstRefPosition,
                                                       polishParams->alphabet, polishParams->useRepeatCountsInAlignment,
                                                       maxRL);
@@ -1272,7 +1274,7 @@ getMaxWeight(const double *weights, uint64_t weightNo, uint64_t referenceIndex, 
     }
     assert(maxIndex != -1);
 
-    return weights[referenceIndex] * referenceWeightPenalty > maxWeight ? referenceIndex : maxIndex;
+    return weights[referenceIndex] * referenceWeightPenalty >= maxWeight ? referenceIndex : maxIndex;
 }
 
 RleString *poa_getConsensus(Poa *poa, int64_t **poaToConsensusMap, PolishParams *pp) {
@@ -1477,7 +1479,7 @@ RleString *poa_getConsensus(Poa *poa, int64_t **poaToConsensusMap, PolishParams 
             stList_append(consensusStrings, rleString_expand(maxInsert->insert));
             if (pp->useRunLengthEncoding) {
                 char base = maxInsert->insert->rleString[maxInsert->insert->length - 1];
-                runningConsensusLength += maxInsert->insert->length + (base != previousBase ? 0 : -1);
+                runningConsensusLength += (int64_t) maxInsert->insert->length + (base != previousBase ? 0 : -1);
                 previousBase = maxInsert->insert->rleString[0];
             } else {
                 assert(maxInsert->insert->nonRleLength == maxInsert->insert->length);
@@ -1801,7 +1803,7 @@ RleString *poa_polish(Poa *poa, stList *bamChunkReads, PolishParams *params,
 }
 
 // Functions to iteratively polish a sequence
-Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishParams, bool hmmMNotRealign,
+Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishParams, bool hmmNotRealign,
                           int64_t minIterations, int64_t maxIterations) {
     assert(maxIterations >= 0);
     assert(minIterations <= maxIterations);
@@ -1820,12 +1822,12 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishP
         time_t consensusFindingStartTime = time(NULL);
 
         int64_t *poaToConsensusMap;
-        RleString *reference = hmmMNotRealign ? poa_getConsensus(poa, &poaToConsensusMap, polishParams) :
+        RleString *reference = hmmNotRealign ? poa_getConsensus(poa, &poaToConsensusMap, polishParams) :
                                poa_polish(poa, bamChunkReads, polishParams, &poaToConsensusMap);
 
         st_logInfo(" %s Took %3d seconds to do round %" PRIi64 " of consensus finding using algorithm %s\n",
                    logIdentifier, (int) (time(NULL) - consensusFindingStartTime), i,
-                   hmmMNotRealign ? "consensus" : "polish");
+                   hmmNotRealign ? "consensus" : "polish");
 
         // Stop in case consensus string is same as old reference (i.e. greedy convergence)
         if (rleString_eq(reference, poa->refString)) {
@@ -1872,7 +1874,7 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishP
 
     st_logInfo(
             " %s Took %3d seconds to realign iterative using algorithm: %s through %" PRIi64 " iterations, got final score : %6.4f\n",
-            logIdentifier, (int) (time(NULL) - startTime), hmmMNotRealign ? "consensus" : "polish", i,
+            logIdentifier, (int) (time(NULL) - startTime), hmmNotRealign ? "consensus" : "polish", i,
             score / PAIR_ALIGNMENT_PROB_1);
 
     free(logIdentifier);

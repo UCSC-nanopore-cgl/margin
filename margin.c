@@ -243,7 +243,8 @@ int main(int argc, char *argv[]) {
             // Now make a POA for each of the haplotypes
             stHash *readsToPSeqs;
             startTime = time(NULL);
-            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, bamChunk->refSeqName, reads, params, &readsToPSeqs);
+            stReference *ref = bubbleGraph_getReference(bg, bamChunk->refSeqName, params);
+            stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, ref, reads, params, &readsToPSeqs);
             totalTime = time(NULL) - startTime;
             st_logInfo("Took %f seconds to phase bubble graph\n", (float) totalTime);
 
@@ -320,6 +321,7 @@ int main(int argc, char *argv[]) {
             stSet_destruct(readsBelongingToHap2);
             stHash_destruct(readsToPSeqs);
             stGenomeFragment_destruct(gf);
+            stReference_destruct(ref);
 		} else {
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
         }

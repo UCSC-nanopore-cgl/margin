@@ -264,9 +264,6 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment) {
     stSet_destruct(genomeFragment->reads1);
     stSet_destruct(genomeFragment->reads2);
 
-    //TODO find a better place for this
-    stReference_destruct(genomeFragment->reference);
-
     free(genomeFragment);
 }
 

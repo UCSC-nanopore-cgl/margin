@@ -11,7 +11,7 @@ RleString *rleString_construct(char *str) {
 
     // Calc length of rle'd str
     for (uint64_t i = 0; i < rleString->nonRleLength; i++) {
-        if (i + 1 == rleString->nonRleLength || toupper(str[i]) != toupper(str[i + 1])) {
+        if (i + 1 == rleString->nonRleLength || str[i] != str[i + 1]) {
             rleString->length++;
         }
     }
@@ -23,8 +23,8 @@ RleString *rleString_construct(char *str) {
     // Fill out
     uint64_t j = 0, k = 1;
     for (uint64_t i = 0; i < rleString->nonRleLength; i++) {
-        if (i + 1 == rleString->nonRleLength || toupper(str[i]) != toupper(str[i + 1])) {
-            rleString->rleString[j] = (char) toupper(str[i]);
+        if (i + 1 == rleString->nonRleLength || str[i] != str[i + 1]) {
+            rleString->rleString[j] = str[i];
             rleString->repeatCounts[j++] = k;
             k = 1;
         } else {
@@ -154,17 +154,25 @@ char *rleString_expand(RleString *rleString) {
     return s;
 }
 
-void rleString_rotateString(RleString *str, int64_t rotationLength) {
+void rleString_rotateString(RleString *str, int64_t rotationLength, bool mergeEnds) {
     char rotatedString[str->length];
     uint64_t rotatedRepeatCounts[str->length];
     for (int64_t i = 0; i < str->length; i++) {
         rotatedString[(i + rotationLength) % str->length] = str->rleString[i];
         rotatedRepeatCounts[(i + rotationLength) % str->length] = str->repeatCounts[i];
     }
+    int64_t j = 0;
     for (int64_t i = 0; i < str->length; i++) {
-        str->rleString[i] = rotatedString[i];
-        str->repeatCounts[i] = rotatedRepeatCounts[i];
+        if (!mergeEnds || i == 0 || rotatedString[i] != rotatedString[i - 1]) {
+            str->rleString[j] = rotatedString[i];
+            str->repeatCounts[j++] = rotatedRepeatCounts[i];
+        } else {
+            str->repeatCounts[j - 1] += rotatedRepeatCounts[i];
+        }
+        //str->rleString[i] = rotatedString[i];
+        //str->repeatCounts[i] = rotatedRepeatCounts[i];
     }
+    str->length = j;
 }
 
 uint8_t *rleString_rleQualities(RleString *rleString, const uint8_t *qualities) {

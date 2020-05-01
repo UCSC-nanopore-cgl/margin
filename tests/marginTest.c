@@ -55,16 +55,18 @@ static stSet *getReadNamesFromPartitionFile(CuTest *testCase, char *readPartitio
 }
 
 void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
-    char *referenceFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.fasta";
+    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
+    //"../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.fasta";
     bool verbose = false;
-    char *bamFile = "../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.bam ";
-    char *region = NULL;
+    char *bamFile = "../tests/data/realData/NA12878.np.chr3.100kb.4.bam";
+    //"../tests/data/diploidTestExamples/AVG-chr7/HG002.shasta.g305.122-10980000-11086000.bam ";
+    char *region = "chr3:8100000-8200000"; //NULL;
     char *base = "temp_output";
 
     // Make a temporary params file with smaller default chunk sizes
     char *tempParamsFile = "params.temp";
     st_system(
-            "cat %s | sed 's/\"chunkSize\": 100000/\"chunkSize\": 1000/' | sed 's/\"chunkBoundary\": 1000/\"chunkBoundary\": 500/' > %s",
+            "cat %s | sed 's/\"filterAlignmentsWithMapQBelowThisThreshold\": 60/\"filterAlignmentsWithMapQBelowThisThreshold\": 0/' | sed 's/\"chunkSize\": 200000/\"chunkSize\": 1000/' | sed 's/\"chunkBoundary\": 5000/\"chunkBoundary\": 500/' > %s",
             polishParamsFile, tempParamsFile);
 
     // Run in diploid mode and get all the file outputs
@@ -84,7 +86,7 @@ void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
     char *outputHap2ReadPhasingFile = "temp_output_reads.csv.hap2";
 
     // Parse the sequences
-    char *sequenceName = "122:10980000-11086000";
+    char *sequenceName = "chr3"; //"122:10980000-11086000";
     char *seq1 = getSequence(testCase, outputHap1File, sequenceName);
     char *seq2 = getSequence(testCase, outputHap2File, sequenceName);
     RleString *seq1Rle = rleString_construct(seq1);
@@ -112,7 +114,7 @@ void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
     stFile_rmrf(outputHap2RepeatCountFile);
     stFile_rmrf(outputHap1ReadPhasingFile);
     stFile_rmrf(outputHap2ReadPhasingFile);
-    stFile_rmrf(tempParamsFile);
+    //stFile_rmrf(tempParamsFile);
 }
 
 void test_marginIntegration(CuTest *testCase) {
@@ -126,7 +128,7 @@ void test_marginIntegrationInMemory(CuTest *testCase) {
 CuSuite *marginIntegrationTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
     SUITE_ADD_TEST(suite, test_marginIntegration);
-    SUITE_ADD_TEST(suite, test_marginIntegrationInMemory);
+    //SUITE_ADD_TEST(suite, test_marginIntegrationInMemory);
 
     return suite;
 }

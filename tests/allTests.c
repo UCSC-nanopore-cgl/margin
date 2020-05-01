@@ -38,10 +38,10 @@ int marginPhaseTests(void) {
     CuSuiteAddSuite(suite, stRPHmmTestSuite());
     CuSuiteAddSuite(suite, parserTestSuite());
     CuSuiteAddSuite(suite, polisherTestSuite());
+    CuSuiteAddSuite(suite, pairwiseAlignmentTestSuite());
     CuSuiteAddSuite(suite, marginIntegrationTestSuite());
     CuSuiteAddSuite(suite, viewTestSuite());
-    CuSuiteAddSuite(suite, pairwiseAlignmentTestSuite());
-    CuSuiteAddSuite(suite, chunkingTestSuite());
+    //CuSuiteAddSuite(suite, chunkingTestSuite());
     CuSuiteAddSuite(suite, stitchingTestSuite());
 #ifdef _HDF5
     CuSuiteAddSuite(suite, featureTestSuite());
