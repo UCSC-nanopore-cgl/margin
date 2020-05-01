@@ -114,7 +114,7 @@ void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
     stFile_rmrf(outputHap2RepeatCountFile);
     stFile_rmrf(outputHap1ReadPhasingFile);
     stFile_rmrf(outputHap2ReadPhasingFile);
-    //stFile_rmrf(tempParamsFile);
+    stFile_rmrf(tempParamsFile);
 }
 
 void test_marginIntegration(CuTest *testCase) {
@@ -128,7 +128,7 @@ void test_marginIntegrationInMemory(CuTest *testCase) {
 CuSuite *marginIntegrationTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
     SUITE_ADD_TEST(suite, test_marginIntegration);
-    //SUITE_ADD_TEST(suite, test_marginIntegrationInMemory);
+    SUITE_ADD_TEST(suite, test_marginIntegrationInMemory);
 
     return suite;
 }
