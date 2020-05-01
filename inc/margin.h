@@ -82,8 +82,6 @@ struct _params {
 
 Params *params_readParams(char *paramsFile);
 
-Params *params_readParams2(char *paramsFile, bool requirePolish, bool requirePhase);
-
 void params_destruct(Params *params);
 
 void params_printParameters(Params *params, FILE *fh);

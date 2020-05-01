@@ -428,8 +428,7 @@ void poa_augment(Poa *poa, RleString *read, bool readStrand, int64_t readNo, stL
                 // Finally see if can be shifted by common suffix
                 int64_t commonSuffixLength = getMaxCommonSuffixLength(poa->refString, insertPosition, insert,
                                                                       polishParams->poaConstructCompareRepeatCounts);
-                // TODO: Disabling rotation for now, as doesn't seem to improve the results
-                if (commonSuffixLength > 0 && 0) {
+                if (commonSuffixLength > 0) {
                     rleString_rotateString(insert, commonSuffixLength, polishParams->useRunLengthEncoding);
                     insertPosition -= commonSuffixLength;
                 }

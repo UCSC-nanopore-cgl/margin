@@ -32,13 +32,11 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     return params;
 }
 
-stRPHmmParameters *parseParameters_fromJson(char *buf, size_t r) {
+void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *buf, size_t r) {
     // Setup parser
     jsmntok_t *tokens;
     char *js;
     int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
-
-    stRPHmmParameters *params = stRPHmmParameters_construct();
 
     //TODO: refactor the following to use the json parsing functions
 
@@ -78,10 +76,11 @@ stRPHmmParameters *parseParameters_fromJson(char *buf, size_t r) {
     // Cleanup
     free(js);
     free(tokens);
-
-    return params;
 }
 
+void stRPHmmParameters_finishParsing(stRPHmmParameters *params) {
+    // This is a stub, which is there to check parameters after parsing them out of file(s)
+}
 
 /*
  * Params object for polisher
@@ -95,14 +94,12 @@ int64_t repeatSubMatrix_parseLogProbabilities(RepeatSubMatrix *repeatSubMatrix, 
     return i;
 }
 
-RepeatSubMatrix *repeatSubMatrix_jsonParse(char *buf, size_t r) {
+void repeatSubMatrix_jsonParse(RepeatSubMatrix *repeatSubMatrix, char *buf, size_t r) {
     // Setup parser
     jsmntok_t *tokens;
     char *js;
     int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
 
-    // TODO: Generalize to not be nucleotide only
-    RepeatSubMatrix *repeatSubMatrix = repeatSubMatrix_constructEmpty(alphabet_constructNucleotide());
     // TODO: ADD support for Ns
     for (int64_t tokenIndex = 1; tokenIndex < tokenNumber; tokenIndex++) {
         jsmntok_t key = tokens[tokenIndex];
@@ -142,16 +139,9 @@ RepeatSubMatrix *repeatSubMatrix_jsonParse(char *buf, size_t r) {
     // Cleanup
     free(js);
     free(tokens);
-
-    return repeatSubMatrix;
 }
 
-PolishParams *polishParams_jsonParse(char *buf, size_t r) {
-    // Setup parser
-    jsmntok_t *tokens;
-    char *js;
-    int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
-
+PolishParams  *polishParams_constructEmpty() {
     // Make empty params object
     PolishParams *params = st_calloc(1, sizeof(PolishParams));
 
@@ -181,11 +171,19 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
     params->hetSubstitutionProbability = 0.0001;
     params->hetRunLengthSubstitutionProbability = 0.0001;
 
+    // At this point the repeat matrix, the hmms for read alignment, the alphabet and the pairwise alignment parameter will be null.
+
+    return params;
+}
+
+void polishParams_jsonParse(PolishParams *params, char *buf, size_t r) {
+    // Setup parser
+    jsmntok_t *tokens;
+    char *js;
+    int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
+
     // Parse tokens, starting at token 1
     // (token 0 is entire object)
-    bool gotHmmForwardStrandReadGivenReference = 0;
-    bool gotPairwiseAlignmentParameters = 0, gotRepeatCountMatrix = 0, gotAlphabet = 0;
-
     for (int64_t tokenIndex = 1; tokenIndex < tokenNumber; tokenIndex++) {
         jsmntok_t key = tokens[tokenIndex];
         char *keyString = stJson_token_tostr(js, &key);
@@ -222,9 +220,12 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
         } else if (strcmp(keyString, "repeatCountSubstitutionMatrix") == 0) {
             jsmntok_t tok = tokens[tokenIndex + 1];
             char *tokStr = stJson_token_tostr(js, &tok);
-            params->repeatSubMatrix = repeatSubMatrix_jsonParse(tokStr, strlen(tokStr));
+            // TODO: Generalize to not be nucleotide only
+            if(params->repeatSubMatrix == NULL) {
+                params->repeatSubMatrix = repeatSubMatrix_constructEmpty(alphabet_constructNucleotide());
+            }
+            repeatSubMatrix_jsonParse(params->repeatSubMatrix, tokStr, strlen(tokStr));
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
-            gotRepeatCountMatrix = 1;
         } else if (strcmp(keyString, "poaConstructCompareRepeatCounts") == 0) {
             params->poaConstructCompareRepeatCounts = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "hmmForwardStrandReadGivenReference") == 0) {
@@ -232,7 +233,6 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
             char *tokStr = stJson_token_tostr(js, &tok);
             Hmm *hmmForwardStrandReadGivenReference = hmm_jsonParse(tokStr, strlen(tokStr));
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
-            gotHmmForwardStrandReadGivenReference = 1;
             params->stateMachineForForwardStrandRead = hmm_getStateMachine(hmmForwardStrandReadGivenReference);
             params->stateMachineForReverseStrandRead = hmm_getStateMachine(hmmForwardStrandReadGivenReference);
             nucleotideEmissions_reverseComplement(
@@ -246,7 +246,6 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
                 st_errAbort("ERROR: pairwiseAlignmentParameters.diagonalExpansion must be even\n");
             }
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
-            gotPairwiseAlignmentParameters = 1;
         } else if (strcmp(keyString, "shuffleChunks") == 0) {
             params->shuffleChunks = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "includeSoftClipping") == 0) {
@@ -346,23 +345,28 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
             } else {
                 st_errAbort("ERROR: Unrecognised alphabet type json: %s\n", tokStr);
             }
-            gotAlphabet = TRUE;
         } else {
             st_errAbort("ERROR: Unrecognised key in polish params json: %s\n", keyString);
         }
     }
 
-    if (!gotRepeatCountMatrix && params->useRunLengthEncoding) {
+    // Cleanup
+    free(js);
+    free(tokens);
+}
+
+void polishParams_finishParsing(PolishParams *params) {
+    if (params->repeatSubMatrix == NULL && params->useRunLengthEncoding) {
         st_logCritical(
                 "  ERROR: Did not find repeat counts specified in json polish params! Will default to MODE estimation\n");
     }
-    if (!gotHmmForwardStrandReadGivenReference) {
+    if (params->stateMachineForForwardStrandRead == NULL) {
         st_errAbort("ERROR: Did not find HMM for alignment of read to a reference specified in json polish params\n");
     }
-    if (!gotPairwiseAlignmentParameters) {
+    if (params->p == NULL) {
         st_errAbort("ERROR: Did not find pairwise alignment params specified in json polish params\n");
     }
-    if (!gotAlphabet) {
+    if (params->alphabet == NULL) {
         st_errAbort("ERROR: Did not find alphabet params specified in json polish params\n");
     }
 
@@ -371,7 +375,7 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
             st_errAbort(
                     "ERROR: Trying to use repeat counts in read to reference alignment but not using run length encoding\n");
         }
-        if (!gotRepeatCountMatrix) {
+        if (params->repeatSubMatrix == NULL) {
             st_errAbort(
                     "ERROR: Did not find find repeat counts specified in json but trying to use repeat counts in read to reference alignment\n");
         }
@@ -381,12 +385,6 @@ PolishParams *polishParams_jsonParse(char *buf, size_t r) {
         params->stateMachineForReverseStrandRead->emissions = rleNucleotideEmissions_construct(
                 params->stateMachineForReverseStrandRead->emissions, params->repeatSubMatrix, 0);
     }
-
-    // Cleanup
-    free(js);
-    free(tokens);
-
-    return params;
 }
 
 void polishParams_printParameters(PolishParams *polishParams, FILE *fh) {
@@ -416,77 +414,67 @@ void polishParams_destruct(PolishParams *params) {
 /*
  * Global params objects
  */
-Params *params_jsonParse(char *buf, size_t r, bool requirePolish, bool requirePhase) {
+
+Params *params_constructEmpty() {
+    // Make empty params object
+    Params *params = st_calloc(1, sizeof(Params));
+    params->polishParams = polishParams_constructEmpty();
+    params->phaseParams = stRPHmmParameters_construct();
+
+    return params;
+}
+
+void params_readParams2(Params *params, char *paramsFile);
+
+void params_jsonParse(Params *params, char *buf, size_t r, char *paramsFile) {
     // Setup parser
     jsmntok_t *tokens;
     char *js;
     int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
 
-    // Make empty params object
-    Params *params = st_calloc(1, sizeof(Params));
-
     // Parse tokens, starting at token 1
     // (token 0 is entire object)
-    bool gotPolish = 0, gotPhase = 0;
     for (int64_t tokenIndex = 1; tokenIndex < tokenNumber; tokenIndex++) {
         jsmntok_t key = tokens[tokenIndex];
         char *keyString = stJson_token_tostr(js, &key);
-
-        if (strcmp(keyString, "polish") == 0) {
-            if (requirePolish) {
-                jsmntok_t tok = tokens[tokenIndex + 1];
-                char *tokStr = stJson_token_tostr(js, &tok);
-                params->polishParams = polishParams_jsonParse(tokStr, strlen(tokStr));
-            }
+        if(strcmp(keyString, "include") == 0) {
+            jsmntok_t tok = tokens[++tokenIndex];
+            char *nestedParamsFile= stJson_token_tostr(js, &tok);
+            // Make the complete path to the nested params file
+            stList *paramsPath = stString_splitByString(paramsFile, "/");
+            stList *nestedParamsPath = stString_splitByString(nestedParamsFile, "/");
+            free(stList_pop(paramsPath));
+            stList_appendAll(paramsPath, nestedParamsPath);
+            char *nonRelativeNestedParamsFile = stString_join2("/", paramsPath);
+            st_logDebug("Parsing nested params file %s, joining params file path: %s and nested params file path: %s\n", nonRelativeNestedParamsFile, paramsFile, nestedParamsFile);
+            // Parse the nested params file
+            params_readParams2(params, nonRelativeNestedParamsFile);
+            //cleanup
+            free(nonRelativeNestedParamsFile);
+            stList_setDestructor(nestedParamsPath, NULL);
+            stList_destruct(nestedParamsPath);
+            stList_destruct(paramsPath);
+        } else if (strcmp(keyString, "polish") == 0) {
+            jsmntok_t tok = tokens[tokenIndex + 1];
+            char *tokStr = stJson_token_tostr(js, &tok);
+            polishParams_jsonParse(params->polishParams, tokStr, strlen(tokStr));
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
-            gotPolish = 1;
         } else if (strcmp(keyString, "phase") == 0) {
-            if (requirePhase) {
-                jsmntok_t tok = tokens[tokenIndex + 1];
-                char *tokStr = stJson_token_tostr(js, &tok);
-                params->phaseParams = parseParameters_fromJson(tokStr, strlen(tokStr));
-            }
+            jsmntok_t tok = tokens[tokenIndex + 1];
+            char *tokStr = stJson_token_tostr(js, &tok);
+            stRPHmmParameters_parseParametersFromJson(params->phaseParams, tokStr, strlen(tokStr));
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
-            gotPhase = 1;
         } else {
-            // maybe we only need one of these?
-            if (requirePolish && !requirePhase) {
-                st_logInfo(
-                        "WARN: parameters file missing 'polish' and 'phase' top-level entries.  Interpreting as 'polish'.\n");
-                params->polishParams = polishParams_jsonParse(buf, r);
-                tokenIndex = tokenNumber;
-                gotPolish = 1;
-            } else if (requirePhase && !requirePolish) {
-                st_logInfo(
-                        "WARN: parameters file missing 'polish' and 'phase' top-level entries.  Interpreting as 'phase'.\n");
-                params->phaseParams = parseParameters_fromJson(buf, r);
-                tokenIndex = tokenNumber;
-                gotPhase = 1;
-            } else {
-                st_errAbort("ERROR: Unrecognised key in params json: %s\n", keyString);
-            }
+            st_errAbort("ERROR: Unrecognised key in params json: %s\n", keyString);
         }
-    }
-
-    if (!gotPolish && requirePolish) {
-        st_errAbort("ERROR: Did not find polish parameters in json params\n");
-    }
-    if (!gotPhase && requirePhase) {
-        st_errAbort("ERROR: Did not find phase parameters in json params\n");
     }
 
     // Cleanup
     free(js);
     free(tokens);
-
-    return params;
 }
 
-Params *params_readParams(char *paramsFile) {
-    return params_readParams2(paramsFile, TRUE, TRUE);
-}
-
-Params *params_readParams2(char *paramsFile, bool requirePolish, bool requirePhase) {
+void params_readParams2(Params *params, char *paramsFile) {
     // open file and check for existence
     FILE *fh = fopen(paramsFile, "rb");
     if (fh == NULL) {
@@ -501,11 +489,18 @@ Params *params_readParams2(char *paramsFile, bool requirePolish, bool requirePha
     char *buf = st_calloc(st.st_size + 1, sizeof(char));
     size_t readLen = fread(buf, sizeof(char), st.st_size, fh);
     buf[st.st_size] = '\0';
-    Params *params = params_jsonParse(buf, readLen, requirePolish, requirePhase);
+    params_jsonParse(params, buf, readLen, paramsFile);
 
     // close
     free(buf);
     fclose(fh);
+}
+
+Params *params_readParams(char *paramsFile) {
+    Params *params = params_constructEmpty();
+    params_readParams2(params, paramsFile);
+    stRPHmmParameters_finishParsing(params->phaseParams);
+    polishParams_finishParsing(params->polishParams); // This initializes everything
 
     return params;
 }
@@ -522,4 +517,3 @@ void params_printParameters(Params *params, FILE *fh) {
     fprintf(fh, "Phase parameters:\n");
     stRPHmmParameters_printParameters(params->phaseParams, fh);
 }
-
