@@ -65,9 +65,9 @@ void test_marginIntegration2(CuTest *testCase, bool inMemoryBuffers) {
 
     // Make a temporary params file with smaller default chunk sizes
     char *tempParamsFile = "params.temp";
-    st_system(
-            "cat %s | sed 's/\"filterAlignmentsWithMapQBelowThisThreshold\": 60/\"filterAlignmentsWithMapQBelowThisThreshold\": 0/' | sed 's/\"chunkSize\": 200000/\"chunkSize\": 1000/' | sed 's/\"chunkBoundary\": 5000/\"chunkBoundary\": 500/' > %s",
-            polishParamsFile, tempParamsFile);
+    FILE *fh = fopen(tempParamsFile, "w");
+    fprintf(fh, "{ \"include\" : \"%s\", \"polish\": { \"filterAlignmentsWithMapQBelowThisThreshold\": 0,\"chunkSize\": 1000,\"chunkBoundary\": 500 } }", polishParamsFile);
+    fclose(fh);
 
     // Run in diploid mode and get all the file outputs
     st_logInfo("\tTesting diploid polishing on %s\n", bamFile);
