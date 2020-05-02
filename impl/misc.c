@@ -79,13 +79,15 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
     char *referenceString = stString_getSubString(fullReferenceString, bamChunk->chunkBoundaryStart,
                                                   (refLen < bamChunk->chunkBoundaryEnd ? refLen : bamChunk->chunkBoundaryEnd) - bamChunk->chunkBoundaryStart);
 
+    int64_t subRefLen = strlen(referenceString);
+    // TODO: Decide where the proper place to do this is
+    for (int64_t i = 0; i < subRefLen; i++) {
+        referenceString[i] = (char) toupper(referenceString[i]);
+    }
+
     RleString *rleRef = params->polishParams->useRunLengthEncoding ?
                         rleString_construct(referenceString) : rleString_construct_no_rle(referenceString);
 
-    //TODO is this the right spot?
-    for (int64_t i = 0; i < rleRef->length; i++) {
-        rleRef->rleString[i] = (char) toupper(rleRef->rleString[i]);
-    }
     free(referenceString);
 
     return rleRef;
