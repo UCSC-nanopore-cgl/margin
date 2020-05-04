@@ -84,7 +84,7 @@ static void test_getQualityScores(CuTest *testCase) {
         // see how many reads there are
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == stList_length(reads));
         CuAssertTrue(testCase, readCount == 9);
 
@@ -156,7 +156,7 @@ static void test_getChunksWithBoundary(CuTest *testCase) {
         // see how many reads there are
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == stList_length(reads));
 
         // all these should cover any read whose alignment overlaps (inclusive) with chunkMarginStart and (exclusive)
@@ -204,7 +204,7 @@ static void test_getChunksWithoutBoundary(CuTest *testCase) {
         // see how many reads there are
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == stList_length(reads));
 
         // all these should cover any read whose alignment overlaps (inclusive) with chunkMarginStart and (exclusive)
@@ -277,7 +277,7 @@ static void test_getReadsWithoutSoftClipping(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 10);
         for (int64_t i = 0; i < 10; i++) {
             // check the length of the cigar strings
@@ -308,7 +308,7 @@ static void test_getReadsWithSoftClipping(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 10);
         for (int64_t i = 0; i < 10; i++) {
             // check the length of the cigar strings
@@ -346,7 +346,7 @@ static void test_readAlignmentsWithoutSoftclippingChunkStart(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 24);
         for (int64_t i = 0; i < 24; i++) {
             BamChunkRead *read = stList_get(reads, i);
@@ -515,7 +515,7 @@ static void test_readAlignmentsWithSoftclippingChunkStart(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 24);
         for (int64_t i = 0; i < 24; i++) {
             BamChunkRead *read = stList_get(reads, i);
@@ -683,7 +683,7 @@ static void test_readAlignmentsWithoutSoftclippingChunkEnd(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 21);
         for (int64_t i = 0; i < 21; i++) {
             BamChunkRead *read = stList_get(reads, i);
@@ -837,7 +837,7 @@ static void test_readAlignmentsWithSoftclippingChunkEnd(CuTest *testCase) {
         // analyze reads and alignments
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments);
+        uint32_t readCount = convertToReadsAndAlignments(chunk, NULL, reads, alignments, NULL);
         CuAssertTrue(testCase, readCount == 21);
         for (int64_t i = 0; i < 21; i++) {
             BamChunkRead *read = stList_get(reads, i);

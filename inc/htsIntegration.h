@@ -35,7 +35,8 @@ void bamChunk_destruct(BamChunk *bamChunk);
 /*
  * Converts chunk of aligned reads into list of reads and alignments.
  */
-uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments);
+uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments,
+                                     PolishParams *polishParams);
 
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
                         stList *filteredReads, stList *filteredAlignments, stList *discardedReads,

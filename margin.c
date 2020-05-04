@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
         st_logInfo("> Parsing input reads from file: %s\n", bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        convertToReadsAndAlignments(bamChunk, reference, reads, alignments);
+        convertToReadsAndAlignments(bamChunk, reference, reads, alignments, params->polishParams);
 
         // Now run the polishing method
 

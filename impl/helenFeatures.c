@@ -214,7 +214,8 @@ void PoaFeature_handleHelenFeatures(
         trueReferenceBamChunker->bamFile = stString_copy(trueReferenceBam);
         trueRefBamChunk->parent = trueReferenceBamChunker;
         // get true ref as "read"
-        uint32_t trueAlignmentCount = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReads, trueRefAligns);
+        uint32_t trueAlignmentCount = convertToReadsAndAlignments(trueRefBamChunk, originalReference, trueRefReads,
+                                                                  trueRefAligns, NULL);
 
         if (trueAlignmentCount == 1) {
             BamChunkRead *trueRefRead = stList_get(trueRefReads, 0);
@@ -865,9 +866,9 @@ bool PoaFeature_handleDiploidHelenTruthAlignment(char *trueReferenceBamA, char *
     trueRefBamChunk->parent = trueReferenceBamChunker;
     // get true ref as reads
     trueReferenceBamChunker->bamFile = trueReferenceBamA;
-    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsA, truthOriginalRefAlignA);
+    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsA, truthOriginalRefAlignA, NULL);
     trueReferenceBamChunker->bamFile = trueReferenceBamB;
-    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsB, truthOriginalRefAlignB);
+    convertToReadsAndAlignments(trueRefBamChunk, originalReference, truthReadsB, truthOriginalRefAlignB, NULL);
     trueReferenceBamChunker->bamFile = NULL;
     // tracking
     stList *truthAlignmentDescriptors = stList_construct3(0, free);

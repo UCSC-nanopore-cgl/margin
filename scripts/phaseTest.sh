@@ -57,9 +57,11 @@ if [ ${makePlots} = TRUE ]; then
   # Make POA visualizations of each predicted het
   echo Making POA graph visualizations of predicted hets
   mkdir visualizations
-  for i in $(cat validatedMismatches.txt | grep 'Predicted mismatch:' | cut -f5 -d' '); do
-    j=$(echo ${i} - 5 | bc)
-    python3 ../../scripts/phasedPoaToDot.py output_poa.csv.hap1 --start=${j} --length=10 --output=visualizations/hap1_poa_${j}
+  for i in $(cat validatedMismatches.txt | grep 'Predicted mismatch:' | cut -f5,7 -d' ' | sed 's/ /_/'); do
+    k=$(echo ${i} | cut -f1 -d'_')
+    j=$(echo ${k} - 5 | bc)
+    l=$(echo ${i} | cut -f2 -d'_')
+    python3 ../../scripts/phasedPoaToDot.py output_poa.csv.hap1 --start=${j} --length=10 --output=visualizations/hap1_poa_${j}_${l}
   done
 fi
 

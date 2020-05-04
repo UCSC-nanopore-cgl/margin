@@ -339,9 +339,6 @@ typedef struct samview_settings {
     void *bed;
 } samview_settings_t;
 
-
-#define DEFAULT_ALIGNMENT_SCORE 10
-
 /*
  * This generates a set of BamChunkReads (and alignments to the reference) from a BamChunk.  The BamChunk describes
  * positional information within the bam, from which the reads should be extracted.  The bam must be indexed.  Reads
@@ -349,7 +346,8 @@ typedef struct samview_settings {
  * softclipped portions of the reads should be included.
  */
 
-uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments) {
+uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments,
+                                     PolishParams *polishParams) {
 
     // sanity check
     assert(stList_length(reads) == 0);
@@ -502,7 +500,7 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
                 if (cigarIdxInRef >= chunkStart && cigarIdxInRef < chunkEnd) {
                     stList_append(cigRepr, stIntTuple_construct3(cigarIdxInRef + refCigarModification,
                                                                  cigarIdxInSeq + seqCigarModification,
-                                                                 DEFAULT_ALIGNMENT_SCORE));
+                                                                 polishParams != NULL ? polishParams->p->diagonalExpansion : 10)); //TODO: Tidy up so polish params is not optional
                     alignedReadLength++;
                 }
                 cigarIdxInSeq++;
