@@ -41,7 +41,7 @@ int marginPhaseTests(void) {
     CuSuiteAddSuite(suite, pairwiseAlignmentTestSuite());
     CuSuiteAddSuite(suite, marginIntegrationTestSuite());
     CuSuiteAddSuite(suite, viewTestSuite());
-    //CuSuiteAddSuite(suite, chunkingTestSuite());
+    CuSuiteAddSuite(suite, chunkingTestSuite());
     CuSuiteAddSuite(suite, stitchingTestSuite());
 #ifdef _HDF5
     CuSuiteAddSuite(suite, featureTestSuite());

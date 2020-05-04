@@ -2244,10 +2244,6 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
     stList *gapXPairs = NULL;
     stList *gapYPairs = NULL;
     stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, (uint64_t) polishParams->p->diagonalExpansion);
-    for (int64_t i = 0; i<stList_length(anchorPairs); i++) {
-        int64_t *ap = stList_get(anchorPairs, i);
-        ap[3] = PAIR_ALIGNMENT_PROB_1;
-    }
 
     // quick fail
     int64_t minLength = (consensusStr->length < truthStr->length ? consensusStr : truthStr)->length;

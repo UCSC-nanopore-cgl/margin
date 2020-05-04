@@ -1339,6 +1339,10 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     if (stList_length(profileSeqs) == 0) {
         stGenomeFragment *gf = stGenomeFragment_constructEmpty(ref, 0, 0, stSet_construct(), stSet_construct());
         stList_destruct(profileSeqs);
+        stList_destruct(forwardStrandProfileSeqs);
+        stList_destruct(reverseStrandProfileSeqs);
+        stSet_destruct(discardedReadsSet);
+        free(logIdentifier);
         return gf;
     }
 
