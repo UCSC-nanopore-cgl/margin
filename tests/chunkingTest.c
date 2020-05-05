@@ -9,7 +9,7 @@
 #include "margin.h"
 
 #define INPUT_BAM "../tests/data/chunkingTest/chunkingTest.bam"
-#define INPUT_PARAMS "../params/ont/r9.4/allParams.np.human.r94-g344.json"
+#define INPUT_PARAMS "../params/misc/allParams.no_rle.json"
 
 static PolishParams *getParameters(uint64_t chunkSize, uint64_t chunkBoundary, bool includeSoftClipping) {
     PolishParams *params = st_calloc(1, sizeof(PolishParams));
@@ -977,8 +977,8 @@ static void test_readAlignmentsWithSoftclippingChunkEnd(CuTest *testCase) {
 ChunkToStitch **getChunksToStitchFromStrings(char **strings, int len) {
     ChunkToStitch **chunks = st_calloc(len, sizeof(ChunkToStitch*));
     for (int i = 0; i < len ; i++) {
-        chunks[i] = chunkToStitch_construct(stString_print("R%d",i),i,FALSE, FALSE, FALSE);
-        stList_append(chunks[i]->readsHap1Lines, strings[i]);
+        chunks[i] = chunkToStitch_construct(stString_copy("TestContig"),i,FALSE, FALSE, FALSE);
+        chunks[i]->seqHap1 = stString_copy(strings[i]);
     }
     return chunks;
 }
@@ -1022,18 +1022,25 @@ void test_mergeContigChunksThreaded(CuTest *testCase) {
     ChunkToStitch **chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 1, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 2, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 3, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 4, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 5, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 6, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0);
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 7, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0 );
+    chunksToStitch = getChunksToStitchFromStrings(chunks, 16);
     contig = mergeContigChunkzThreaded(chunksToStitch, 0, 16, 8, FALSE, params, "testContig")->seqHap1;
     CuAssertTrue(testCase, strcmp(contig, truth) == 0 );
 }
