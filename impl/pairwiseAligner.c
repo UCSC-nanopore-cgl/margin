@@ -1057,13 +1057,11 @@ void pairwiseAlignmentBandingParameters_destruct(PairwiseAlignmentParameters *p)
     free(p);
 }
 
-PairwiseAlignmentParameters *pairwiseAlignmentParameters_jsonParse(char *buf, size_t r) {
+void *pairwiseAlignmentParameters_jsonParse(PairwiseAlignmentParameters *params, char *buf, size_t r) {
     // Setup parser
     jsmntok_t *tokens;
     char *js;
     int64_t tokenNumber = stJson_setupParser(buf, r, &tokens, &js);
-
-    PairwiseAlignmentParameters *params = pairwiseAlignmentBandingParameters_construct();
 
     for (int64_t tokenIndex = 1; tokenIndex < tokenNumber; tokenIndex++) {
         jsmntok_t key = tokens[tokenIndex];
@@ -1095,8 +1093,6 @@ PairwiseAlignmentParameters *pairwiseAlignmentParameters_jsonParse(char *buf, si
     // Cleanup
     free(js);
     free(tokens);
-
-    return params;
 }
 
 static void alignedPairCoordinateCorrectionFn(int64_t offsetX, int64_t offsetY, void *extraArgs) {

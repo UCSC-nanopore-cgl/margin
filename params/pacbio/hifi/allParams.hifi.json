@@ -1,6 +1,24 @@
 {
   "include" : "../../base_params.json",
   "polish": {
+    "hmmForwardStrandReadGivenReference" : {
+      "type" : 2,
+      "emissionsType" : 0,
+      "transitions": [
+        0.80000, 0.10000, 0.10000,
+        0.500000, 0.500000, 0.000000,
+        0.500000, 0.000000, 0.500000
+      ],
+      "emissions": [
+        0.998, 0.0067, 0.0067, 0.0067,
+        0.0067, 0.998, 0.0067, 0.0067,
+        0.0067, 0.0067, 0.998, 0.0067,
+        0.0067, 0.0067, 0.0067, 0.998,
+
+        1.0, 1.0, 1.0, 1.0,
+        0.25, 0.25, 0.25, 0.25
+      ]
+    },
     "repeatCountSubstitutionMatrix" : {
       "repeatCountLogProbabilities_A_F": [
         -1.707570195198059,

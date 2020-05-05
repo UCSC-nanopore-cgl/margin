@@ -29,7 +29,7 @@ fi
 
 # Run margin
 echo Running Margin
-time ../margin ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/*.bam ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/*shasta*.fasta ../../params/${company}/${seq}/${params} --logLevel DEBUG --diploid --outputPoaCsv
+time ../margin ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/*.bam ${pathToData}/diploidTestExamples/${company}/${seq}/${region}/*.fasta ../../params/${company}/${seq}/${params} --logLevel DEBUG --diploid --outputPoaCsv
 
 # Calculate identity
 echo Comparing predicated haplotype1 to true haplotype1

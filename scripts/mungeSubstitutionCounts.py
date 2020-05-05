@@ -2,8 +2,10 @@
 Converts Ryan's substitution matrix to one used by margin
 """
 
+import sys
+
 counts = {k: {i: {j: 0 for j in "ACTG"} for i in "ACTG"} for k in "FR"}
-fh = open("subs.txt")
+fh = open(sys.argv[1])
 line = fh.readline()
 while line != '':
     assert line[0] == '>'
@@ -26,7 +28,7 @@ for strand in "FR":
         # refBase = refBase if strand == "F" else rc(refBase)
         for readBase in "ACGT":
             readBase = readBase if strand == "F" else rc(readBase)
-            print("{:.3f}".format(counts[strand][refBase][readBase]) + ", ", end="")
+            print("{:.5f}".format(counts[strand][refBase][readBase]) + ", ", end="")
         print()
     print("")
 

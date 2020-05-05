@@ -51,7 +51,7 @@
                 "threshold": 0.01,
                 "minDiagsBetweenTraceBack": 5000,
                 "traceBackDiagonals": 40,
-                "diagonalExpansion": 2,
+                "diagonalExpansion": 4,
                 "constraintDiagonalTrim": 0,
                 "splitMatrixBiggerThanThis": 250000000,
                 "alignAmbiguityCharacters": false,

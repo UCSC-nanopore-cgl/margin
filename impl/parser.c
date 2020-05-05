@@ -170,6 +170,7 @@ PolishParams  *polishParams_constructEmpty() {
     params->useReadAllelesInPhasing = 0;
     params->hetSubstitutionProbability = 0.0001;
     params->hetRunLengthSubstitutionProbability = 0.0001;
+    params->p = pairwiseAlignmentBandingParameters_construct();
 
     // At this point the repeat matrix, the hmms for read alignment, the alphabet and the pairwise alignment parameter will be null.
 
@@ -233,6 +234,12 @@ void polishParams_jsonParse(PolishParams *params, char *buf, size_t r) {
             char *tokStr = stJson_token_tostr(js, &tok);
             Hmm *hmmForwardStrandReadGivenReference = hmm_jsonParse(tokStr, strlen(tokStr));
             tokenIndex += stJson_getNestedTokenCount(tokens, tokenIndex + 1);
+            // Cleanup any older state machine
+            if(params->stateMachineForForwardStrandRead != NULL) {
+                stateMachine_destruct(params->stateMachineForForwardStrandRead);
+                assert(params->stateMachineForReverseStrandRead != NULL);
+                stateMachine_destruct(params->stateMachineForReverseStrandRead);
+            }
             params->stateMachineForForwardStrandRead = hmm_getStateMachine(hmmForwardStrandReadGivenReference);
             params->stateMachineForReverseStrandRead = hmm_getStateMachine(hmmForwardStrandReadGivenReference);
             nucleotideEmissions_reverseComplement(
@@ -241,7 +248,7 @@ void polishParams_jsonParse(PolishParams *params, char *buf, size_t r) {
         } else if (strcmp(keyString, "pairwiseAlignmentParameters") == 0) {
             jsmntok_t tok = tokens[tokenIndex + 1];
             char *tokStr = stJson_token_tostr(js, &tok);
-            params->p = pairwiseAlignmentParameters_jsonParse(tokStr, strlen(tokStr));
+            pairwiseAlignmentParameters_jsonParse(params->p, tokStr, strlen(tokStr));
             if (params->p->diagonalExpansion % 2 != 0) {
                 st_errAbort("ERROR: pairwiseAlignmentParameters.diagonalExpansion must be even\n");
             }

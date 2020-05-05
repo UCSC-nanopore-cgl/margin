@@ -46,7 +46,7 @@ void pairwiseAlignmentBandingParameters_destruct(PairwiseAlignmentParameters *p)
  * Parse from json description. Use defaults specified in pairwiseAlignmentBandingParameters_construct()
  * if a parameter is not specified.
  */
-PairwiseAlignmentParameters *pairwiseAlignmentParameters_jsonParse(char *buf, size_t r);
+void *pairwiseAlignmentParameters_jsonParse(PairwiseAlignmentParameters *params, char *buf, size_t r);
 
 /*
  * Computes for the forward log probability of aligning the two sequences
