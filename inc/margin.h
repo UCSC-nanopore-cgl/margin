@@ -440,6 +440,9 @@ struct _stGenomeFragment {
 	float *haplotypeProbs2;
 };
 
+//todo fix this
+void setMinPhredScoreForHaplotypePartition(double v);
+
 stGenomeFragment *
 stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2);
 
@@ -1375,5 +1378,8 @@ typedef enum {
 #define POAFEATURE_SPLIT_MAX_RUN_LENGTH_DEFAULT 10
 #define POAFEATURE_CHANNEL_MAX_RUN_LENGTH_DEFAULT 10
 #define POAFEATURE_DIPLOID_MAX_RUN_LENGTH_DEFAULT 10
+
+
+//todo fix this, do it right
 
 #endif /* ST_RP_HMM_H_ */

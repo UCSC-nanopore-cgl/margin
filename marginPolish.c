@@ -43,6 +43,7 @@ void usage() {
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000).\n");
     fprintf(stderr, "    -p --depth               : Will override the downsampling depth set in PARAMS.\n");
     fprintf(stderr, "    -2 --diploid             : Will perform diploid phasing.\n");
+    fprintf(stderr, "    -P --minPartitionPhred   : Min Phred-scale liklihood for partition inclusion (diploid)\n");
     fprintf(stderr, "    -k --tempFilesToDisk     : Write temporary files to disk (for --diploid or supplementary output).\n");
 
 # ifdef _HDF5
@@ -130,6 +131,7 @@ int main(int argc, char *argv[]) {
                 { "outputBase", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
                 { "depth", required_argument, 0, 'p'},
+                { "minPartitionPhred", required_argument, 0, 'P'},
                 { "diploid", no_argument, 0, '2'},
                 { "produceFeatures", no_argument, 0, 'f'},
                 { "featureType", required_argument, 0, 'F'},
@@ -146,7 +148,7 @@ int main(int argc, char *argv[]) {
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:2t:r:fF:u:L:cCijdmnk", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:P:2t:r:fF:u:L:cCijdmnk", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -172,6 +174,10 @@ int main(int argc, char *argv[]) {
             if (maxDepth < 0) {
                 st_errAbort("Invalid maxDepth: %s", optarg);
             }
+            break;
+        case 'P':
+            setMinPhredScoreForHaplotypePartition(atoi(optarg));
+            st_logCritical("Setting minPhredScoreForHaplotypePartition = %d\n", atoi(optarg));
             break;
         case 'F':
             if (stString_eqcase(optarg, "simpleWeight") || stString_eqcase(optarg, "simple")) {

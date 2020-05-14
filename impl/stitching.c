@@ -699,10 +699,10 @@ void outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int6
 
     // Output the read partition
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
-            stSet_size(gF->reads1) + 1);
+            stSet_size(readsBelongingToHap1) + 1);
     stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 1);
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
-            stSet_size(gF->reads2) + 1);
+            stSet_size(readsBelongingToHap2) + 1);
     stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 0);
 
     // Cleanup
@@ -763,11 +763,8 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
      * Closes the file streams and removes the output files (used for
      * chunker output to temporary files)
      */
-    //todo remove the time logging
-    time_t start = time(NULL);
     outputChunker_close(outputChunker); // Closes file streams
 
-    time_t rmrfStart = time(NULL);
     if (!outputChunker->useMemoryBuffers) { // If not in memory need to delete underlying files
         // if in memory, buffers will be freed in destructor
 
@@ -789,7 +786,6 @@ void outputChunker_closeAndDeleteFiles(OutputChunker *outputChunker) {
             stFile_rmrf(outputChunker->outputReadPartitionFile);
         }
     }
-    st_logInfo("  Closing temp file chunker, fclose: %"PRId64"s, rm -rf: %"PRId64"s\n", rmrfStart-start, time(NULL)-rmrfStart);
 }
 
 void writeLines(FILE *fh, stList *lines) {

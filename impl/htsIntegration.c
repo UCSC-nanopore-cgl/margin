@@ -754,11 +754,11 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     // output file mangement
     samFile *out1 = NULL, *out2 = NULL, *outUnmatched = NULL;
     if (outputBamFileBase != NULL) {
-        out1 = hts_open(haplotype1BamOutFile, "w");
+        out1 = hts_open(haplotype1BamOutFile, "wb");
         r = sam_hdr_write(out1, bamHdr);
-        out2 = hts_open(haplotype2BamOutFile, "w");
+        out2 = hts_open(haplotype2BamOutFile, "wb");
         r = sam_hdr_write(out2, bamHdr);
-        outUnmatched = hts_open(unmatchedBamOutFile, "w");
+        outUnmatched = hts_open(unmatchedBamOutFile, "wb");
         r = sam_hdr_write(outUnmatched, bamHdr);
     }
     FILE *readOutH1 = NULL, *readOutH2 = NULL, *readOutUnmatched = NULL;

@@ -6,6 +6,12 @@
 
 #include "margin.h"
 
+//todo put this in params
+static double todoFixThis_minPhredScoreForHaplotypePartition = -1.0;
+void setMinPhredScoreForHaplotypePartition(double v) {
+    todoFixThis_minPhredScoreForHaplotypePartition = v;
+}
+
 stGenomeFragment *
 stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2) {
     stGenomeFragment *gF = st_calloc(1, sizeof(stGenomeFragment));
@@ -110,7 +116,10 @@ void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool h
                                                               gF->refStart, gF->length, gF->reference) :
                    getLogProbabilityOfBeingInPartition(pSeq, gF->haplotypeString1, gF->haplotypeString2, gF->refStart,
                                                        gF->length, gF->reference);
-        fprintf(fh, "%s,%f\n", pSeq->readId, -10 * p / 2.302585);
+        p = -10 * p / 2.302585;
+        if (p > todoFixThis_minPhredScoreForHaplotypePartition) {
+            fprintf(fh, "%s,%f\n", pSeq->readId, p);
+        }
     }
     stSet_destructIterator(it);
 }
@@ -227,20 +236,41 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
                                          stSet **readsBelongingToHap1, stSet **readsBelongingToHap2) {
     *readsBelongingToHap1 = stSet_construct();
     *readsBelongingToHap2 = stSet_construct();
+    int64_t discardedForPhredCount = 0;
+    int64_t consideredForPhasing = 0;
 
     for (int64_t i = 0; i < stList_length(reads); i++) {
         BamChunkRead *read = stList_get(reads, i);
         stProfileSeq *pSeq = stHash_search(readsToPSeqs, read);
-        if (pSeq !=
-            NULL) { // Some reads do not get converted to pSeqs because they are too low quality at every aligned site they
-            // overlap
+        if (pSeq != NULL) { // Some reads do not get converted to pSeqs because they are too low quality
+            // at every aligned site they overlap
 
             // Checks
             assert(stSet_search(gf->reads1, pSeq) != NULL || stSet_search(gf->reads2, pSeq) != NULL);
             assert(stSet_search(gf->reads1, pSeq) == NULL || stSet_search(gf->reads2, pSeq) == NULL);
 
-            stSet_insert(stSet_search(gf->reads1, pSeq) != NULL ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
+            bool hap1 = stSet_search(gf->reads1, pSeq) != NULL;
+            double lp = hap1 ?
+                        getLogProbabilityOfBeingInPartition(pSeq, gf->haplotypeString2, gf->haplotypeString1,
+                                                            gf->refStart, gf->length, gf->reference) :
+                        getLogProbabilityOfBeingInPartition(pSeq, gf->haplotypeString1, gf->haplotypeString2,
+                                                            gf->refStart, gf->length, gf->reference);
+            double phred = -10 * lp / 2.302585;
+            if (phred < todoFixThis_minPhredScoreForHaplotypePartition) {
+                discardedForPhredCount++;
+            } else {
+                stSet_insert(hap1 ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
+            }
+            consideredForPhasing += 1;
         }
+    }
+
+    if (st_getLogLevel() >= info) {
+        char *logIdentifier = getLogIdentifier();
+        st_logInfo(" %s Excluded %"PRId64" (%.5f%%) reads for haplotype inclusion likelihood < %d.\n", logIdentifier,
+                discardedForPhredCount, 1.0 * discardedForPhredCount / consideredForPhasing,
+                (int) todoFixThis_minPhredScoreForHaplotypePartition);
+        free(logIdentifier);
     }
 }
 
