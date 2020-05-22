@@ -267,8 +267,8 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
 
     if (st_getLogLevel() >= info) {
         char *logIdentifier = getLogIdentifier();
-        st_logInfo(" %s Excluded %"PRId64" (%.5f%%) reads for haplotype inclusion likelihood < %d.\n", logIdentifier,
-                discardedForPhredCount, 1.0 * discardedForPhredCount / consideredForPhasing,
+        st_logInfo(" %s Excluded %"PRId64" (%.5f) reads for haplotype inclusion likelihood < %d.\n", logIdentifier,
+                discardedForPhredCount, 1.0 * discardedForPhredCount / (consideredForPhasing == 0 ? 1 : consideredForPhasing),
                 (int) todoFixThis_minPhredScoreForHaplotypePartition);
         free(logIdentifier);
     }
