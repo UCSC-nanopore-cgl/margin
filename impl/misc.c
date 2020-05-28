@@ -117,3 +117,4 @@ stSet *bamChunkRead_to_readName(stSet *bamChunkReads) {
     stSet_destructIterator(itor);
     return readNames;
 }
+

@@ -364,13 +364,13 @@ void test_truthAlignments(CuTest *testCase) {
 CuSuite* featureTestSuite(void) {
     CuSuite* suite = CuSuiteNew();
 //
-//    SUITE_ADD_TEST(suite, test_simpleWeightIndex);
-//    SUITE_ADD_TEST(suite, test_splitRleWeightIndex);
-//    SUITE_ADD_TEST(suite, test_channelRleWeightIndex);
-//    SUITE_ADD_TEST(suite, test_diploidRleWeightIndex);
-//    SUITE_ADD_TEST(suite, test_defaultFeatureGeneration);
-//    SUITE_ADD_TEST(suite, test_simpleWeightFeatureGeneration);
-//    SUITE_ADD_TEST(suite, test_splitRleWeightFeatureGeneration);
+    SUITE_ADD_TEST(suite, test_simpleWeightIndex);
+    SUITE_ADD_TEST(suite, test_splitRleWeightIndex);
+    SUITE_ADD_TEST(suite, test_channelRleWeightIndex);
+    SUITE_ADD_TEST(suite, test_diploidRleWeightIndex);
+    SUITE_ADD_TEST(suite, test_defaultFeatureGeneration);
+    SUITE_ADD_TEST(suite, test_simpleWeightFeatureGeneration);
+    SUITE_ADD_TEST(suite, test_splitRleWeightFeatureGeneration);
     SUITE_ADD_TEST(suite, test_truthAlignments);
 
     return suite;

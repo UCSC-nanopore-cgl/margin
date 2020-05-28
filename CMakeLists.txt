@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 project(marginPhase VERSION 1.1.0)
 
 #set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt ")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG -fsanitize=address -static-libasan")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt ")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG -fsanitize=address -static-libasan")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -UNDEBUG")
 
 project(marginPhase LANGUAGES C)
@@ -243,7 +243,7 @@ set(SOURCE_FILES
         impl/repeatSubMatrix.c
         impl/stitching.c
         impl/htsIntegration.c
-        impl/view.c
+        impl/vcf.c
         impl/profileSeq.c
         impl/bubbleGraph.c
         impl/randomSequences.c
@@ -314,6 +314,9 @@ target_link_libraries(marginPolish marginLib)
 add_executable(margin margin.c)
 target_link_libraries(margin marginLib)
 
+add_executable(marginVcfPhase marginVcfPhase.c)
+target_link_libraries(marginVcfPhase marginLib)
+
 enable_testing()
 
 if (HDF5_FOUND)
@@ -328,6 +331,7 @@ if (HDF5_FOUND)
             tests/viewTest.c
             tests/featureTest.c
             tests/stitchingTest.c
+            tests/vcfTest.c
             )
 else ()
     add_executable(allTests
@@ -340,6 +344,7 @@ else ()
             tests/polisherTest.c
             tests/stRPHmmTest.c
             tests/viewTest.c
-            tests/stitchingTest.c)
+            tests/stitchingTest.c
+            tests/vcfTest.c)
 endif ()
 target_link_libraries(allTests marginLib)

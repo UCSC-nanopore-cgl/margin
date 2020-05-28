@@ -67,6 +67,11 @@ typedef struct _refMsaView MsaView;
 typedef struct _outputChunkers OutputChunkers;
 
 /*
+ * VCF structs
+ */
+typedef struct _vcfEntry VcfEntry;
+
+/*
  * Combined params object
  */
 typedef struct _params Params;
@@ -622,6 +627,22 @@ struct _poaBaseObservation {
 	int64_t offset;
 	double weight;
 };
+
+
+/*
+ * VCF data structures
+ */
+
+struct _vcfEntry {
+	char *refSeqName;
+	int64_t refPos;
+	RleString *allele1;
+	RleString *allele2;
+};
+
+VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, RleString *allele1, RleString *allele2);
+void vcfEntry_destruct(VcfEntry *vcfEntry);
+stList *parseVcf(char *vcfFile, PolishParams *params);
 
 /*
  * Poa functions.

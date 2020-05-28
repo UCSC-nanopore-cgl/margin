@@ -1188,7 +1188,7 @@ void test_flipAReadsPartition(CuTest *testCase) {
 //		CuAssertTrue(testCase, pSeq->refStart >= 0);
 //		CuAssertTrue(testCase, pSeq->length >= 0);
 //		CuAssertTrue(testCase, pSeq->length + pSeq->refStart <= strlen(reference));
-//		CuAssertStrEquals(testCase, pSeq->referenceName, "ref");
+//		CuAssertStrEquals(testCase, pSeq->refSeqName, "ref");
 //
 //		for(int64_t i=0; i<pSeq->length; i++) {
 //			int64_t total=0;

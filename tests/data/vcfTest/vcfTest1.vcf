@@ -1,0 +1,10 @@
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE
+chr20	1000	.	G	A	30	.	.	GT:AD	0/1:1,1
+chr20	2000	.	T	CCC	30	.	.	AD:GT	0,1:0|1
+chr20	3000	.	T	C,A	30	.	.	GT:AD	1|2:1,1
+chr20	4000	.	T	C	30	.	.	GT:AD:SE	0|1:1,1:SomethingElse
+chr20	5000	.	A	GATTACA	30	.	.	GT:AD	1|0:1,1
+chr20	6000	.	TC	T	30	.	.	GT:AD	1/0:1,1
+chr20	7000	.	G	.	30	.	.	GT:AD	0|0:1,1
+chr20	8000	.	G	A	30	.	.	GT:AD	1|1:1,1
+chr20	250000000	.	G	A	30	.	.	GT:AD	1|0:1,1
