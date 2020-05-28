@@ -222,7 +222,7 @@ set(SONLIB_SOURCES
 set(SSW_SOURCES
         externalTools/ssw/ssw.c)
 
-set(CORE_SOURCE_FILES
+set(SOURCE_FILES
         impl/chunker.c
         impl/column.c
         impl/coordination.c
@@ -242,10 +242,6 @@ set(CORE_SOURCE_FILES
         impl/rle.c
         impl/repeatSubMatrix.c
         impl/stitching.c
-        )
-
-
-set(SOURCE_FILES
         impl/htsIntegration.c
         impl/view.c
         impl/profileSeq.c
@@ -297,7 +293,7 @@ add_dependencies(hts HTSLIB_CONFIGURED)
 target_link_libraries(hts pthread z)
 
 # Build margin library
-add_library(marginLib ${SOURCE_FILES} ${CORE_SOURCE_FILES} ${SSW_SOURCES})
+add_library(marginLib ${SOURCE_FILES} ${SSW_SOURCES})
 target_link_libraries(marginLib son hts)
 
 if (OPENMP_FOUND)
@@ -312,7 +308,7 @@ endif ()
 ######### EXECUTABLES #########
 ###############################
 
-add_executable(marginPolish marginPolish.c ${SOURCE_FILES} ${CORE_SOURCE_FILES})
+add_executable(marginPolish marginPolish.c)
 target_link_libraries(marginPolish marginLib)
 
 add_executable(margin margin.c)
