@@ -675,12 +675,52 @@ bool *expand(bool *b, int64_t length, int64_t expansion) {
     return b2;
 }
 
-bool *getFilteredAnchorPositions(Poa *poa, double *candidateWeights, PolishParams *params) {
+void updateCandidateVariantPositionsByVcfEntries(bool *candidateVariantPositions, int64_t cvpLength, stList *vcfEntries) {
+    stListIterator *itor = stList_getIterator(vcfEntries);
+    VcfEntry *vcfEntry = stList_getNext(itor);
+
+    int64_t tn = 0;
+    int64_t fn = 0;
+    int64_t fp = 0;
+    int64_t tp = 0;
+    for (int64_t i = 0; i < cvpLength; i++) {
+        bool isCVP = candidateVariantPositions[i];
+        bool isVCF = vcfEntry != NULL && vcfEntry->refPos == i;
+
+        if (isCVP) {
+            if (isVCF)  tp++;
+            else        fp++;
+        } else {
+            if (isVCF)  fn++;
+            else        tn++;
+        }
+
+        candidateVariantPositions[i] = isVCF;
+        if (vcfEntry != NULL && vcfEntry->refPos <= i) {
+            vcfEntry = stList_getNext(itor);
+        }
+    }
+    char *logIdentifier = getLogIdentifier();
+    st_logInfo(" %s Of %"PRId64" positions, got %"PRId64" TP, %"PRId64" FP, %"PRId64" FN, %"PRId64" TN, "
+               "equating to a variation rate of %.5f, precision of %.5f, and recall of %.5f.\n",
+            logIdentifier, cvpLength, tp, fp, fn, tn, 1.0*(tp+fn)/cvpLength, 1.0*tp/(tp+fp), 1.0*tp/(tp+fn));
+    free(logIdentifier);
+
+    stList_destructIterator(itor);
+}
+
+
+bool *getFilteredAnchorPositions(Poa *poa, double *candidateWeights, stList *vcfEntries, PolishParams *params) {
     /*
      * Create set of anchor positions, using positions not close to candidate variants
      */
     // Identity sites that overlap candidate variants, and expand to surrounding positions
     bool *candidateVariantPositions = getCandidateVariantOverlapPositions(poa, candidateWeights);
+
+    if (vcfEntries != NULL) {
+        updateCandidateVariantPositionsByVcfEntries(candidateVariantPositions, stList_length(poa->nodes), vcfEntries);
+    }
+
     bool *expandedCandidateVariantPositions = expand(candidateVariantPositions, stList_length(poa->nodes),
                                                      params->columnAnchorTrim);
 
@@ -817,6 +857,11 @@ BubbleGraph *bubbleGraph_constructFromPoa(Poa *poa, stList *bamChunkReads, Polis
 }
 
 BubbleGraph *bubbleGraph_constructFromPoa2(Poa *poa, stList *bamChunkReads, PolishParams *params, bool phasing) {
+    return bubbleGraph_constructFromPoaAndVCF(poa, bamChunkReads, NULL, params, phasing);
+}
+
+BubbleGraph *bubbleGraph_constructFromPoaAndVCF(Poa *poa, stList *bamChunkReads, stList *vcfEntries,
+        PolishParams *params, bool phasing) {
     // Setup
     double *candidateWeights = getCandidateWeights(poa, params);
 
@@ -836,7 +881,7 @@ BubbleGraph *bubbleGraph_constructFromPoa2(Poa *poa, stList *bamChunkReads, Poli
     sortBaseObservations(poa);
 
     // Identify anchor points, represented as a binary array, one bit for each POA node
-    bool *anchors = getFilteredAnchorPositions(poa, candidateWeights, params);
+    bool *anchors = getFilteredAnchorPositions(poa, candidateWeights, vcfEntries, params);
 
     // Make a list of bubbles
     stList *bubbles = stList_construct3(0, free);
@@ -1347,6 +1392,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     }
 
     // Run phasing for each strand partition
+    //todo this is not thread safe
     params->phaseParams->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
 
     st_logInfo(" %s Phasing forward strand reads\n", logIdentifier);
@@ -1362,6 +1408,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     stRPHmm *hmm = fuseTilingPath(mergeTwoTilingPaths(tilingPathForward, tilingPathReverse));
 
     // Run the forward-backward algorithm
+    //todo this is not thread safe
     params->phaseParams->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
     stRPHmm_forwardBackward(hmm);
 

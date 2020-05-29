@@ -630,21 +630,6 @@ struct _poaBaseObservation {
 
 
 /*
- * VCF data structures
- */
-
-struct _vcfEntry {
-	char *refSeqName;
-	int64_t refPos;
-	RleString *allele1;
-	RleString *allele2;
-};
-
-VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, RleString *allele1, RleString *allele2);
-void vcfEntry_destruct(VcfEntry *vcfEntry);
-stList *parseVcf(char *vcfFile, PolishParams *params);
-
-/*
  * Poa functions.
  */
 
@@ -1370,6 +1355,25 @@ ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64
                                  Params *params);
 ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
                                          bool phased, Params *params, char *referenceSequenceName);
+
+
+/*
+ * VCF data structures
+ */
+
+struct _vcfEntry {
+    char *refSeqName;
+    int64_t refPos;
+    RleString *allele1;
+    RleString *allele2;
+};
+
+VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, RleString *allele1, RleString *allele2);
+void vcfEntry_destruct(VcfEntry *vcfEntry);
+stList *parseVcf(char *vcfFile, PolishParams *params);
+stList *getVcfEntriesForRegion(stList *vcfEntries, char *refSeqName, int64_t startPos, int64_t endPos);
+BubbleGraph *bubbleGraph_constructFromPoaAndVCF(Poa *poa, stList *bamChunkReads, stList *vcfEntries,
+                                                PolishParams *params, bool phasing);
 
 /*
  * Misc

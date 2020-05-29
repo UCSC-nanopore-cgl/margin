@@ -10,6 +10,7 @@ VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, RleString *allele
     vcfEntry->refPos = refPos;
     vcfEntry->allele1 = allele1;
     vcfEntry->allele2 = allele2;
+    return vcfEntry;
 }
 
 void vcfEntry_destruct(VcfEntry *vcfEntry) {
@@ -20,7 +21,6 @@ void vcfEntry_destruct(VcfEntry *vcfEntry) {
 }
 
 stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
-    st_logCritical("Parsing VCF for %s entries: %s\n", hetOnly ? "HET" : "all", vcfFile);
     stList *entries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
     FILE *fp = fopen(vcfFile, "r");
     if (fp == NULL) {
@@ -46,6 +46,8 @@ stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
             }
         }
         if (gtIdx == -1) {
+            stList_destruct(format);
+            free(line);
             st_logInfo("  Missing GT record for format string '%s' in VCF line:\n\t\t%s\n", stList_get(elements, 8), line);
             continue;
         }
@@ -54,15 +56,28 @@ stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
         stList *sample = stString_splitByString(stList_get(elements, 9), ":");
         char *genotypeStr = stList_get(sample, gtIdx);
         if (strlen(genotypeStr) != 3) {
+            stList_destruct(sample);
+            stList_destruct(format);
+            stList_destruct(elements);
+            free(line);
             st_logInfo("  Unexpected genotype str '%s' in VCF line:\n\t\t%s\n", genotypeStr, line);
+            continue;
+        }
+        // early fail
+        if (genotypeStr[0] == '.') {
+            stList_destruct(sample);
+            stList_destruct(format);
+            stList_destruct(elements);
+            free(line);
             continue;
         }
         int64_t gt1 = genotypeStr[0] - '0';
         int64_t gt2 = genotypeStr[2] - '0';
+        assert(gt1 >= 0 && gt2 >=0);
 
         // get alleles
         stList *alleles = stList_construct(); //ref is freed in elements, alts are freed in altAlleles
-        stList_append(alleles, stString_copy(stList_get(elements, 3))); //ref
+        stList_append(alleles, stList_get(elements, 3)); //ref
         stList *altAlleles = stString_splitByString(stList_get(elements, 4), ",");
         stList_appendAll(alleles, altAlleles);
         assert(stList_length(alleles) >= (gt1 > gt2 ? gt1 : gt2));
@@ -84,6 +99,8 @@ stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
         }
 
         // cleanup
+        stList_destruct(alleles);
+        stList_destruct(altAlleles);
         stList_destruct(format);
         stList_destruct(sample);
         stList_destruct(elements);
@@ -94,9 +111,24 @@ stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
     // cleanup
     fclose(fp);
 
-    st_logCritical("Read %"PRId64" VCF entries from %s.\n", stList_length(entries), vcfFile);
+    st_logCritical("> Parsed %"PRId64" %sVCF entries from %s.\n", stList_length(entries), hetOnly?"HET ":"", vcfFile);
     return entries;
 }
 stList *parseVcf(char *vcfFile, PolishParams *params) {
     return parseVcf2(vcfFile, TRUE, params);
+}
+
+
+stList *getVcfEntriesForRegion(stList *vcfEntries, char *refSeqName, int64_t startPos, int64_t endPos) {
+    stList *regionEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    for (int64_t i = 0; i < stList_length(vcfEntries); i++) {
+        VcfEntry *e = stList_get(vcfEntries, i);
+        if (!stString_eq(refSeqName, e->refSeqName)) continue;
+        if (startPos > e->refPos) continue;
+        if (endPos <= e->refPos) continue;
+        VcfEntry *copy = vcfEntry_construct(e->refSeqName, e->refPos - startPos, rleString_copy(e->allele1),
+                                            rleString_copy(e->allele2));
+        stList_append(regionEntries, copy);
+    }
+    return regionEntries;
 }

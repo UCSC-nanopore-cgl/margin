@@ -25,7 +25,7 @@
 void usage() {
     fprintf(stderr, "usage: marginVcfPhase <BAM_FILE> <ASSEMBLY_FASTA> <VARIANT_VCF> <PARAMS> [options]\n");
     fprintf(stderr, "Version: %s \n\n", MARGIN_POLISH_VERSION_H);
-    fprintf(stderr, "Phases the alignments in BAM_FILE using variants in VARIANT_VCF.\n");
+    fprintf(stderr, "Phases the alignments in BAM_FILE using variants in VARIANT_VCF, outputs HP-tagged BAMs.\n");
 
     fprintf(stderr, "\nRequired arguments:\n");
     fprintf(stderr, "    BAM_FILE is the alignment of reads to the assembly (or reference).\n");
@@ -55,7 +55,6 @@ void usage() {
     fprintf(stderr, "    -i --outputRepeatCounts  : Write out the repeat counts as CSV file\n");
     fprintf(stderr, "    -j --outputPoaCsv        : Write out the poa as CSV file\n");
     fprintf(stderr, "    -n --outputHaplotypeReads: Write out phased reads and likelihoods as CSV file\n");
-    fprintf(stderr, "    -m --outputHaplotypeBAM  : Write out phased BAMs\n");
     fprintf(stderr, "\n");
 }
 
@@ -79,7 +78,6 @@ int main(int argc, char *argv[]) {
     bool outputPoaCSV = FALSE;
     bool outputRepeatCounts = FALSE;
     bool outputHaplotypeReads = FALSE;
-    bool outputHaplotypeBAM = FALSE;
     bool writeChunkSupplementaryOutput = FALSE;
     bool writeChunkSupplementaryOutputOnly = FALSE;
 
@@ -112,13 +110,12 @@ int main(int argc, char *argv[]) {
 				{ "outputRepeatCounts", no_argument, 0, 'i'},
 				{ "outputPoaCsv", no_argument, 0, 'j'},
 				{ "outputPoaDot", no_argument, 0, 'd'},
-				{ "outputHaplotypeBAM", no_argument, 0, 'm'},
 				{ "outputHaplotypeReads", no_argument, 0, 'n'},
                 { "tempFilesToDisk", no_argument, 0, 'k'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:P:t:r:cCijdmnk", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:v:p:P:t:r:cCijdnk", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -173,9 +170,6 @@ int main(int argc, char *argv[]) {
         case 'd':
             outputPoaDOT = TRUE;
             break;
-        case 'm':
-            outputHaplotypeBAM = TRUE;
-            break;
         case 'n':
             outputHaplotypeReads = TRUE;
             break;
@@ -200,7 +194,10 @@ int main(int argc, char *argv[]) {
         free(idx);
     }
     if (access(referenceFastaFile, R_OK) != 0) {
-        st_errAbort("Could not read from reference fastafile: %s\n", referenceFastaFile);
+        st_errAbort("Could not read from reference fasta file: %s\n", referenceFastaFile);
+    }
+    if (access(vcfFile, R_OK) != 0) {
+        st_errAbort("Could not read from VCF file %s\n", vcfFile);
     }
     if (access(paramsFile, R_OK) != 0) {
         st_errAbort("Could not read from params file: %s\n", paramsFile);
@@ -236,6 +233,9 @@ int main(int argc, char *argv[]) {
 
     // get reference sequences (and remove cruft after refName)
     stHash *referenceSequences = parseReferenceSequences(referenceFastaFile);
+
+    // get VCF entries
+    stList *vcfEntries = parseVcf(vcfFile, params->polishParams);
 
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams);
@@ -394,8 +394,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Generate partial order alignment (POA) (destroys rleAlignments in the process)
-        //poa = poa_realignAll(reads, alignments, rleReference, params->polishParams);
-        poa_realign(reads, alignments, rleReference, params->polishParams);
+        poa = poa_realign(reads, alignments, rleReference, params->polishParams);
 
         // Log info about the POA
         if (st_getLogLevel() >= info) {
@@ -412,8 +411,19 @@ int main(int argc, char *argv[]) {
                                                   outputPoaDOT, outputPoaCSV, outputRepeatCounts);
         }
 
+        // Get variants for chunk
+        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, bamChunk->refSeqName, bamChunk->chunkStart, bamChunk->chunkEnd);
+        if (params->polishParams->useRunLengthEncoding) {
+            uint64_t *rleMap = rleString_getNonRleToRleCoordinateMap(rleReference);
+            for (int v = 0; v<stList_length(chunkVcfEntries); v++) {
+                VcfEntry *vcfEntry = stList_get(chunkVcfEntries, v);
+                vcfEntry->refPos = rleMap[vcfEntry->refPos];
+            }
+            free(rleMap);
+        }
+
         // Get the bubble graph representation
-        BubbleGraph *bg = bubbleGraph_constructFromPoa2(poa, reads, params->polishParams, TRUE);
+        BubbleGraph *bg = bubbleGraph_constructFromPoaAndVCF(poa, reads, chunkVcfEntries, params->polishParams, TRUE);
 
         // Now make a POA for each of the haplotypes
         stHash *readsToPSeqs;
@@ -475,7 +485,14 @@ int main(int argc, char *argv[]) {
         if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
             poa_writeSupplementalChunkInformationDiploid(outputBase, chunkIdx, bamChunk, gf, poa_hap1, poa_hap2,
                     reads, readsBelongingToHap1, readsBelongingToHap2, params, outputPoaDOT, outputPoaCSV,
-                    outputRepeatCounts, outputHaplotypeReads, outputHaplotypeBAM, logIdentifier);
+                    outputRepeatCounts, outputHaplotypeReads, TRUE, logIdentifier);
+        }
+
+        // report timing
+        if (st_getLogLevel() >= info) {
+            st_logInfo(">%s Chunk with %"PRId64" reads and %"PRIu64"K nucleotides processed in %d sec\n",
+                       logIdentifier, stList_length(reads), totalNucleotides >> 10,
+                       (int) (time(NULL) - chunkStartTime));
         }
 
         // Cleanup
@@ -493,13 +510,7 @@ int main(int argc, char *argv[]) {
         poa_destruct(poa_hap1);
         poa_destruct(poa_hap2);
         stHash_destruct(readsToPSeqs);
-
-        // report timing
-        if (st_getLogLevel() >= info) {
-            st_logInfo(">%s Chunk with %"PRId64" reads and %"PRIu64"K nucleotides processed in %d sec\n",
-                       logIdentifier, stList_length(reads), totalNucleotides >> 10,
-                       (int) (time(NULL) - chunkStartTime));
-        }
+        stList_destruct(chunkVcfEntries);
 
         // Cleanup
         rleString_destruct(rleReference);
@@ -512,7 +523,7 @@ int main(int argc, char *argv[]) {
     // for writing haplotyped chunks
     stList *allReadIdsHap1 = NULL;
     stList *allReadIdsHap2 = NULL;
-    if (outputHaplotypeBAM && !writeChunkSupplementaryOutputOnly) {
+    if (!writeChunkSupplementaryOutputOnly) {
         // setup
         allReadIdsHap1 = stList_construct();
         allReadIdsHap2 = stList_construct();
@@ -584,13 +595,16 @@ int main(int argc, char *argv[]) {
     stHash_destruct(referenceSequences);
     params_destruct(params);
     stList_destruct(chunkOrder);
+    stList_destruct(vcfEntries);
     free(outputSequenceFile);
     if (outputPoaCsvFile != NULL) free(outputPoaCsvFile);
     if (outputReadCsvFile != NULL) free(outputReadCsvFile);
     if (outputRepeatCountFile != NULL) free(outputRepeatCountFile);
+    if (regionStr != NULL) free(regionStr);
     free(outputBase);
     free(bamInFile);
     free(referenceFastaFile);
+    free(vcfFile);
     free(paramsFile);
 
     // log completion
