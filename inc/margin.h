@@ -254,6 +254,8 @@ struct _stRPHmmParameters {
 	bool includeAncestorSubProb;
 };
 
+stRPHmmParameters *stRPHmmParameters_construct();
+stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy);
 void stRPHmmParameters_destruct(stRPHmmParameters *params);
 
 void stRPHmmParameters_printParameters(stRPHmmParameters *params, FILE *fH);
