@@ -412,7 +412,8 @@ int main(int argc, char *argv[]) {
         }
 
         // Get variants for chunk
-        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, bamChunk->refSeqName, bamChunk->chunkStart, bamChunk->chunkEnd);
+        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, bamChunk->refSeqName, bamChunk->chunkBoundaryStart,
+                bamChunk->chunkBoundaryEnd);
         if (params->polishParams->useRunLengthEncoding) {
             uint64_t *rleMap = rleString_getNonRleToRleCoordinateMap(rleReference);
             for (int v = 0; v<stList_length(chunkVcfEntries); v++) {
