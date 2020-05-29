@@ -1392,8 +1392,8 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     }
 
     // Run phasing for each strand partition
-    //todo this is not thread safe
-    params->phaseParams->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
+    stRPHmmParameters *phaseParamsCopy = stRPHmmParameters_copy(params->phaseParams);
+    phaseParamsCopy->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
 
     st_logInfo(" %s Phasing forward strand reads\n", logIdentifier);
     stList *tilingPathForward = getRPHmms(forwardStrandProfileSeqs, params->phaseParams);
@@ -1408,8 +1408,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     stRPHmm *hmm = fuseTilingPath(mergeTwoTilingPaths(tilingPathForward, tilingPathReverse));
 
     // Run the forward-backward algorithm
-    //todo this is not thread safe
-    params->phaseParams->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
+    phaseParamsCopy->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
     stRPHmm_forwardBackward(hmm);
 
     st_logInfo(" %s Forward probability of the hmm: %f, backward prob: %f\n", logIdentifier, (float) hmm->forwardLogProb,
@@ -1468,6 +1467,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     assert(stSet_sizeOfIntersection(gF->reads1, gF->reads2) == 0);
 
     // Cleanup
+    stRPHmmParameters_destruct(phaseParamsCopy);
     stSet_destruct(discardedReadsSet);
     stList_destruct(forwardStrandProfileSeqs);
     stList_destruct(reverseStrandProfileSeqs);

@@ -32,6 +32,26 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     return params;
 }
 
+stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
+    // Params object
+    stRPHmmParameters *params = st_calloc(1, sizeof(stRPHmmParameters));
+
+    // More variables for hmm stuff
+    params->maxCoverageDepth = toCopy->maxCoverageDepth;
+    params->maxNotSumTransitions = toCopy->maxNotSumTransitions;
+    params->minPartitionsInAColumn = toCopy->minPartitionsInAColumn;
+    params->maxPartitionsInAColumn = toCopy->maxPartitionsInAColumn;
+    params->minPosteriorProbabilityForPartition = toCopy->minPosteriorProbabilityForPartition;
+    params->minReadCoverageToSupportPhasingBetweenHeterozygousSites = toCopy->minReadCoverageToSupportPhasingBetweenHeterozygousSites;
+
+    // Other marginPhase program options
+    params->roundsOfIterativeRefinement = toCopy->roundsOfIterativeRefinement;
+    params->includeInvertedPartitions = toCopy->includeInvertedPartitions;
+    params->includeAncestorSubProb = toCopy->includeAncestorSubProb;
+
+    return params;
+}
+
 void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *buf, size_t r) {
     // Setup parser
     jsmntok_t *tokens;
