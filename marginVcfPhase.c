@@ -247,6 +247,17 @@ int main(int argc, char *argv[]) {
         st_errAbort("> Found no valid reads!\n");
     }
 
+    // print chunk info
+    char *outputChunksFile = stString_print("%s.chunks.csv", outputBase);
+    FILE *chunksOut = fopen(outputChunksFile, "w");
+    for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
+        BamChunk *c = stList_get(bamChunker->chunks, i);
+        fprintf(chunksOut, "%s,%"PRId64",%"PRId64",%"PRId64",%"PRId64"\n", c->refSeqName, c->chunkBoundaryStart,
+                c->chunkBoundaryEnd, c->chunkStart, c->chunkEnd);
+    }
+    fclose(chunksOut);
+    free(outputChunksFile);
+
     // output info
     char *outputSequenceFile = stString_print("%s.fa", outputBase);
     char *outputReadCsvFile = stString_print("%s.reads.csv", outputBase);
