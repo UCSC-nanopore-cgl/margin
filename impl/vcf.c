@@ -111,7 +111,7 @@ stList *parseVcf2(char *vcfFile, bool hetOnly, PolishParams *params) {
     // cleanup
     fclose(fp);
 
-    st_logCritical("> Parsed %"PRId64" %sVCF entries from %s.\n", stList_length(entries), hetOnly?"HET ":"", vcfFile);
+    st_logCritical("> Parsed %"PRId64" %sVCF entries from %s\n", stList_length(entries), hetOnly?"HET ":"", vcfFile);
     return entries;
 }
 stList *parseVcf(char *vcfFile, PolishParams *params) {
