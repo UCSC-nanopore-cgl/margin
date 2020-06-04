@@ -76,6 +76,6 @@
 		  "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 2,
 		  "includeInvertedPartitions" : true,
 		  "roundsOfIterativeRefinement": 10,
-		  "verbose" : 0
+          "minPhredScoreForHaplotypePartition": 10
 	}
 }

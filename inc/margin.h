@@ -257,6 +257,9 @@ struct _stRPHmmParameters {
 
 	// Flag used to determine if the ancestor substitution probabilities are used
 	bool includeAncestorSubProb;
+
+	// Whether to include reads in a partition
+	int64_t minPhredScoreForHaplotypePartition;
 };
 
 stRPHmmParameters *stRPHmmParameters_construct();
@@ -460,10 +463,11 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment);
 void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,
 										   stRPHmm *hmm, stList *path, int64_t maxIterations);
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool hap1);
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1);
 
 void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads,
-										 stSet **readsBelongingToHap1, stSet **readsBelongingToHap2);
+										 stSet **readsBelongingToHap1, stSet **readsBelongingToHap2,
+										 stRPHmmParameters *params);
 
 double getLogProbOfReadGivenHaplotype(const uint64_t *haplotypeString, int64_t start, int64_t length,
 									  stProfileSeq *profileSeq, stReference *ref);
@@ -1343,7 +1347,7 @@ outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t chun
 void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
 											   char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
 											   stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
-											   stGenomeFragment *gF);
+											   stGenomeFragment *gF, Params *params);
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
 void outputChunkers_stitchAndTrackReadIds(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,

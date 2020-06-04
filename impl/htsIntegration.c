@@ -911,13 +911,13 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         char *readIdsHap1Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap1.csv",
                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
         FILE *readIdsHap1File = fopen(readIdsHap1Filename, "w");
-        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap1File, TRUE);
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap1File, params->phaseParams, TRUE);
         fclose(readIdsHap1File);
 
         char *readIdsHap2Filename = stString_print("%s.readIds.C%05"PRId64".%s-%"PRId64"-%"PRId64".hap2.csv",
                                                    outputBase, chunkIdx, bamChunk->refSeqName, bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
         FILE *readIdsHap2File = fopen(readIdsHap2Filename, "w");
-        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap2File, FALSE);
+        stGenomeFragment_printPartitionAsCSV(genomeFragment, readIdsHap2File, params->phaseParams, FALSE);
         fclose(readIdsHap2File);
 
         free(readIdsHap1Filename);

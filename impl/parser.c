@@ -28,6 +28,8 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->roundsOfIterativeRefinement = 0;
     params->includeInvertedPartitions = true;
     params->includeAncestorSubProb = true;
+    params->minPhredScoreForHaplotypePartition = 0;
+
 
     return params;
 }
@@ -48,6 +50,7 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->roundsOfIterativeRefinement = toCopy->roundsOfIterativeRefinement;
     params->includeInvertedPartitions = toCopy->includeInvertedPartitions;
     params->includeAncestorSubProb = toCopy->includeAncestorSubProb;
+    params->minPhredScoreForHaplotypePartition = toCopy->minPhredScoreForHaplotypePartition;
 
     return params;
 }
@@ -88,6 +91,8 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             i++;
         } else if (strcmp(keyString, "roundsOfIterativeRefinement") == 0) {
             params->roundsOfIterativeRefinement = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "minPhredScoreForHaplotypePartition") == 0) {
+            params->minPhredScoreForHaplotypePartition = stJson_parseInt(js, tokens, ++i);
         } else {
             st_errAbort("ERROR: Unrecognised key in params file: %s\n", keyString);
         }

@@ -6,12 +6,6 @@
 
 #include "margin.h"
 
-//todo put this in params
-static double todoFixThis_minPhredScoreForHaplotypePartition = -1.0;
-void setMinPhredScoreForHaplotypePartition(double v) {
-    todoFixThis_minPhredScoreForHaplotypePartition = v;
-}
-
 stGenomeFragment *
 stGenomeFragment_constructEmpty(stReference *ref, uint64_t refStart, uint64_t length, stSet *reads1, stSet *reads2) {
     stGenomeFragment *gF = st_calloc(1, sizeof(stGenomeFragment));
@@ -104,7 +98,7 @@ double getLogProbabilityOfBeingInPartition(stProfileSeq *pSeq, uint64_t *haploty
     return i - stMath_logAddExact(i, j);
 }
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool hap1) {
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1) {
     /*
      * Prints reads in partition as a CSV file and the phred scaled probability the read is correctly placed in the partition.
      */
@@ -117,7 +111,7 @@ void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, bool h
                    getLogProbabilityOfBeingInPartition(pSeq, gF->haplotypeString1, gF->haplotypeString2, gF->refStart,
                                                        gF->length, gF->reference);
         p = -10 * p / 2.302585;
-        if (p > todoFixThis_minPhredScoreForHaplotypePartition) {
+        if (p > params->minPhredScoreForHaplotypePartition) {
             fprintf(fh, "%s,%f\n", pSeq->readId, p);
         }
     }
@@ -233,7 +227,8 @@ void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF, stRPHmm *hmm, s
 }
 
 void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads,
-                                         stSet **readsBelongingToHap1, stSet **readsBelongingToHap2) {
+                                         stSet **readsBelongingToHap1, stSet **readsBelongingToHap2,
+                                         stRPHmmParameters *params) {
     *readsBelongingToHap1 = stSet_construct();
     *readsBelongingToHap2 = stSet_construct();
     int64_t discardedForPhredCount = 0;
@@ -256,7 +251,7 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
                         getLogProbabilityOfBeingInPartition(pSeq, gf->haplotypeString1, gf->haplotypeString2,
                                                             gf->refStart, gf->length, gf->reference);
             double phred = -10 * lp / 2.302585;
-            if (phred < todoFixThis_minPhredScoreForHaplotypePartition) {
+            if (phred < params->minPhredScoreForHaplotypePartition) {
                 discardedForPhredCount++;
             } else {
                 stSet_insert(hap1 ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
@@ -267,9 +262,9 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
 
     if (st_getLogLevel() >= info) {
         char *logIdentifier = getLogIdentifier();
-        st_logInfo(" %s Excluded %"PRId64" (%.5f) reads for haplotype inclusion likelihood < %d.\n", logIdentifier,
+        st_logInfo(" %s Excluded %"PRId64" (%.5f) reads for haplotype inclusion likelihood < %"PRId64".\n", logIdentifier,
                 discardedForPhredCount, 1.0 * discardedForPhredCount / (consideredForPhasing == 0 ? 1 : consideredForPhasing),
-                (int) todoFixThis_minPhredScoreForHaplotypePartition);
+                params->minPhredScoreForHaplotypePartition);
         free(logIdentifier);
     }
 }

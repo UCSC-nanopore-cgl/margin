@@ -72,6 +72,7 @@ int main(int argc, char *argv[]) {
     int numThreads = 1;
     int64_t maxDepth = -1;
     bool inMemory = TRUE;
+    int64_t minPhredScoreForHaplotypePartition = -1;
 
     // for supplementary output
     bool outputPoaDOT = FALSE;
@@ -143,8 +144,7 @@ int main(int argc, char *argv[]) {
             }
             break;
         case 'P':
-            setMinPhredScoreForHaplotypePartition(atoi(optarg));
-            st_logCritical("Setting minPhredScoreForHaplotypePartition = %d\n", atoi(optarg));
+            minPhredScoreForHaplotypePartition = atoi(optarg);
             break;
         case 't':
             numThreads = atoi(optarg);
@@ -224,6 +224,11 @@ int main(int argc, char *argv[]) {
         st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
                        maxDepth);
         params->polishParams->maxDepth = (uint64_t) maxDepth;
+    }
+    if (minPhredScoreForHaplotypePartition >= 0) {
+        st_logCritical("> Changing minPhredScoreForHaplotypePartition paramter from %"PRId64" to %"PRId64"\n",
+                params->phaseParams->minPhredScoreForHaplotypePartition, minPhredScoreForHaplotypePartition);
+        params->phaseParams->minPhredScoreForHaplotypePartition = minPhredScoreForHaplotypePartition;
     }
 
     // Print a report of the parsed parameters
@@ -443,7 +448,8 @@ int main(int argc, char *argv[]) {
         stGenomeFragment *gf = bubbleGraph_phaseBubbleGraph(bg, ref, reads, params, &readsToPSeqs);
 
         stSet *readsBelongingToHap1, *readsBelongingToHap2;
-        stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
+        stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2,
+                params->phaseParams);
         st_logInfo(" %s After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned "
                    "into hap2 (%i unphased)\n", logIdentifier, (int) stList_length(reads),
                    (int) stSet_size(readsBelongingToHap1), (int) stSet_size(readsBelongingToHap2),
@@ -487,7 +493,7 @@ int main(int argc, char *argv[]) {
         // Output
         outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
                                                   poa_hap1, poa_hap2, reads,
-                                                  readsBelongingToHap1, readsBelongingToHap2, gf);
+                                                  readsBelongingToHap1, readsBelongingToHap2, gf, params);
         RleString *polishedRleConsensusH1 = rleString_copy(poa_hap1->refString);
         RleString *polishedRleConsensusH2 = rleString_copy(poa_hap2->refString);
         char *polishedConsensusStringH1 = rleString_expand(polishedRleConsensusH1);

@@ -687,7 +687,7 @@ outputChunker_processChunkSequencePhased2(OutputChunker *outputChunker, char *he
 
 void outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int64_t chunkOrdinal, char *sequenceName,
                                          Poa *poaHap1, Poa *poaHap2, stList *reads, stSet *readsBelongingToHap1,
-                                         stSet *readsBelongingToHap2, stGenomeFragment *gF) {
+                                         stSet *readsBelongingToHap2, stGenomeFragment *gF, Params *params) {
     // Create chunk name
     char *headerLinePrefix = stString_print("%s,%" PRIi64 ",", sequenceName, chunkOrdinal);
 
@@ -700,10 +700,10 @@ void outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int6
     // Output the read partition
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
             stSet_size(readsBelongingToHap1) + 1);
-    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 1);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 1);
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
             stSet_size(readsBelongingToHap2) + 1);
-    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, 0);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 0);
 
     // Cleanup
     free(headerLinePrefix);
@@ -946,12 +946,12 @@ void outputChunkers_processChunkSequence(OutputChunkers *outputChunkers, int64_t
 void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, int64_t chunker, int64_t chunkOrdinal,
                                                char *sequenceName, Poa *poaHap1, Poa *poaHap2, stList *reads,
                                                stSet *readsBelongingToHap1, stSet *readsBelongingToHap2,
-                                               stGenomeFragment *gF) {
+                                               stGenomeFragment *gF, Params *params) {
     outputChunker_processChunkSequencePhased(stList_get(outputChunkers->tempFileChunkers, chunker), chunkOrdinal,
                                              sequenceName,
                                              poaHap1,
                                              poaHap2, reads, readsBelongingToHap1,
-                                             readsBelongingToHap2, gF);
+                                             readsBelongingToHap2, gF, params);
 }
 
 void outputChunkers_close(OutputChunkers *outputChunkers) {

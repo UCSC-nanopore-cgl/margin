@@ -249,7 +249,8 @@ int main(int argc, char *argv[]) {
             st_logInfo("Took %f seconds to phase bubble graph\n", (float) totalTime);
 
             stSet *readsBelongingToHap1, *readsBelongingToHap2;
-            stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2);
+            stGenomeFragment_phaseBamChunkReads(gf, readsToPSeqs, reads, &readsBelongingToHap1, &readsBelongingToHap2,
+                    params->phaseParams);
             st_logInfo(
                     "After phasing, of %i reads got %i reads partitioned into hap1 and %i reads partitioned into hap2 (%i unphased)\n",
                     (int) stList_length(reads), (int) stSet_size(readsBelongingToHap1),
@@ -309,7 +310,7 @@ int main(int argc, char *argv[]) {
             // Output
             outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
                                                       poa_hap1, poa_hap2, reads,
-                                                      readsBelongingToHap1, readsBelongingToHap2, gf);
+                                                      readsBelongingToHap1, readsBelongingToHap2, gf, params);
 
             // Cleanup
             free(hap1);
