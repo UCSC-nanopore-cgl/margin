@@ -30,6 +30,6 @@ RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
 WORKDIR /opt/MarginPolish/build
 RUN cmake .. && make && ./marginPolish
 RUN ln -s /opt/MarginPolish/build/marginPolish /usr/local/bin/marginPolish && \
-    ln -s /opt/MarginPolish/build/marginVcfPhase /usr/local/bin/marginVcfPhase \
+    ln -s /opt/MarginPolish/build/marginVcfPhase /usr/local/bin/marginVcfPhase
 
 WORKDIR /data

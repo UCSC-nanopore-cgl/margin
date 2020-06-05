@@ -472,20 +472,27 @@ void params_jsonParse(Params *params, char *buf, size_t r, char *paramsFile) {
         if(strcmp(keyString, "include") == 0) {
             jsmntok_t tok = tokens[++tokenIndex];
             char *nestedParamsFile= stJson_token_tostr(js, &tok);
-            // Make the complete path to the nested params file
-            stList *paramsPath = stString_splitByString(paramsFile, "/");
-            stList *nestedParamsPath = stString_splitByString(nestedParamsFile, "/");
-            free(stList_pop(paramsPath));
-            stList_appendAll(paramsPath, nestedParamsPath);
-            char *nonRelativeNestedParamsFile = stString_join2("/", paramsPath);
-            st_logDebug("Parsing nested params file %s, joining params file path: %s and nested params file path: %s\n", nonRelativeNestedParamsFile, paramsFile, nestedParamsFile);
+            char *nonRelativeNestedParamsFile = NULL;
+            if (nestedParamsFile[0] == '/') {
+                nonRelativeNestedParamsFile = stString_copy(nestedParamsFile);
+            } else {
+                // Make the complete path to the nested params file
+                stList *paramsPath = stString_splitByString(paramsFile, "/");
+                stList *nestedParamsPath = stString_splitByString(nestedParamsFile, "/");
+                free(stList_pop(paramsPath));
+                stList_appendAll(paramsPath, nestedParamsPath);
+                nonRelativeNestedParamsFile = stString_join2("/", paramsPath);
+                st_logDebug(
+                        "Parsing nested params file %s, joining params file path: %s and nested params file path: %s\n",
+                        nonRelativeNestedParamsFile, paramsFile, nestedParamsFile);
+                stList_setDestructor(nestedParamsPath, NULL);
+                stList_destruct(nestedParamsPath);
+                stList_destruct(paramsPath);
+            }
             // Parse the nested params file
             params_readParams2(params, nonRelativeNestedParamsFile);
             //cleanup
             free(nonRelativeNestedParamsFile);
-            stList_setDestructor(nestedParamsPath, NULL);
-            stList_destruct(nestedParamsPath);
-            stList_destruct(paramsPath);
         } else if (strcmp(keyString, "polish") == 0) {
             jsmntok_t tok = tokens[tokenIndex + 1];
             char *tokStr = stJson_token_tostr(js, &tok);
