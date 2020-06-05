@@ -591,8 +591,8 @@ int main(int argc, char *argv[]) {
             whbBamChunk = bamChunk_construct2(regionContig, -1, regionStart, regionStart, regionEnd,
                     regionEnd, bamChunker);
         }
-        writeHaplotypedBams(whbBamChunk, bamChunker->bamFile, outputBase,
-                allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
+        writeHaplotaggedBam(whbBamChunk, bamChunker->bamFile, outputBase,
+                            allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
         if (whbBamChunk != NULL) {
             bamChunk_destruct(whbBamChunk);
         }

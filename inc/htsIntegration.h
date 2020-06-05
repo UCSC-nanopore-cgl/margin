@@ -42,8 +42,8 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
                         stList *filteredReads, stList *filteredAlignments, stList *discardedReads,
                         stList *discardedAlignments);
 
-void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-        stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier);
+void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
+                         stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier);
 
 int64_t getAlignedReadLength(bam1_t *aln);
 

@@ -1,6 +1,8 @@
 FROM ubuntu:18.04
 MAINTAINER Kishwar Shafin, kishwar.shafin@gmail.com
 
+ARG git_commit
+
 # update and install dependencies
 RUN apt-get update && \
     apt-get -y install time git make wget autoconf gcc g++ zlib1g-dev libcurl4-openssl-dev libbz2-dev libhdf5-dev && \
@@ -20,17 +22,14 @@ WORKDIR /opt
 RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
     cd /opt/MarginPolish && \
     git fetch && \
-    git checkout master && \
-    git pull origin master && \
+    git checkout $git_commit && \
     git submodule update --init && \
     rm -rf /opt/MarginPolish/.git
 
+# link executables
 WORKDIR /opt/MarginPolish/build
 RUN cmake .. && make && ./marginPolish
-RUN ln -s /opt/MarginPolish/build/marginPolish /usr/local/bin/marginPolish
+RUN ln -s /opt/MarginPolish/build/marginPolish /usr/local/bin/marginPolish && \
+    ln -s /opt/MarginPolish/build/marginVcfPhase /usr/local/bin/marginVcfPhase \
 
-
-# setup entrypoint
-COPY wrapper.sh /opt/wrapper.sh
 WORKDIR /data
-ENTRYPOINT ["sh", "/opt/wrapper.sh"]

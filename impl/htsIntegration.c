@@ -707,8 +707,8 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 }
 
 
-void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-        stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier) {
+void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
+                         stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier) {
     /*
      * Write out sam files with reads in each split based on which haplotype partition they are in.
      */
@@ -725,11 +725,8 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
         chunkIdentifier = stString_print(".C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
                                          bamChunk->chunkBoundaryStart, bamChunk->chunkBoundaryEnd);
     }
-    char *haplotype1BamOutFile = stString_print("%s%s.hap1.bam", outputBamFileBase, chunkIdentifier);
-    char *haplotype2BamOutFile = stString_print("%s%s.hap2.bam", outputBamFileBase, chunkIdentifier);
-    char *unmatchedBamOutFile = stString_print("%s%s.hap0.bam", outputBamFileBase, chunkIdentifier);
-    st_logInfo(" %s Writing BAM haplotype output to: %s, %s, and %s \n", logIdentifier, haplotype1BamOutFile,
-            haplotype2BamOutFile, unmatchedBamOutFile);
+    char *haplotaggedBamOutFile = stString_print("%s%s.haplotagged.bam", outputBamFileBase, chunkIdentifier);
+    st_logInfo(" %s Writing BAM haplotype output to: %s \n", logIdentifier, haplotaggedBamOutFile);
 
     int64_t h1Count = 0;
     int64_t h2Count = 0;
@@ -752,16 +749,12 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     int r;
 
     // output file mangement
-    samFile *out1 = NULL, *out2 = NULL, *outUnmatched = NULL;
+    samFile *out = NULL;
     if (outputBamFileBase != NULL) {
-        out1 = hts_open(haplotype1BamOutFile, "wb");
-        r = sam_hdr_write(out1, bamHdr);
-        out2 = hts_open(haplotype2BamOutFile, "wb");
-        r = sam_hdr_write(out2, bamHdr);
-        outUnmatched = hts_open(unmatchedBamOutFile, "wb");
-        r = sam_hdr_write(outUnmatched, bamHdr);
+        out = hts_open(haplotaggedBamOutFile, "wb");
+        r = sam_hdr_write(out, bamHdr);
     }
-    FILE *readOutH1 = NULL, *readOutH2 = NULL, *readOutUnmatched = NULL;
+    FILE *readOut = NULL;
 
     // prep for index (not entirely sure what all this does.  see samtools/sam_view.c
     int filter_state = ALL, filter_op = 0;
@@ -812,7 +805,6 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
             } else {
                 bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
             }
-            r = sam_write1(out1, bamHdr, aln);
             h1Count++;
         } else if (!inH1 & inH2) {
             int32_t ht = 2;
@@ -821,7 +813,6 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
             } else {
                 bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
             }
-            r = sam_write1(out2, bamHdr, aln);
             h2Count++;
         } else {
             int32_t ht = 0;
@@ -830,9 +821,9 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
             } else {
                 bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
             }
-            r = sam_write1(outUnmatched, bamHdr, aln);
             h0Count++;
         }
+        r = sam_write1(out, bamHdr, aln);
     }
     st_logInfo(" %s Separated reads with divisions: H1 %"PRId64", H2 %"PRId64", and H0 %"PRId64"\n", logIdentifier,
             h1Count, h2Count, h0Count);
@@ -847,13 +838,9 @@ void writeHaplotypedBams(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     bam_destroy1(aln);
     bam_hdr_destroy(bamHdr);
     sam_close(in);
-    sam_close(out1);
-    sam_close(out2);
-    sam_close(outUnmatched);
+    sam_close(out);
     free(chunkIdentifier);
-    free(haplotype1BamOutFile);
-    free(haplotype2BamOutFile);
-    free(unmatchedBamOutFile);
+    free(haplotaggedBamOutFile);
 }
 
 
@@ -930,7 +917,8 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
 
         // write it
-        writeHaplotypedBams(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, params, logIdentifier);
+        writeHaplotaggedBam(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, params,
+                            logIdentifier);
 
         // cleanup
         stSet_destruct(readIdsInHap1);
