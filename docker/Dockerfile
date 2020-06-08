@@ -1,5 +1,5 @@
 FROM ubuntu:18.04
-MAINTAINER Kishwar Shafin, kishwar.shafin@gmail.com
+MAINTAINER Trevor Pesout tpesout@ucsc.edu
 
 ARG git_commit
 
@@ -17,6 +17,18 @@ RUN mkdir /opt/cmake && \
     sh /tmp/cmake-3.11.4-Linux-x86_64.sh --prefix=/opt/cmake --skip-license && \
     ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake
 
+# get samtools
+WORKDIR /opt/samtools
+RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2 && \
+    tar xvf samtools-1.9.tar.bz2 && \
+    rm -r /opt/samtools/samtools-1.9.tar.bz2 && \
+    cd samtools-1.9/ && \
+    autoheader && \
+    autoconf -Wno-header && \
+    ./configure --without-curses --disable-lzma && \
+    make && \
+    ln -s /opt/samtools-1.9/samtools /usr/local/bin/samtools
+
 # get marginPolish
 WORKDIR /opt
 RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
@@ -24,12 +36,14 @@ RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
     git fetch && \
     git checkout $git_commit && \
     git submodule update --init && \
-    rm -rf /opt/MarginPolish/.git
-
-# link executables
-WORKDIR /opt/MarginPolish/build
-RUN cmake .. && make && ./marginPolish
-RUN ln -s /opt/MarginPolish/build/marginPolish /usr/local/bin/marginPolish && \
-    ln -s /opt/MarginPolish/build/marginVcfPhase /usr/local/bin/marginVcfPhase
+    rm -rf /opt/MarginPolish/.git && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make && \
+    ln -s /opt/MarginPolish/build/marginPolish /usr/local/bin/marginPolish && \
+    ln -s /opt/MarginPolish/build/marginVcfPhase /usr/local/bin/marginVcfPhase && \
+    marginPolish && \
+    marginVcfPhase
 
 WORKDIR /data
