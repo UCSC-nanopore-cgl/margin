@@ -37,6 +37,9 @@ void bamChunk_destruct(BamChunk *bamChunk);
  */
 uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments,
                                      PolishParams *polishParams);
+uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *reference, stList *reads,
+                                                 stList *alignments, stList *filteredReads, stList *filteredAlignments,
+                                                 PolishParams *polishParams);
 
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
                         stList *filteredReads, stList *filteredAlignments, stList *discardedReads,

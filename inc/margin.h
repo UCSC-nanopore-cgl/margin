@@ -1393,7 +1393,10 @@ char *getFileBase(char *base, char *defawlt);
 RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceSequences, Params *params);
 uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params);
 stSet *bamChunkRead_to_readName(stSet *bamChunkReads);
-
+stList *copyListOfIntTuples(stList *toCopy);
+void rankReadPoaAlignments(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *hap1Reads, stSet *hap2Reads);
+void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *hap1Reads, stSet *hap2Reads,
+                            PolishParams *polishParams);
 /*
  * HELEN Features
  */

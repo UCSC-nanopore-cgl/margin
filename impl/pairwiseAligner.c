@@ -1393,6 +1393,7 @@ stList *getMaximalExpectedAccuracyPairwiseAlignment(stList *alignedPairs,
         double s = score + ((x < seqXLength ? getIndelProb(gapXCumulativeProbs, x + 1, seqXLength - x - 1) : 0) +
                             (y < seqYLength ? getIndelProb(gapYCumulativeProbs, y + 1, seqYLength - y - 1) : 0)) *
                            p->gapGamma;
+        //fprintf(stderr, "scores %"PRId64"x, %"PRId64"y, %"PRId64"s, %"PRId64"S\n", x, y, score, maxScore);
         if (s >= maxScore) {
             maxScore = s; // Record the max score
             isHighScore[i] = 1; // Record the fact that the score represents a max seen so far.
@@ -1407,7 +1408,7 @@ stList *getMaximalExpectedAccuracyPairwiseAlignment(stList *alignedPairs,
         stList_append(filteredAlignment, stIntTuple_construct3(stIntTuple_get(aPair, 0),
                                                                stIntTuple_get(aPair, 1), stIntTuple_get(aPair, 2)));
         i = backPointers[i];
-    }
+            }
     stList_reverse(filteredAlignment); // Flip the order
 
     // Cleanup
@@ -1597,9 +1598,10 @@ stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t a
     // Traceback
     stList *anchorPairs = stList_construct3(0, (void (*)(void *)) stIntTuple_destruct);
     while (maxPair != -1) {
+        int64_t x = cPs[maxPair].x + KMER_SIZE / 2;
+        int64_t y = cPs[maxPair].y + KMER_SIZE / 2;
         stList_append(anchorPairs,
-                      stIntTuple_construct3(cPs[maxPair].x + KMER_SIZE / 2, cPs[maxPair].y + KMER_SIZE / 2,
-                                            anchorExpansion));
+                      stIntTuple_construct3(x, y, anchorExpansion));
         maxPair = cPs[maxPair].backpointer;
     }
     stList_reverse(anchorPairs); // Put in ascending coordinate order

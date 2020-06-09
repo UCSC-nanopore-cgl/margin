@@ -2259,13 +2259,13 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
 
     time_t apTime = time(NULL);
     getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
-                                          polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, TRUE, TRUE);
+                                          polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, FALSE, FALSE);
     time_t meaTime = time(NULL);
     stList *meaAlignedPairs = getMaximalExpectedAccuracyPairwiseAlignment(alignedPairs, gapXPairs, gapYPairs,
                                                                           sX.length, sY.length, score, polishParams->p);
     char *logIdentifer = getLogIdentifier();
-    st_logInfo(" %s Truth alignment (seq len %"PRId64", %.3f AP ratio) got aligned pairs in %ds and MEA in %ds\n",
-            logIdentifer, minLength, apRatio, meaTime-apTime, time(NULL)-meaTime);
+    st_logInfo(" %s Sequence alignment (seq len %"PRId64", %.3f K-AP ratio) got %"PRId64" MEA aligned pairs in %ds and MEA in %ds\n",
+            logIdentifer, minLength, apRatio, stList_length(meaAlignedPairs), meaTime-apTime, time(NULL)-meaTime);
     free(logIdentifer);
 
     // refactor

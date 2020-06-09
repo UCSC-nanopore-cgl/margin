@@ -346,8 +346,8 @@ typedef struct samview_settings {
  * softclipped portions of the reads should be included.
  */
 
-uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments,
-                                     PolishParams *polishParams) {
+uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *reference, stList *reads,
+        stList *alignments, stList *filteredReads, stList *filteredAlignments, PolishParams *polishParams) {
 
     // sanity check
     assert(stList_length(reads) == 0);
@@ -403,6 +403,7 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
 
     // fetch alignments //todo while(sam_read1(in,bamHdr,aln) > 0) {
     while ((result = sam_itr_multi_next(in, iter, aln)) >= 0) {
+        bool filtered = FALSE;
         // basic filtering (no read length, no cigar)
         if (aln->core.l_qseq <= 0) continue;
         if (aln->core.n_cigar == 0) continue;
@@ -412,8 +413,10 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
             continue; //secondary
         if (!bamChunk->parent->params->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
             continue; //supplementary
-        if (aln->core.qual < bamChunk->parent->params->filterAlignmentsWithMapQBelowThisThreshold)
-            continue; //low mapping quality
+        if (aln->core.qual < bamChunk->parent->params->filterAlignmentsWithMapQBelowThisThreshold) { //low mapping quality
+            if (filteredReads == NULL) continue;
+            filtered = TRUE;
+        }
 
         //data
         char *chr = bamHdr->target_name[aln->core.tid];
@@ -537,10 +540,6 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
                 currPosInOp = 0;
             }
         }
-        // sanity checks
-        //TODO these may fail because of the existance of non-match end cigar operations
-        //assert(cigarIdxInRef == alnEndPos);  //does not include soft clip
-        //assert(cigarIdxInSeq == readEndIdxInChunk - (includeSoftClip ? end_softclip : 0));
 
         // get sequence positions
         int64_t seqLen = alignedReadLength;
@@ -625,7 +624,7 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
         bool forwardStrand = !bam_is_rev(aln);
         BamChunkRead *chunkRead = bamChunkRead_construct2(readName, seq, qual, forwardStrand,
                                                           bamChunk->parent->params->useRunLengthEncoding);
-        stList_append(reads, chunkRead);
+        stList_append(filtered ? filteredReads: reads, chunkRead);
 
         // save alignment
         if (bamChunk->parent->params->useRunLengthEncoding) {
@@ -633,13 +632,13 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
             if (ref_nonRleToRleCoordinateMap != NULL) {
                 // rle the alignment and save it
                 uint64_t *read_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(chunkRead->rleRead);
-                stList_append(alignments, runLengthEncodeAlignment(cigRepr, ref_nonRleToRleCoordinateMap,
-                                                                   read_nonRleToRleCoordinateMap));
+                stList_append(filtered ? filteredAlignments : alignments,
+                        runLengthEncodeAlignment(cigRepr, ref_nonRleToRleCoordinateMap, read_nonRleToRleCoordinateMap));
                 stList_destruct(cigRepr);
                 free(read_nonRleToRleCoordinateMap);
             }
         } else {
-            stList_append(alignments, cigRepr);
+            stList_append(filtered ? filteredAlignments : alignments, cigRepr);
         }
         savedAlignments++;
 
@@ -667,6 +666,11 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
     if (ref_nonRleToRleCoordinateMap != NULL)
         free(ref_nonRleToRleCoordinateMap);
     return savedAlignments;
+}
+
+uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, stList *reads, stList *alignments,
+                                     PolishParams *polishParams) {
+    return convertToReadsAndAlignmentsWithFiltered(bamChunk, reference, reads, alignments, NULL, NULL, polishParams);
 }
 
 bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,

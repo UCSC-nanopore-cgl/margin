@@ -356,48 +356,44 @@ int main(int argc, char *argv[]) {
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *alignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-        convertToReadsAndAlignments(bamChunk, rleReference, reads, alignments, params->polishParams);
+        stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *filteredAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
+        convertToReadsAndAlignmentsWithFiltered(bamChunk, rleReference, reads, alignments, filteredReads,
+                filteredAlignments, params->polishParams);
 
         // do downsampling if appropriate
         if (params->polishParams->maxDepth > 0) {
             // get downsampling structures
-            stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-            stList *discardedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-            stList *filteredAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-            stList *discardedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
+            stList *maintainedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+            stList *maintainedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
 
+            // save removed reads to filtered-in-cTRAAWF lists (for classification after phasing)
             bool didDownsample = poorMansDownsample(params->polishParams->maxDepth, bamChunk, reads, alignments,
-                                                    filteredReads, filteredAlignments, discardedReads,
-                                                    discardedAlignments);
+                                                    maintainedReads, maintainedAlignments, filteredReads,
+                                                    filteredAlignments);
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
                 st_logInfo(" %s Downsampled from %"PRId64" to %"PRId64" reads\n", logIdentifier,
-                           stList_length(reads), stList_length(filteredReads));
-                // free all reads and alignments not used
-                stList_destruct(discardedReads);
-                stList_destruct(discardedAlignments);
+                           stList_length(reads), stList_length(maintainedReads));
                 // still has all the old reads, need to not free these
                 stList_setDestructor(reads, NULL);
                 stList_setDestructor(alignments, NULL);
                 stList_destruct(reads);
                 stList_destruct(alignments);
                 // and keep the filtered reads
-                reads = filteredReads;
-                alignments = filteredAlignments;
+                reads = maintainedReads;
+                alignments = maintainedAlignments;
             }
                 // no downsampling, we just need to free the (empty) objects
             else {
-                stList_destruct(filteredReads);
-                stList_destruct(filteredAlignments);
-                stList_destruct(discardedReads);
-                stList_destruct(discardedAlignments);
+                stList_destruct(maintainedReads);
+                stList_destruct(maintainedAlignments);
             }
         }
 
         // prep for ploishing
         Poa *poa = NULL; // The poa alignment
-        char *polishedConsensusString = NULL; // The polished reference string
 
         // Run the polishing method
         int64_t totalNucleotides = 0;
@@ -490,6 +486,28 @@ int main(int argc, char *argv[]) {
                                                              readsBelongingToHap2, readsBelongingToHap1, params->polishParams);
         }
 
+
+        /*
+         * TODO new code to attempt to phase filtered reads
+         */
+        // add to filtered set
+        for (int64_t bcrIdx = 0; bcrIdx < stList_length(reads); bcrIdx++) {
+            BamChunkRead *bcr = stList_get(reads, bcrIdx);
+            if (!stSet_search(readsBelongingToHap1, bcr) && !stSet_search(readsBelongingToHap2, bcr)) {
+                // was filtered in some form
+                stList_append(filteredReads, bamChunkRead_constructCopy(bcr));
+                stList_append(filteredAlignments, copyListOfIntTuples(stList_get(alignments, bcrIdx)));
+            }
+        }
+        Poa *filteredPoa = poa_realign(filteredReads, filteredAlignments, rleReference, params->polishParams);
+        Poa *filteredPoa_hap1 = bubbleGraph_getNewPoa(bg, hap1, filteredPoa, filteredReads, params);
+        Poa *filteredPoa_hap2 = bubbleGraph_getNewPoa(bg, hap2, filteredPoa, filteredReads, params);
+        stSet *filteredHap1Reads = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
+        stSet *filteredHap2Reads  = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
+        rankReadPoaAlignments2(filteredReads, filteredPoa_hap1, filteredPoa_hap2, filteredHap1Reads, filteredHap2Reads,
+                params->polishParams);
+        //todo cleanup poas and sets
+
         // Output
         outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
                                                   poa_hap1, poa_hap2, reads,
@@ -535,6 +553,8 @@ int main(int argc, char *argv[]) {
         poa_destruct(poa);
         stList_destruct(reads);
         stList_destruct(alignments);
+        stList_destruct(filteredReads);
+        stList_destruct(filteredAlignments);
         free(logIdentifier);
     }
 
