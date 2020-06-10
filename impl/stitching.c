@@ -697,16 +697,42 @@ void outputChunker_processChunkSequencePhased(OutputChunker *outputChunker, int6
     outputChunker_processChunkSequencePhased2(outputChunker, headerLinePrefix,
                                               poaHap2, reads, readsBelongingToHap2, readsBelongingToHap1);
 
-    // Output the read partition
+    // becasue we (may) have filtered reads now: readsBelongingToHapX has more reads than GF
+    stSet *readIdsInGfHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    stSet *readIdsInGfHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    BamChunkRead *read = NULL;
+    stSetIterator *itor = NULL;
+
+    // Output the read partition hap1
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
             stSet_size(readsBelongingToHap1) + 1);
-    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 1);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 1,
+                                         readIdsInGfHap1);
+    itor = stSet_getIterator(readsBelongingToHap1);
+    while ((read = stSet_getNext(itor)) != NULL) {
+        if (stSet_search(readIdsInGfHap1, read->readName) == NULL) {
+            fprintf(outputChunker->outputReadPartitionFileHandle, "%s,%f\n", read->readName, -1.0);
+        }
+    }
+    stSet_destructIterator(itor);
+
+    // Output the read partition hap2
     fprintf(outputChunker->outputReadPartitionFileHandle, "%s%" PRIi64 "\n", headerLinePrefix,
             stSet_size(readsBelongingToHap2) + 1);
-    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 0);
+    stGenomeFragment_printPartitionAsCSV(gF, outputChunker->outputReadPartitionFileHandle, params->phaseParams, 0,
+                                         readIdsInGfHap2);
+    itor = stSet_getIterator(readsBelongingToHap2);
+    while ((read = stSet_getNext(itor)) != NULL) {
+        if (stSet_search(readIdsInGfHap2, read->readName) == NULL) {
+            fprintf(outputChunker->outputReadPartitionFileHandle, "%s,%f\n", read->readName, -1.0);
+        }
+    }
+    stSet_destructIterator(itor);
 
     // Cleanup
     free(headerLinePrefix);
+    stSet_destruct(readIdsInGfHap1);
+    stSet_destruct(readIdsInGfHap2);
 }
 
 ChunkToStitch *outputChunker_readChunk(OutputChunker *outputChunker, bool phased) {

@@ -1322,6 +1322,7 @@ stList *getMaximalExpectedAccuracyPairwiseAlignment(stList *alignedPairs,
                                                     PairwiseAlignmentParameters *p) {
 
     int64_t totalPairs = stList_length(alignedPairs); // Total number of aligned pairs
+    stList_sort(alignedPairs, cmpAlignedPairsByCoordinates);
 
     double *scores = st_calloc(totalPairs + 1, sizeof(double)); // MEA alignment score for each aligned pair
     int64_t *backPointers = st_calloc(totalPairs + 1, sizeof(int64_t)); // Trace back pointers

@@ -463,7 +463,8 @@ void stGenomeFragment_destruct(stGenomeFragment *genomeFragment);
 void stGenomeFragment_refineGenomeFragment(stGenomeFragment *gF,
 										   stRPHmm *hmm, stList *path, int64_t maxIterations);
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1);
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1,
+        stSet *printedReads);
 
 void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPSeqs, stList *reads,
 										 stSet **readsBelongingToHap1, stSet **readsBelongingToHap2,
@@ -819,6 +820,13 @@ Poa *poa_realignAll(stList *bamChunkReads, stList *anchorAlignments, RleString *
 Poa *poa_checkMajorIndelEditsGreedily(Poa *poa, stList *bamChunkReads, PolishParams *polishParams);
 
 void poa_destruct(Poa *poa);
+
+/*
+ * Compare functions
+ */
+int cmpAlignedPairsByCoordinates(const void *a, const void *b);
+int cmpAlignedPairsByInvertedCoordinates(const void *a, const void *b);
+
 
 double *poaNode_getStrandSpecificBaseWeights(PoaNode *node, stList *bamChunkReads,
 											 double *totalWeight, double *totalPositiveWeight,

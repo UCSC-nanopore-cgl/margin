@@ -490,7 +490,8 @@ int main(int argc, char *argv[]) {
         /*
          * TODO new code to attempt to phase filtered reads
          */
-        // add to filtered set
+
+        // add untagged to filtered set
         for (int64_t bcrIdx = 0; bcrIdx < stList_length(reads); bcrIdx++) {
             BamChunkRead *bcr = stList_get(reads, bcrIdx);
             if (!stSet_search(readsBelongingToHap1, bcr) && !stSet_search(readsBelongingToHap2, bcr)) {
@@ -499,14 +500,30 @@ int main(int argc, char *argv[]) {
                 stList_append(filteredAlignments, copyListOfIntTuples(stList_get(alignments, bcrIdx)));
             }
         }
+
+        // get structure for filtering
         Poa *filteredPoa = poa_realign(filteredReads, filteredAlignments, rleReference, params->polishParams);
         Poa *filteredPoa_hap1 = bubbleGraph_getNewPoa(bg, hap1, filteredPoa, filteredReads, params);
         Poa *filteredPoa_hap2 = bubbleGraph_getNewPoa(bg, hap2, filteredPoa, filteredReads, params);
-        stSet *filteredHap1Reads = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
-        stSet *filteredHap2Reads  = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
+        stSet *filteredHap1Reads = stSet_construct();
+        stSet *filteredHap2Reads  = stSet_construct();
+
+        // assign to different haplotypes
         rankReadPoaAlignments2(filteredReads, filteredPoa_hap1, filteredPoa_hap2, filteredHap1Reads, filteredHap2Reads,
                 params->polishParams);
-        //todo cleanup poas and sets
+
+        // save to haps
+        BamChunkRead *filteredRead = NULL;
+        stSetIterator *itor = stSet_getIterator(filteredHap1Reads);
+        while ((filteredRead = stSet_getNext(itor)) != NULL) {
+            stSet_insert(readsBelongingToHap1, filteredRead);
+        }
+        stSet_destructIterator(itor);
+        itor = stSet_getIterator(filteredHap2Reads);
+        while ((filteredRead = stSet_getNext(itor)) != NULL) {
+            stSet_insert(readsBelongingToHap2, filteredRead);
+        }
+        stSet_destructIterator(itor);
 
         // Output
         outputChunkers_processChunkSequencePhased(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName,
@@ -530,6 +547,13 @@ int main(int argc, char *argv[]) {
                        logIdentifier, stList_length(reads), totalNucleotides >> 10,
                        (int) (time(NULL) - chunkStartTime));
         }
+
+        // Cleanup
+        poa_destruct(filteredPoa);
+        poa_destruct(filteredPoa_hap1);
+        poa_destruct(filteredPoa_hap2);
+        stSet_destruct(filteredHap1Reads);
+        stSet_destruct(filteredHap2Reads);
 
         // Cleanup
         free(hap1);

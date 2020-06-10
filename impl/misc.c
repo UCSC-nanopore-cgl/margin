@@ -279,6 +279,7 @@ void rankReadPoaAlignments(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *h
 void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *hap1Reads, stSet *hap2Reads,
                             PolishParams *polishParams) {
     int64_t length = stList_length(reads);
+    if (length == 0) return;
     double *totalReadScore_hap1 = st_calloc(length, sizeof(double));
     double *totalReadScore_hap2 = st_calloc(length, sizeof(double));
     char *logIdentifier = getLogIdentifier();
@@ -288,21 +289,6 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
     double score = 0;
     stList *alignedPairs = alignConsensusAndTruthRLEWithKmerAnchors(polishedRleConsensusH1, polishedRleConsensusH2,
                                                                     &score, polishParams);
-    /*uint16_t score;
-    char *polishedRawConsensusH1 = rleString_expand(polishedRleConsensusH1);
-    char *polishedRawConsensusH2 = rleString_expand(polishedRleConsensusH2);
-    uint64_t *polishedConsensusH1_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH1);
-    uint64_t *polishedConsensusH2_nonRleToRleCoordinateMap = rleString_getNonRleToRleCoordinateMap(polishedRleConsensusH2);
-    uint16_t sswScore = 0;
-    stList *alignedPairsRawSSW = alignConsensusAndTruthSSW(polishedRawConsensusH1, polishedRawConsensusH2, &sswScore);
-    stList *alignedPairs = runLengthEncodeAlignment(alignedPairsRawSSW, polishedConsensusH1_nonRleToRleCoordinateMap,
-            polishedConsensusH2_nonRleToRleCoordinateMap);
-    free(polishedConsensusH1_nonRleToRleCoordinateMap);
-    free(polishedConsensusH2_nonRleToRleCoordinateMap);
-    free(polishedRawConsensusH1);
-    free(polishedRawConsensusH2);*/
-
-    printMEAAlignment2(polishedRleConsensusH1, polishedRleConsensusH2, alignedPairs);
 
     stListIterator *alignmentItor = stList_getIterator(alignedPairs);
     stIntTuple *currAlign = stList_getNext(alignmentItor);
@@ -386,10 +372,12 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
     int64_t hap2Count = 0;
     for (int64_t i = 0; i < length; i++) {
         if (totalReadScore_hap1[i] < totalReadScore_hap2[i]) {
-            stSet_insert(hap2Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
+            //stSet_insert(hap2Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
+            stSet_insert(hap2Reads, stList_get(reads, i));
             hap1Count++;
         } else if (totalReadScore_hap1[i] > totalReadScore_hap2[i]) {
-            stSet_insert(hap1Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
+            //stSet_insert(hap1Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
+            stSet_insert(hap1Reads, stList_get(reads, i));
             hap2Count++;
         } else {
             if (totalReadScore_hap1[i] == 0) {
@@ -406,10 +394,13 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
                logIdentifier, length, hap1Count, 1.0*hap1Count/length, hap2Count, 1.0*hap2Count/length,
                unclassifiedCount, 1.0*unclassifiedCount/length, noScoreCount,
                1.0*noScoreCount/(unclassifiedCount == 0 ? 1 : unclassifiedCount), totalNoScoreLength / noScoreCount);
+
+    // cleanup
     stList_destructIterator(alignmentItor);
     stList_destruct(alignedPairs);
     rleString_destruct(polishedRleConsensusH1);
     rleString_destruct(polishedRleConsensusH2);
     free(totalReadScore_hap1);
     free(totalReadScore_hap2);
+    free(logIdentifier);
 }

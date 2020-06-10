@@ -98,10 +98,12 @@ double getLogProbabilityOfBeingInPartition(stProfileSeq *pSeq, uint64_t *haploty
     return i - stMath_logAddExact(i, j);
 }
 
-void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1) {
+void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHmmParameters *params, bool hap1,
+        stSet *printedReads) {
     /*
      * Prints reads in partition as a CSV file and the phred scaled probability the read is correctly placed in the partition.
      */
+    // need this for use in writing with filtered reads
     fprintf(fh, "READ_NAME,PHRED_SCORE_OF_BEING_IN_PARTITION\n");
     stSetIterator *it = stSet_getIterator(hap1 ? gF->reads1 : gF->reads2);
     stProfileSeq *pSeq;
@@ -113,6 +115,7 @@ void stGenomeFragment_printPartitionAsCSV(stGenomeFragment *gF, FILE *fh, stRPHm
         p = -10 * p / 2.302585;
         if (p > params->minPhredScoreForHaplotypePartition) {
             fprintf(fh, "%s,%f\n", pSeq->readId, p);
+            if (printedReads != NULL) stSet_insert(printedReads, stString_copy(pSeq->readId));
         }
     }
     stSet_destructIterator(it);
