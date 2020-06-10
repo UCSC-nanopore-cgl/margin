@@ -292,8 +292,8 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
 
     stListIterator *alignmentItor = stList_getIterator(alignedPairs);
     stIntTuple *currAlign = stList_getNext(alignmentItor);
-    int64_t posH1 = stIntTuple_get(currAlign, 0);
-    int64_t posH2 = stIntTuple_get(currAlign, 1);
+    int64_t posH1 = currAlign == NULL ? 0 : stIntTuple_get(currAlign, 0);
+    int64_t posH2 = currAlign == NULL ? 0 : stIntTuple_get(currAlign, 1);
     int64_t insertH1 = 0;
     int64_t insertH2 = 0;
     int64_t mismatch = 0;

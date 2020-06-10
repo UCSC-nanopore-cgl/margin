@@ -16,7 +16,7 @@ repeatSubMatrix_setLogProb(RepeatSubMatrix *repeatSubMatrix, Symbol base, bool s
     if (base >= repeatSubMatrix->alphabet->alphabetSize - 1) {
         char *logIdentifier = getLogIdentifier();
         if (base == repeatSubMatrix->alphabet->alphabetSize - 1) {
-            st_logInfo(" %s [repeatSubMatrix_setLogProb] base 'Nn' (%d) not supported for repeat estimation! "
+            st_logDebug(" %s [repeatSubMatrix_setLogProb] base 'Nn' (%d) not supported for repeat estimation! "
                        "Setting to 'A' (0)\n", logIdentifier, base);
         } else {
             st_errAbort(" %s [repeatSubMatrix_setLogProb] base > 'Nn' (%d) not supported for repeat estimation!\n",
