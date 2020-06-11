@@ -276,7 +276,8 @@ void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t 
     st_logInfo(" %s Of %"PRId64" filtered reads: %"PRId64" (%.2f) were hap1, %"PRId64" (%.2f) were hap2, %"PRId64" (%.2f) were unclassified with %"PRId64" (%.2f) having no score (avg len %"PRId64").\n",
                logIdentifier, length, hap1Count, 1.0*hap1Count/length, hap2Count, 1.0*hap2Count/length,
                unclassifiedCount, 1.0*unclassifiedCount/length, noScoreCount,
-               1.0*noScoreCount/(unclassifiedCount == 0 ? 1 : unclassifiedCount), totalNoScoreLength / noScoreCount);
+               1.0*noScoreCount/(unclassifiedCount == 0 ? 1 : unclassifiedCount),
+               totalNoScoreLength / (noScoreCount == 0 ? 1 : noScoreCount));
 
     // cleanup
     stList_destructIterator(alignmentItor);
