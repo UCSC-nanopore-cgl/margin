@@ -2229,8 +2229,6 @@ stList *alignConsensusAndTruthRLE(RleString *consensusStr, RleString *truthStr, 
 
 stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleString *truthStr, double *score,
                                                  PolishParams *polishParams) {
-
-
     // Symbol strings
     uint64_t maxRL = polishParams->useRunLengthEncoding ? (uint64_t) polishParams->repeatSubMatrix->maximumRepeatLength : 2;
     SymbolString sX = rleString_constructSymbolString(consensusStr, 0, consensusStr->length, polishParams->alphabet,

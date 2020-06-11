@@ -137,159 +137,41 @@ stList *copyListOfIntTuples(stList *toCopy) {
     return copy;
 }
 
-void saveAlignmentWeightsAndScores(Poa *poa, stList *reads, double *weights, double *score, int64_t length) {
-    for (int64_t p = 0; p < length; p++) {
-        PoaNode *node = stList_get(poa->nodes, p);
-
-        // match/mismatch
-        for (int64_t o = 0; o < stList_length(node->observations); o++) {
-            PoaBaseObservation *observation = stList_get(node->observations, o);
-            BamChunkRead *read = stList_get(reads, observation->readNo);
-
-            weights[observation->readNo] += observation->weight;
-            if (node->base == read->rleRead->rleString[observation->offset]) {
-                /*int nrc = (int) node->repeatCount;
-                int rrc = (int) read->rleRead->repeatCounts[observation->offset];
-                score[observation->readNo] += (2 - abs(nrc - rrc)/((nrc+rrc)/2.0) ) * observation->weight;*/
-                score[observation->readNo] += 2 * observation->weight;
-            } else {
-                score[observation->readNo] -= observation->weight;
-            }
-
-        }
-
-        // insert
-        for (int64_t i = 0; i < stList_length(node->inserts); i++) {
-            PoaInsert *insert = stList_get(node->inserts, i);
-            for (int64_t o = 0; o < stList_length(insert->observations); o++) {
-                PoaBaseObservation *observation = stList_get(insert->observations, o);
-
-                weights[observation->readNo] += observation->weight;
-                score[observation->readNo] -= observation->weight;
-            }
-        }
-
-        // delete
-        for (int64_t d = 0; d < stList_length(node->deletes); d++) {
-            PoaDelete *delete = stList_get(node->deletes, d);
-            for (int64_t o = 0; o < stList_length(delete->observations); o++) {
-                PoaBaseObservation *observation = stList_get(delete->observations, o);
-
-                weights[observation->readNo] += observation->weight;
-                score[observation->readNo] -= observation->weight;
-            }
-        }
-
-    }
-
-}
-
-
-
-
-void rankReadPoaAlignments(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *hap1Reads, stSet *hap2Reads) {
-    int64_t length = stList_length(reads);
-    double *totalReadWeights_hap1 = st_calloc(length, sizeof(double));
-    double *totalReadWeights_hap2 = st_calloc(length, sizeof(double));
-    double *totalReadScore_hap1 = st_calloc(length, sizeof(double));
-    double *totalReadScore_hap2 = st_calloc(length, sizeof(double));
-    char *logIdentifier = getLogIdentifier();
-
-    /*if (stList_length(poa_hap1->nodes) != stList_length(poa_hap2->nodes)) {
-        st_logInfo(" %s Ranked POAs have different sizes: %"PRId64", %"PRId64"\n", logIdentifier,
-                stList_length(poa_hap1->nodes), stList_length(poa_hap2->nodes));
-    }
-    int64_t diffNodes = 0;
-    for (int64_t i = 0; i < stList_length(poa_hap1->nodes); i++) {
-        PoaNode *node1 = stList_get(poa_hap1->nodes, i);
-        PoaNode *node2 = stList_get(poa_hap2->nodes, i);
-        char pos1[6] = "     ";
-        char pos2[6] = "     ";
-        pos1[0] = node1->base;
-        pos2[0] = node2->base;
-        pos1[1] = (char) ('0' + node1->repeatCount);
-        pos2[1] = (char) ('0' + node2->repeatCount);
-        pos1[3] = (char) ('0' + stList_length(node1->inserts));
-        pos2[3] = (char) ('0' + stList_length(node2->inserts));
-        pos1[4] = (char) ('0' + stList_length(node1->deletes));
-        pos2[4] = (char) ('0' + stList_length(node2->deletes));
-
-        if (!stString_eq(pos1, pos2)) {
-            st_logInfo(" %s Ranked POA diff: %6"PRId64" %s %s\n", logIdentifier, i, pos1, pos2);
-            diffNodes++;
-            if (diffNodes >= 8) {
-                st_logInfo(" %s Ranked POA diff: ...\n", logIdentifier);
-                break;
-            }
-        }
-    }*/
-
-    saveAlignmentWeightsAndScores(poa_hap1, reads, totalReadWeights_hap1, totalReadScore_hap1, length);
-    saveAlignmentWeightsAndScores(poa_hap2, reads, totalReadWeights_hap2, totalReadScore_hap2, length);
-
-    int64_t scoreAndWeightAreAlignedCount = 0;
-    int64_t equalWeightCount = 0;
-    int64_t equalScoreCount = 0;
-    int64_t unclassifiedCount = 0;
-    for (int64_t i = 0; i < length; i++) {
-        int hapByWeight = 0;
-        int hapByScore = 0;
-        if (totalReadScore_hap1[i] == totalReadScore_hap2[i]) {
-            equalScoreCount++;
-        } else if (totalReadScore_hap1[i] > totalReadScore_hap2[i]) {
-            hapByWeight = 1;
-        } else {
-            hapByWeight = 2;
-        }
-        if (totalReadWeights_hap1[i] == totalReadWeights_hap2[i]) {
-            equalWeightCount++;
-        } else if (totalReadWeights_hap1[i] >= totalReadWeights_hap2[i]) {
-            hapByScore = 1;
-        } else {
-            hapByScore = 2;
-        }
-
-        // quantify score v total weight
-        if (hapByScore == hapByWeight) {
-            scoreAndWeightAreAlignedCount++;
-        }
-
-        // classify by score (probably better)
-        if (hapByScore == 0) {
-            unclassifiedCount++;
-        } else {
-            stSet_insert(hapByScore == 1 ? hap1Reads : hap2Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
-        }
-    }
-
-    // loggit
-    st_logInfo(" %s Of %"PRId64" reads, %.4f had score and weight aligned, %.4f had score equal, %.4f had equal weight, and %.4f were unclassified\n",
-            logIdentifier, length, 1.0*scoreAndWeightAreAlignedCount/length, 1.0*equalScoreCount/length,
-            1.0*equalWeightCount/length, 1.0*unclassifiedCount/length);
-
-    // cleanup
-    free(logIdentifier);
-    free(totalReadWeights_hap1);
-    free(totalReadWeights_hap2);
-    free(totalReadScore_hap1);
-    free(totalReadScore_hap2);
-}
-
-
-void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *hap1Reads, stSet *hap2Reads,
-                            PolishParams *polishParams) {
-    int64_t length = stList_length(reads);
+void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2, RleString *rleReference,
+                                      stList *filteredReads, stList *filteredAlignments,
+                                      stSet *hap1Reads, stSet *hap2Reads, Params *params) {
+    // quick fail
+    int64_t length = stList_length(filteredReads);
     if (length == 0) return;
-    double *totalReadScore_hap1 = st_calloc(length, sizeof(double));
-    double *totalReadScore_hap2 = st_calloc(length, sizeof(double));
-    char *logIdentifier = getLogIdentifier();
-    RleString *polishedRleConsensusH1 = rleString_copy(poa_hap1->refString);
-    RleString *polishedRleConsensusH2 = rleString_copy(poa_hap2->refString);
-    // align POAs and rank based on misaligned nodes
+
+    // get POA structure for filtering
+    Poa *filteredPoa = poa_realign(filteredReads, filteredAlignments, rleReference, params->polishParams);
+    Poa *filteredPoa_hap1 = bubbleGraph_getNewPoa(bg, hap1, filteredPoa, filteredReads, params);
+    Poa *filteredPoa_hap2 = bubbleGraph_getNewPoa(bg, hap2, filteredPoa, filteredReads, params);
+
+    // align POAs to find het sites
+    RleString *polishedRleConsensusH1 = rleString_copy(filteredPoa_hap1->refString);
+    RleString *polishedRleConsensusH2 = rleString_copy(filteredPoa_hap2->refString);
     double score = 0;
     stList *alignedPairs = alignConsensusAndTruthRLEWithKmerAnchors(polishedRleConsensusH1, polishedRleConsensusH2,
-                                                                    &score, polishParams);
+                                                                    &score, params->polishParams);
 
+    // quick failure check
+    char *logIdentifier = getLogIdentifier();
+    if (alignedPairs == NULL || stList_length(alignedPairs) == 0) {
+        st_logInfo(" %s Could not get polished consensus alignment for haplotyping filtered reads.\n", logIdentifier);
+
+        // cleanup
+        stList_destruct(alignedPairs);
+        rleString_destruct(polishedRleConsensusH1);
+        rleString_destruct(polishedRleConsensusH2);
+        free(logIdentifier);
+        return;
+    }
+
+    // score reads based on alignment at het sites
+    double *totalReadScore_hap1 = st_calloc(length, sizeof(double));
+    double *totalReadScore_hap2 = st_calloc(length, sizeof(double));
     stListIterator *alignmentItor = stList_getIterator(alignedPairs);
     stIntTuple *currAlign = stList_getNext(alignmentItor);
     int64_t posH1 = currAlign == NULL ? 0 : stIntTuple_get(currAlign, 0);
@@ -304,10 +186,10 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
         // H2 gap / H1 insert
         if (posH1 < currAlignPosHap1) {
             insertH1++;
-            PoaNode *insertNodeX = stList_get(poa_hap1->nodes, posH1);
+            PoaNode *insertNodeX = stList_get(filteredPoa_hap1->nodes, posH1);
             for (int64_t o = 0; o < stList_length(insertNodeX->observations); o++) {
                 PoaBaseObservation *observation = stList_get(insertNodeX->observations, o);
-                BamChunkRead *read = stList_get(reads, observation->readNo);
+                BamChunkRead *read = stList_get(filteredReads, observation->readNo);
                 if (insertNodeX->base == read->rleRead->rleString[observation->offset]) {
                     totalReadScore_hap1[observation->readNo] += observation->weight;
                 } else {
@@ -316,13 +198,13 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
             }
             posH1++;
         }
-            // H1 gap / H2 insert
+        // H1 gap / H2 insert
         else if (posH2 < currAlignPosHap2) {
             insertH2++;
-            PoaNode *insertNodeY = stList_get(poa_hap1->nodes, posH2);
+            PoaNode *insertNodeY = stList_get(filteredPoa_hap1->nodes, posH2);
             for (int64_t o = 0; o < stList_length(insertNodeY->observations); o++) {
                 PoaBaseObservation *observation = stList_get(insertNodeY->observations, o);
-                BamChunkRead *read = stList_get(reads, observation->readNo);
+                BamChunkRead *read = stList_get(filteredReads, observation->readNo);
                 if (insertNodeY->base == read->rleRead->rleString[observation->offset]) {
                     totalReadScore_hap2[observation->readNo] += observation->weight;
                 } else {
@@ -331,15 +213,15 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
             }
             posH2++;
         }
-            // match
+        // match
         else if (posH1 == currAlignPosHap1 && posH2 == currAlignPosHap2) {
-            PoaNode *matchNodeH1 = stList_get(poa_hap1->nodes, posH1);
-            PoaNode *matchNodeH2 = stList_get(poa_hap2->nodes, posH2);
+            PoaNode *matchNodeH1 = stList_get(filteredPoa_hap1->nodes, posH1);
+            PoaNode *matchNodeH2 = stList_get(filteredPoa_hap2->nodes, posH2);
             if (matchNodeH1->base != matchNodeH2->base) {
                 mismatch++;
                 for (int64_t o = 0; o < stList_length(matchNodeH1->observations); o++) {
                     PoaBaseObservation *observation = stList_get(matchNodeH1->observations, o);
-                    BamChunkRead *read = stList_get(reads, observation->readNo);
+                    BamChunkRead *read = stList_get(filteredReads, observation->readNo);
                     if (matchNodeH1->base == read->rleRead->rleString[observation->offset]) {
                         totalReadScore_hap1[observation->readNo] += observation->weight;
                     } else {
@@ -348,7 +230,7 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
                 }
                 for (int64_t o = 0; o < stList_length(matchNodeH2->observations); o++) {
                     PoaBaseObservation *observation = stList_get(matchNodeH2->observations, o);
-                    BamChunkRead *read = stList_get(reads, observation->readNo);
+                    BamChunkRead *read = stList_get(filteredReads, observation->readNo);
                     if (matchNodeH2->base == read->rleRead->rleString[observation->offset]) {
                         totalReadScore_hap2[observation->readNo] += observation->weight;
                     } else {
@@ -360,11 +242,13 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
             posH2++;
             currAlign = stList_getNext(alignmentItor);
         }
-            // should never happen
+        // should never happen
         else {
             assert(FALSE);
         }
     }
+
+    // get scores and save to appropriate sets
     int64_t totalNoScoreLength = 0;
     int64_t noScoreCount = 0;
     int64_t unclassifiedCount = 0;
@@ -372,21 +256,20 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
     int64_t hap2Count = 0;
     for (int64_t i = 0; i < length; i++) {
         if (totalReadScore_hap1[i] < totalReadScore_hap2[i]) {
-            //stSet_insert(hap2Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
-            stSet_insert(hap2Reads, stList_get(reads, i));
+            stSet_insert(hap2Reads, stList_get(filteredReads, i));
             hap1Count++;
         } else if (totalReadScore_hap1[i] > totalReadScore_hap2[i]) {
-            //stSet_insert(hap1Reads, ((BamChunkRead *) stList_get(reads, i))->readName);
-            stSet_insert(hap1Reads, stList_get(reads, i));
+            stSet_insert(hap1Reads, stList_get(filteredReads, i));
             hap2Count++;
         } else {
             if (totalReadScore_hap1[i] == 0) {
-                totalNoScoreLength += ((BamChunkRead *) stList_get(reads, i))->rleRead->nonRleLength;
+                totalNoScoreLength += ((BamChunkRead *) stList_get(filteredReads, i))->rleRead->nonRleLength;
                 noScoreCount++;
             }
             unclassifiedCount++;
         }
     }
+
     // loggit
     st_logInfo(" %s Filtered read haplotyping performed over %d aligned positions, with %"PRId64" H1 inserts, %"PRId64" H2 inserts, and %"PRId64" mismatches\n",
                logIdentifier, stList_length(alignedPairs), insertH1, insertH2, mismatch);
@@ -402,5 +285,8 @@ void rankReadPoaAlignments2(stList *reads, Poa *poa_hap1, Poa *poa_hap2, stSet *
     rleString_destruct(polishedRleConsensusH2);
     free(totalReadScore_hap1);
     free(totalReadScore_hap2);
+    poa_destruct(filteredPoa);
+    poa_destruct(filteredPoa_hap1);
+    poa_destruct(filteredPoa_hap2);
     free(logIdentifier);
 }
