@@ -201,7 +201,7 @@ void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t 
         // H1 gap / H2 insert
         else if (posH2 < currAlignPosHap2) {
             insertH2++;
-            PoaNode *insertNodeY = stList_get(filteredPoa_hap1->nodes, posH2);
+            PoaNode *insertNodeY = stList_get(filteredPoa_hap2->nodes, posH2);
             for (int64_t o = 0; o < stList_length(insertNodeY->observations); o++) {
                 PoaBaseObservation *observation = stList_get(insertNodeY->observations, o);
                 BamChunkRead *read = stList_get(filteredReads, observation->readNo);

@@ -2264,7 +2264,6 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
     char *logIdentifer = getLogIdentifier();
     st_logInfo(" %s Sequence alignment (seq len %"PRId64", %.3f K-AP ratio) got %"PRId64" MEA aligned pairs in %ds and MEA in %ds\n",
             logIdentifer, minLength, apRatio, stList_length(meaAlignedPairs), meaTime-apTime, time(NULL)-meaTime);
-    free(logIdentifer);
 
     // refactor
     stList *finalAlignedPairs = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
@@ -2282,6 +2281,7 @@ stList *alignConsensusAndTruthRLEWithKmerAnchors(RleString *consensusStr, RleStr
     stList_destruct(anchorPairs);
     symbolString_destruct(sX);
     symbolString_destruct(sY);
+    free(logIdentifer);
 
     return finalAlignedPairs;
 }
