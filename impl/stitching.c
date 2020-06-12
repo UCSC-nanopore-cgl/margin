@@ -903,6 +903,8 @@ OutputChunkers *
 outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outputSequenceFile, char *outputPoaFile,
                          char *outputReadPartitionFile, char *outputRepeatCountFile, char *hap1Suffix, char *hap2Suffix,
                          bool inMemoryBuffers) {
+
+    char *outputReadPartitionFileForStitching = NULL;
     if (hap2Suffix != NULL) {
         if (stString_eq(hap1Suffix, hap2Suffix)) {
             st_errAbort("Hap1 and hap2 suffixes are identical, can not open distinct files for output\n");
@@ -910,8 +912,10 @@ outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outpu
         // Make temporary read phasing file if not specified
         //TODO if inMemoryBuffers and !shouldOutputReadPartition, this results in shouldOutputReadPartition
         if (outputReadPartitionFile == NULL) {
-            outputReadPartitionFile = "temp_read_phasing_file.csv";
-            st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFile);
+            outputReadPartitionFileForStitching = "temp_read_phasing_file.csv";
+            st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFileForStitching);
+        } else {
+            outputReadPartitionFileForStitching = outputReadPartitionFile;
         }
     } else {
         if (outputReadPartitionFile != NULL) {
@@ -929,17 +933,10 @@ outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outpu
     outputChunkers->tempFileChunkers = stList_construct3(0, (void (*)(void *)) outputChunker_destruct);
     for (int64_t i = 0; i < noOfOutputChunkers; i++) {
         stList_append(outputChunkers->tempFileChunkers, inMemoryBuffers ?
-                                                        outputChunker_constructInMemory(params, outputPoaFile != NULL,
-                                                                                        outputReadPartitionFile != NULL,
-                                                                                        outputRepeatCountFile != NULL) :
-                                                        outputChunker_construct(params,
-                                                                                printTempFileName(outputSequenceFile,
-                                                                                                  i),
-                                                                                printTempFileName(outputPoaFile, i),
-                                                                                printTempFileName(
-                                                                                        outputReadPartitionFile, i),
-                                                                                printTempFileName(outputRepeatCountFile,
-                                                                                                  i)));
+            outputChunker_constructInMemory(params, outputPoaFile != NULL, outputReadPartitionFileForStitching != NULL,
+                outputRepeatCountFile != NULL) :
+            outputChunker_construct(params, printTempFileName(outputSequenceFile, i), printTempFileName(outputPoaFile, i),
+                printTempFileName(outputReadPartitionFileForStitching, i), printTempFileName(outputRepeatCountFile, i)));
     }
     // Make the final output chunkers
     outputChunkers->outputChunkerHap1 = outputChunker_construct(params,
