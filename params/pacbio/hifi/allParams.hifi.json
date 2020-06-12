@@ -19,6 +19,9 @@
         0.25, 0.25, 0.25, 0.25
       ]
     },
+    "chunkSize": 50000,
+    "chunkBoundary": 5000,
+    "maxDepth": 96,
     "repeatCountSubstitutionMatrix" : {
       "repeatCountLogProbabilities_A_F": [
         -1.707570195198059,
@@ -10433,5 +10436,8 @@
         -1.707570195198059
       ]
     }
+  },
+  "phase" : {
+    "minPhredScoreForHaplotypePartition": 20
   }
 }
