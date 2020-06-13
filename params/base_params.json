@@ -25,6 +25,7 @@
           "chunkSize": 100000,
           "chunkBoundary": 5000,
           "maxDepth": 128,
+          "shuffleChunks": true,
           "referenceBasePenalty": 0.5,
           "poaConstructCompareRepeatCounts": true,
           "minPosteriorProbForAlignmentAnchors": [

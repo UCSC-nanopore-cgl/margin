@@ -1064,6 +1064,7 @@ typedef struct _bamChunk {
     //  should be used to initialize the probabilities at chunkStart
     int64_t chunkEnd;          // same for chunk end
     int64_t chunkBoundaryEnd;    // no reads should start after this position
+    int64_t estimatedDepth;		// for ranking chunk order
     BamChunker *parent;        // reference to parent (may not be needed)
 } BamChunk;
 

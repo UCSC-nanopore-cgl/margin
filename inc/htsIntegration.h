@@ -25,7 +25,9 @@ BamChunk *bamChunker_getChunk(BamChunker *bamChunker, int64_t chunkIdx);
 
 BamChunk *bamChunk_construct();
 BamChunk *bamChunk_construct2(char *refSeqName, int64_t chunkIndex, int64_t chunkBoundaryStart, int64_t chunkStart, int64_t chunkEnd,
-                              int64_t chunkBoundaryEnd, BamChunker *parent);
+                              int64_t chunkBoundaryEnd, int64_t depth, BamChunker *parent);
+
+int compareBamChunkDepthByIndexInList(const void *a, const void *b, const void *chunkList);
 
 BamChunk *bamChunk_copyConstruct(BamChunk *toCopy);
 

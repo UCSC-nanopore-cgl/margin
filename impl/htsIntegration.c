@@ -108,15 +108,38 @@ void countIndels(uint32_t *cigar, uint32_t ncigar, int64_t *numInsertions, int64
 }
 
 /*
- * Utility function for BamChunk constructor
+ * Utility functions for BamChunk constructor
  */
+
+
+int64_t getReadDepthInfoBucketSize(int64_t chunkSize) {
+    int64_t depth = chunkSize / 32;
+    if (depth == 0) depth = 1;
+    return depth;
+}
+
+int64_t getEstimatedChunkDepth(stList *chunkDepths, int64_t contigStartPos, int64_t contigEndPos, int64_t chunkSize) {
+    int64_t bucketSize = getReadDepthInfoBucketSize(chunkSize);
+    contigStartPos = contigStartPos/bucketSize;
+    contigEndPos = contigEndPos/bucketSize;
+    assert(stList_length(chunkDepths) > contigEndPos);
+    int64_t totalSize = 0;
+    for (int64_t pos = contigStartPos; pos < contigEndPos; pos++) {
+        totalSize += (int64_t) stList_get(chunkDepths, pos);
+    }
+    int64_t chunkLength = contigEndPos - contigStartPos;
+    if (chunkLength <= 0) chunkLength = 1;
+    int64_t estimatedDepth = totalSize / chunkLength;
+    return estimatedDepth;
+}
+
 int64_t saveContigChunks(stList *dest, BamChunker *parent, char *contig, int64_t contigStartPos, int64_t contigEndPos,
-                         uint64_t chunkSize, uint64_t chunkMargin) {
+                         uint64_t chunkSize, uint64_t chunkMargin, stList *chunkDepths) {
 
     // whole contig case
     if (chunkSize == 0) {
-        BamChunk *chunk = bamChunk_construct2(contig, stList_length(dest), contigStartPos, contigStartPos, contigEndPos, contigEndPos,
-                                              parent);
+        BamChunk *chunk = bamChunk_construct2(contig, stList_length(dest), contigStartPos, contigStartPos, contigEndPos,
+                contigEndPos, getEstimatedChunkDepth(chunkDepths, contigStartPos, contigEndPos, chunkSize), parent);
         stList_append(dest, chunk);
         return 1;
     }
@@ -132,11 +155,24 @@ int64_t saveContigChunks(stList *dest, BamChunker *parent, char *contig, int64_t
         chunkMarginEndPos = (chunkMarginEndPos > contigEndPos ? contigEndPos : chunkMarginEndPos);
 
         BamChunk *chunk = bamChunk_construct2(contig, stList_length(dest), chunkMarginStartPos, i, chunkEndPos,
-                                              chunkMarginEndPos, parent);
+                                              chunkMarginEndPos, getEstimatedChunkDepth(chunkDepths,
+                                                      chunkMarginStartPos, chunkMarginEndPos, chunkSize), parent);
         stList_append(dest, chunk);
         chunkCount++;
     }
     return chunkCount;
+}
+
+void storeReadDepthInformation(stList *depthList, int64_t startPos, int64_t endPos, int64_t chunkSize) {
+    int64_t bucketSize = getReadDepthInfoBucketSize(chunkSize);
+    startPos = startPos/bucketSize;
+    endPos = endPos/bucketSize;
+    while (stList_length(depthList) < endPos) {
+        stList_append(depthList, (void*) 0);
+    }
+    for (int64_t pos = startPos; pos < endPos; pos++) {
+        stList_set(depthList, pos, (void*) (((int64_t) stList_get(depthList, pos)) + 1));
+    }
 }
 
 
@@ -196,6 +232,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
     char *currentContig = NULL;
     int64_t contigStartPos = 0;
     int64_t contigEndPos = 0;
+    stList *estimatedChunkDepths = stList_construct();
 
     // get all reads
     // there is probably a better way (bai?) to find min and max aligned positions (which we need for chunk divisions)
@@ -236,20 +273,25 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
             currentContig = stString_copy(contig);
             contigStartPos = readStartPos;
             contigEndPos = readEndPos;
+            storeReadDepthInformation(estimatedChunkDepths, readStartPos, readEndPos, chunkSize);
         } else if (stString_eq(currentContig, contig)) {
             // continue this contig's reads
             contigStartPos = readStartPos < contigStartPos ? readStartPos : contigStartPos;
             contigEndPos = readEndPos > contigEndPos ? readEndPos : contigEndPos;
+            storeReadDepthInformation(estimatedChunkDepths, readStartPos, readEndPos, chunkSize);
         } else {
             // new contig (this should never happen if we're filtering by region)
             assert(!filterByRegion);
             int64_t savedChunkCount = saveContigChunks(chunker->chunks, chunker, currentContig,
-                                                       contigStartPos, contigEndPos, chunkSize, chunkBoundary);
+                                                       contigStartPos, contigEndPos, chunkSize, chunkBoundary,
+                                                       estimatedChunkDepths);
             chunker->chunkCount += savedChunkCount;
             free(currentContig);
             currentContig = stString_copy(contig);
             contigStartPos = readStartPos;
             contigEndPos = readEndPos;
+            stList_destruct(estimatedChunkDepths);
+            estimatedChunkDepths = stList_construct();
         }
     }
     // save last contig's chunks
@@ -259,7 +301,8 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
             contigEndPos = (contigEndPos > regionEnd ? regionEnd : contigEndPos);
         }
         int64_t savedChunkCount = saveContigChunks(chunker->chunks, chunker, currentContig,
-                                                   contigStartPos, contigEndPos, chunkSize, chunkBoundary);
+                                                   contigStartPos, contigEndPos, chunkSize, chunkBoundary,
+                                                   estimatedChunkDepths);
         chunker->chunkCount += savedChunkCount;
         free(currentContig);
     }
@@ -268,6 +311,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *par
     assert(stList_length(chunker->chunks) == chunker->chunkCount);
 
     // shut everything down
+    stList_destruct(estimatedChunkDepths);
     bam_hdr_destroy(bamHdr);
     bam_destroy1(aln);
     sam_close(in);
@@ -299,11 +343,11 @@ BamChunk *bamChunker_getChunk(BamChunker *bamChunker, int64_t chunkIdx) {
 }
 
 BamChunk *bamChunk_construct() {
-    return bamChunk_construct2(NULL, 0, 0, 0, 0, 0, NULL);
+    return bamChunk_construct2(NULL, 0, 0, 0, 0, 0, 0, NULL);
 }
 
 BamChunk *bamChunk_construct2(char *refSeqName, int64_t chunkIndex, int64_t chunkBoundaryStart, int64_t chunkStart, int64_t chunkEnd,
-                              int64_t chunkBoundaryEnd, BamChunker *parent) {
+                              int64_t chunkBoundaryEnd, int64_t depth, BamChunker *parent) {
     BamChunk *c = malloc(sizeof(BamChunk));
     c->chunkIdx = chunkIndex;
     c->refSeqName = stString_copy(refSeqName);
@@ -311,6 +355,7 @@ BamChunk *bamChunk_construct2(char *refSeqName, int64_t chunkIndex, int64_t chun
     c->chunkStart = chunkStart;
     c->chunkEnd = chunkEnd;
     c->chunkBoundaryEnd = chunkBoundaryEnd;
+    c->estimatedDepth = depth;
     c->parent = parent;
     return c;
 }
@@ -323,6 +368,7 @@ BamChunk *bamChunk_copyConstruct(BamChunk *toCopy) {
     c->chunkStart = toCopy->chunkStart;
     c->chunkEnd = toCopy->chunkEnd;
     c->chunkBoundaryEnd = toCopy->chunkBoundaryEnd;
+    c->estimatedDepth = toCopy->estimatedDepth;
     c->parent = toCopy->parent;
     return c;
 }
@@ -332,6 +378,11 @@ void bamChunk_destruct(BamChunk *bamChunk) {
     free(bamChunk);
 }
 
+int compareBamChunkDepthByIndexInList(const void *a, const void *b, const void *chunkList) {
+    const BamChunk *chunk1 = stList_get((stList*)chunkList, stIntTuple_get((stIntTuple*) a, 0));
+    const BamChunk *chunk2 = stList_get((stList*)chunkList, stIntTuple_get((stIntTuple*) b, 0));
+    return chunk1->estimatedDepth < chunk2->estimatedDepth ? -1 : chunk1->estimatedDepth > chunk2->estimatedDepth ? 1 : 0;
+}
 
 // This structure holds the bed information
 // TODO rewrite the code to just use a void*
@@ -692,7 +743,8 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 
     // we do need to downsample
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s Downsampling chunk with average depth %.2fx to %dx \n", logIdentifier, averageDepth, intendedDepth);
+    st_logInfo(" %s Downsampling chunk (estimated depth %"PRId64") with average depth %.2fx to %dx \n", logIdentifier,
+            bamChunk->estimatedDepth, averageDepth, intendedDepth);
     free(logIdentifier);
 
     // keep some ratio of reads

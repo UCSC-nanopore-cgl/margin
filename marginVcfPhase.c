@@ -282,7 +282,9 @@ int main(int argc, char *argv[]) {
         stList_append(chunkOrder, stIntTuple_construct1(i));
     }
     if (params->polishParams->shuffleChunks) {
-        stList_shuffle(chunkOrder);
+        st_logInfo("> Ordering chunks by estimated depth.\n");
+        stList_sort2(chunkOrder, compareBamChunkDepthByIndexInList, bamChunker->chunks);
+        stList_reverse(chunkOrder);
     }
 
     // multiproccess the chunks, save to results
@@ -374,7 +376,7 @@ int main(int argc, char *argv[]) {
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
-                st_logInfo(" %s Downsampled from %"PRId64" to %"PRId64" reads\n", logIdentifier,
+                st_logInfo(" %s Downsampled chunk from %"PRId64" to %"PRId64" reads\n", logIdentifier,
                            stList_length(reads), stList_length(maintainedReads));
                 // still has all the old reads, need to not free these
                 stList_setDestructor(reads, NULL);
@@ -638,7 +640,7 @@ int main(int argc, char *argv[]) {
             int regionEnd = 0;
             int scanRet = sscanf(regionStr, "%[^:]:%d-%d", regionContig, &regionStart, &regionEnd);
             whbBamChunk = bamChunk_construct2(regionContig, -1, regionStart, regionStart, regionEnd,
-                    regionEnd, bamChunker);
+                    regionEnd, 0, bamChunker);
         }
         writeHaplotaggedBam(whbBamChunk, bamChunker->bamFile, outputBase,
                             allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
