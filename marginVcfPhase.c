@@ -350,8 +350,8 @@ int main(int argc, char *argv[]) {
                         bamChunk->refSeqName, fullRefLen, chunkIdx, bamChunk->chunkBoundaryStart);
         }
         RleString *rleReference = bamChunk_getReferenceSubstring(bamChunk, referenceSequences, params);
-        st_logInfo(">%s Going to process a chunk for reference sequence: %s, starting at: %i and ending at: %i\n",
-                   logIdentifier, bamChunk->refSeqName, (int) bamChunk->chunkBoundaryStart,
+        st_logInfo(">%s Going to process a chunk (~%"PRId64"x) for reference sequence: %s, starting at: %i and ending at: %i\n",
+                   logIdentifier, bamChunk->estimatedDepth, bamChunk->refSeqName, (int) bamChunk->chunkBoundaryStart,
                    (int) (fullRefLen < bamChunk->chunkBoundaryEnd ? fullRefLen : bamChunk->chunkBoundaryEnd));
 
         // Convert bam lines into corresponding reads and alignments

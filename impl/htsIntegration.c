@@ -743,8 +743,7 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 
     // we do need to downsample
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s Downsampling chunk (estimated depth %"PRId64") with average depth %.2fx to %dx \n", logIdentifier,
-            bamChunk->estimatedDepth, averageDepth, intendedDepth);
+    st_logInfo(" %s Downsampling chunk with average depth %.2fx to %dx \n", logIdentifier, averageDepth, intendedDepth);
     free(logIdentifier);
 
     // keep some ratio of reads
