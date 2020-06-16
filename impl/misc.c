@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sonLibListPrivate.h>
 #include <helenFeatures.h>
+#include <htsIntegration.h>
 
 char *getTimeDescriptorFromSeconds(int64_t seconds) {
     int64_t minutes = (int64_t) (seconds / 60);
@@ -137,9 +138,9 @@ stList *copyListOfIntTuples(stList *toCopy) {
     return copy;
 }
 
-void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2, RleString *rleReference,
-                                      stList *filteredReads, stList *filteredAlignments,
-                                      stSet *hap1Reads, stSet *hap2Reads, Params *params) {
+void assignFilteredReadsToHaplotypes(BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2, RleString *rleReference,
+                                     stList *filteredReads, stList *filteredAlignments,
+                                     stSet *hap1Reads, stSet *hap2Reads, Params *params) {
     // quick fail
     int64_t length = stList_length(filteredReads);
     if (length == 0) return;
@@ -290,4 +291,67 @@ void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t 
     poa_destruct(filteredPoa_hap1);
     poa_destruct(filteredPoa_hap2);
     free(logIdentifier);
+}
+
+
+void assignFilteredReadsToHaplotypesInParts(BamChunk* bamChunk, BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2,
+        RleString *rleReference, stList *reads, stList *alignments, stSet *hap1Reads, stSet *hap2Reads,
+        Params *params, int64_t partSize, char *logIdentifier) {
+
+    stList *remainingReads = reads;
+    stList *remainingAlignments = alignments;
+    int64_t currentIteration = 0;
+
+    // do downsampling of filtered reads if appropriate
+    while (stList_length(remainingReads) > 0) {
+        time_t start = time(NULL);
+        // get downsampling structures
+        stList *maintainedReads = stList_construct();
+        stList *maintainedAlignments = stList_construct();
+        stList *discardedReads = stList_construct();
+        stList *discardedAlignments = stList_construct();
+
+        bool didDownsample = poorMansDownsample(partSize, bamChunk, remainingReads, remainingAlignments,
+                                                maintainedReads, maintainedAlignments, discardedReads,
+                                                discardedAlignments);
+
+        // depth of reads is less than
+        if (!didDownsample) {
+            // "maintained" needs to be used in partitioning, and "remaining" still has the reads we need
+            stList_destruct(maintainedReads);
+            stList_destruct(maintainedAlignments);
+            maintainedReads = remainingReads;
+            maintainedAlignments = remainingAlignments;
+            remainingReads = stList_construct();
+            remainingAlignments = stList_construct();
+        }
+
+        // partition reads
+        assignFilteredReadsToHaplotypes(bg, hap1, hap2, rleReference, maintainedReads, maintainedAlignments,
+                                        hap1Reads, hap2Reads, params);
+
+        // log downsampling
+        st_logInfo(" %s Filtered read assignment iteration %"PRId64" handled %"PRId64" reads (%"PRId64" remaining) in %"PRId64"s\n",
+                   logIdentifier, currentIteration, stList_length(maintainedReads), stList_length(discardedReads),
+                   time(NULL) - start);
+
+        // cleanup, discarded->remaining, free the rest unless a) remaining is original, or b) maintained is original
+        currentIteration++;
+        if (remainingReads != reads) {
+            stList_destruct(remainingReads);
+            stList_destruct(remainingAlignments);
+        }
+        remainingReads = discardedReads;
+        remainingAlignments = discardedAlignments;
+        if (maintainedReads != reads) {
+            stList_destruct(maintainedReads);
+            stList_destruct(maintainedAlignments);
+        }
+    }
+
+    // final cleanup
+    if (remainingReads != reads) {
+        stList_destruct(remainingReads);
+        stList_destruct(remainingAlignments);
+    }
 }

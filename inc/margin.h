@@ -1403,9 +1403,13 @@ RleString *bamChunk_getReferenceSubstring(BamChunk *bamChunk, stHash *referenceS
 uint64_t *getPaddedHaplotypeString(uint64_t *hap, stGenomeFragment *gf, BubbleGraph *bg, Params *params);
 stSet *bamChunkRead_to_readName(stSet *bamChunkReads);
 stList *copyListOfIntTuples(stList *toCopy);
-void assignFilteredReadsToHaplotypes2(BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2, RleString *rleReference,
-									  stList *filteredReads, stList *filteredAlignments,
-									  stSet *hap1Reads, stSet *hap2Reads, Params *params);
+void assignFilteredReadsToHaplotypes(BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2, RleString *rleReference,
+                                     stList *filteredReads, stList *filteredAlignments,
+                                     stSet *hap1Reads, stSet *hap2Reads, Params *params);
+void assignFilteredReadsToHaplotypesInParts(BamChunk* bamChunk, BubbleGraph *bg, uint64_t *hap1, uint64_t *hap2,
+											RleString *rleReference, stList *reads, stList *alignments,
+											stSet *hap1Reads, stSet *hap2Reads,
+											Params *params, int64_t partSize, char *logIdentifier);
 /*
  * HELEN Features
  */

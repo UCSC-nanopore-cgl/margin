@@ -498,44 +498,10 @@ int main(int argc, char *argv[]) {
                 stList_append(filteredAlignments, copyListOfIntTuples(stList_get(alignments, bcrIdx)));
             }
         }
-        // do downsampling of filtered reads if appropriate
-        if (params->polishParams->maxDepth > 0) {
-            // get downsampling structures
-            stList *maintainedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-            stList *maintainedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-            stList *discardedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-            stList *discardedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
-
-            // save removed reads to filtered-in-cTRAAWF lists (for classification after phasing)
-            bool didDownsample = poorMansDownsample(params->polishParams->maxDepth, bamChunk, filteredReads, filteredAlignments,
-                                                    maintainedReads, maintainedAlignments, discardedReads,
-                                                    discardedAlignments);
-
-            if (didDownsample) { // we need to destroy the discarded reads and structures
-                st_logInfo(" %s Downsampled filtered reads from %"PRId64" to %"PRId64" reads\n", logIdentifier,
-                           stList_length(reads), stList_length(maintainedReads));
-                // still has all the old reads, need to not free these
-                stList_setDestructor(filteredReads, NULL);
-                stList_setDestructor(filteredAlignments, NULL);
-                stList_destruct(filteredReads);
-                stList_destruct(filteredAlignments);
-                stList_destruct(discardedReads);
-                stList_destruct(discardedAlignments);
-                // and keep the filtered reads
-                filteredReads = maintainedReads;
-                filteredAlignments = maintainedAlignments;
-            }
-            else { // no downsampling, we just need to free the (empty) objects
-                stList_destruct(maintainedReads);
-                stList_destruct(maintainedAlignments);
-                stList_destruct(discardedReads);
-                stList_destruct(discardedAlignments);
-            }
-        }
 
         // do the final read filtering
-        assignFilteredReadsToHaplotypes2(bg, hap1, hap2, rleReference, filteredReads, filteredAlignments,
-                                         readsBelongingToHap1, readsBelongingToHap2, params);
+        assignFilteredReadsToHaplotypesInParts(bamChunk, bg, hap1, hap2, rleReference, filteredReads,
+                filteredAlignments, readsBelongingToHap1, readsBelongingToHap2, params, 32, logIdentifier);
         /* >>> TODO end code to attempt to phase filtered reads */
 
 
