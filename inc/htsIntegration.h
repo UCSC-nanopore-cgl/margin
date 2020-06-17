@@ -43,9 +43,12 @@ uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *
                                                  stList *alignments, stList *filteredReads, stList *filteredAlignments,
                                                  PolishParams *polishParams);
 
-bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
-                        stList *filteredReads, stList *filteredAlignments, stList *discardedReads,
-                        stList *discardedAlignments);
+bool downsampleViaReadLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *inputReads, stList *inputAlignments,
+                                 stList *maintainedReads, stList *maintainedAlignments, stList *discardedReads,
+                                 stList *discardedAlignments);
+bool downsampleViaHetSpanLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *vcfEntries,
+                                    stList *inputReads, stList *inputAlignments, stList *maintainedReads,
+                                    stList *maintainedAlignments, stList *discardedReads, stList *discardedAlignments);
 
 void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
                          stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier);

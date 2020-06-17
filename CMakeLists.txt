@@ -46,18 +46,22 @@ set(SSW_HEADERS
         externalTools/ssw/
         )
 
+set(LP_HEADERS
+        externalTools/lp_solve/
+        externalTools/lp_solve/bfp/
+        externalTools/lp_solve/bfp/bfp_LUSOL/
+        externalTools/lp_solve/bfp/bfp_LUSOL/LUSOL/
+        externalTools/lp_solve/colamd/
+        externalTools/lp_solve/shared/)
+
+
 include_directories(inc)
 include_directories(externalTools/samtools)
 include_directories(${HTSLIB_HEADERS})
 include_directories(${SONLIB_HEADERS})
 include_directories(${SSW_HEADERS})
+include_directories(${LP_HEADERS})
 
-file(GLOB MARGIN_CORE_HEADERS
-        inc/*.h
-        externalTools/sonLib/C/inc/*.h
-        externalTools/sonLib/C/impl/*.h
-        externalTools/sonLib/externalTools/quicktree_1.1/include/*.h
-        )
 
 set(HTSLIB_SOURCES
         externalTools/htslib/cram/cram_codecs.c
@@ -222,6 +226,49 @@ set(SONLIB_SOURCES
 set(SSW_SOURCES
         externalTools/ssw/ssw.c)
 
+#file(GLOB LP_SOURCES
+#        externalTools/lp_solve/lp_lib.c
+#        )
+
+
+file(GLOB LP_SOURCES
+        externalTools/lp_solve/*.c
+        externalTools/lp_solve/bfp/*.c
+        externalTools/lp_solve/bfp_LUSOL/*.c
+        externalTools/lp_solve/bfp_LUSOL/LUSOL/*.c
+        externalTools/lp_solve/lp_solve/*.c
+        externalTools/lp_solve/shared/*.c
+        )
+
+set(LP_SOURCES
+        externalTools/lp_solve/lp_MDO.c
+        externalTools/lp_solve/shared/commonlib.c
+        externalTools/lp_solve/colamd/colamd.c
+        externalTools/lp_solve/shared/mmio.c
+        externalTools/lp_solve/shared/myblas.c
+        externalTools/lp_solve/ini.c
+        externalTools/lp_solve/lp_rlp.c
+        externalTools/lp_solve/lp_crash.c
+        externalTools/lp_solve/bfp/bfp_LUSOL/lp_LUSOL.c
+        externalTools/lp_solve/bfp/bfp_LUSOL/LUSOL/lusol.c
+        externalTools/lp_solve/lp_Hash.c
+        externalTools/lp_solve/lp_lib.c
+        externalTools/lp_solve/lp_wlp.c
+        externalTools/lp_solve/lp_matrix.c
+        externalTools/lp_solve/lp_mipbb.c
+        externalTools/lp_solve/lp_MPS.c
+        externalTools/lp_solve/lp_params.c
+        externalTools/lp_solve/lp_presolve.c
+        externalTools/lp_solve/lp_price.c
+        externalTools/lp_solve/lp_pricePSE.c
+        externalTools/lp_solve/lp_report.c
+        externalTools/lp_solve/lp_scale.c
+        externalTools/lp_solve/lp_simplex.c
+        externalTools/lp_solve/lp_SOS.c
+        externalTools/lp_solve/lp_utils.c
+        externalTools/lp_solve/yacc_read.c
+        )
+
 set(SOURCE_FILES
         impl/chunker.c
         impl/column.c
@@ -277,6 +324,8 @@ endif ()
 
 # MISC
 add_library(son ${SONLIB_SOURCES})
+add_library(lpsolve ${LP_SOURCES})
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DYY_NEVER_INTERACTIVE -DPARSER_LP -DINVERSE_ACTIVE=INVERSE_LUSOL -DRoleIsExternalInvEngine ")
 
 # HTSLIB
 add_custom_command(
@@ -294,7 +343,7 @@ target_link_libraries(hts pthread z)
 
 # Build margin library
 add_library(marginLib ${SOURCE_FILES} ${SSW_SOURCES})
-target_link_libraries(marginLib son hts)
+target_link_libraries(marginLib son hts lpsolve)
 
 if (OPENMP_FOUND)
     target_link_libraries(marginLib OpenMP::OpenMP_CXX)

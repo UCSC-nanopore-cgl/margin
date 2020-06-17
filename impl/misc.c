@@ -311,9 +311,9 @@ void assignFilteredReadsToHaplotypesInParts(BamChunk* bamChunk, BubbleGraph *bg,
         stList *discardedReads = stList_construct();
         stList *discardedAlignments = stList_construct();
 
-        bool didDownsample = poorMansDownsample(partSize, bamChunk, remainingReads, remainingAlignments,
-                                                maintainedReads, maintainedAlignments, discardedReads,
-                                                discardedAlignments);
+        bool didDownsample = downsampleViaReadLikelihood(partSize, bamChunk, remainingReads, remainingAlignments,
+                                                         maintainedReads, maintainedAlignments, discardedReads,
+                                                         discardedAlignments);
 
         // depth of reads is less than
         if (!didDownsample) {

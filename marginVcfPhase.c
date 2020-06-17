@@ -221,9 +221,14 @@ int main(int argc, char *argv[]) {
 
     // update depth (if set)
     if (maxDepth >= 0) {
-        st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
-                       maxDepth);
-        params->polishParams->maxDepth = (uint64_t) maxDepth;
+        char *depthUpdateString = "";
+        if (maxDepth > 64) {
+            maxDepth = 64;
+            depthUpdateString = " (parameter exceeded max of 64)";
+        }
+        st_logCritical("> Changing PHASE maxCoverageDepth paramter from %"PRId64" to %"PRId64"%s\n",
+                params->phaseParams->maxCoverageDepth, maxDepth, depthUpdateString);
+        params->phaseParams->maxCoverageDepth = (uint64_t) maxDepth;
     }
     if (minPhredScoreForHaplotypePartition >= 0) {
         st_logCritical("> Changing minPhredScoreForHaplotypePartition paramter from %"PRId64" to %"PRId64"\n",
@@ -363,16 +368,28 @@ int main(int argc, char *argv[]) {
         convertToReadsAndAlignmentsWithFiltered(bamChunk, rleReference, reads, alignments, filteredReads,
                 filteredAlignments, params->polishParams);
 
+        // Get variants for chunk
+        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, bamChunk->refSeqName, bamChunk->chunkBoundaryStart,
+                                                         bamChunk->chunkBoundaryEnd);
+        if (params->polishParams->useRunLengthEncoding) {
+            uint64_t *rleMap = rleString_getNonRleToRleCoordinateMap(rleReference);
+            for (int v = 0; v<stList_length(chunkVcfEntries); v++) {
+                VcfEntry *vcfEntry = stList_get(chunkVcfEntries, v);
+                vcfEntry->refPos = rleMap[vcfEntry->refPos];
+            }
+            free(rleMap);
+        }
+
         // do downsampling if appropriate
-        if (params->polishParams->maxDepth > 0) {
+        if (params->phaseParams->maxCoverageDepth > 0) {
             // get downsampling structures
             stList *maintainedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
             stList *maintainedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
 
             // save removed reads to filtered-in-cTRAAWF lists (for classification after phasing)
-            bool didDownsample = poorMansDownsample(params->polishParams->maxDepth, bamChunk, reads, alignments,
-                                                    maintainedReads, maintainedAlignments, filteredReads,
-                                                    filteredAlignments);
+            bool didDownsample = downsampleViaHetSpanLikelihood(params->phaseParams->maxCoverageDepth, bamChunk,
+                    chunkVcfEntries, reads, alignments, maintainedReads, maintainedAlignments, filteredReads,
+                    filteredAlignments);
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
@@ -423,18 +440,6 @@ int main(int argc, char *argv[]) {
         if (writeChunkSupplementaryOutput || writeChunkSupplementaryOutputOnly) {
             poa_writeSupplementalChunkInformation(outputBase, chunkIdx, bamChunk, poa, reads, params,
                                                   outputPoaDOT, outputPoaCSV, outputRepeatCounts);
-        }
-
-        // Get variants for chunk
-        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, bamChunk->refSeqName, bamChunk->chunkBoundaryStart,
-                bamChunk->chunkBoundaryEnd);
-        if (params->polishParams->useRunLengthEncoding) {
-            uint64_t *rleMap = rleString_getNonRleToRleCoordinateMap(rleReference);
-            for (int v = 0; v<stList_length(chunkVcfEntries); v++) {
-                VcfEntry *vcfEntry = stList_get(chunkVcfEntries, v);
-                vcfEntry->refPos = rleMap[vcfEntry->refPos];
-            }
-            free(rleMap);
         }
 
         // Get the bubble graph representation

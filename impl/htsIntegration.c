@@ -4,6 +4,7 @@
 
 #include "htsIntegration.h"
 #include "margin.h"
+#include "lp_lib.h"
 
 /*
  * getAlignedReadLength computes the length of the read sequence which is aligned to the reference.  Hard-clipped bases
@@ -724,17 +725,18 @@ uint32_t convertToReadsAndAlignments(BamChunk *bamChunk, RleString *reference, s
     return convertToReadsAndAlignmentsWithFiltered(bamChunk, reference, reads, alignments, NULL, NULL, polishParams);
 }
 
-bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads, stList *alignments,
-                        stList *filteredReads, stList *filteredAlignments, stList *discardedReads,
-                        stList *discardedAlignments) {
+bool downsampleViaReadLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *inputReads, stList *inputAlignments,
+                                 stList *maintainedReads, stList *maintainedAlignments, stList *discardedReads,
+                                 stList *discardedAlignments) {
 
     // calculate depth
     int64_t totalNucleotides = 0;
-    for (int64_t i = 0; i < stList_length(reads); i++) {
-        BamChunkRead *bcr = stList_get(reads, i);
+    for (int64_t i = 0; i < stList_length(inputReads); i++) {
+        BamChunkRead *bcr = stList_get(inputReads, i);
         totalNucleotides += bcr->rleRead->length;
     }
-    double averageDepth = 1.0 * totalNucleotides / (bamChunk->chunkBoundaryEnd - bamChunk->chunkBoundaryStart);
+    int64_t chunkSize = bamChunk->chunkBoundaryEnd - bamChunk->chunkBoundaryStart;
+    double averageDepth = 1.0 * totalNucleotides / (chunkSize);
 
     // do we need to downsample?
     if (averageDepth < intendedDepth) {
@@ -748,18 +750,161 @@ bool poorMansDownsample(int64_t intendedDepth, BamChunk *bamChunk, stList *reads
 
     // keep some ratio of reads
     double ratioToKeep = intendedDepth / averageDepth;
-    for (int64_t i = 0; i < stList_length(reads); i++) {
+    for (int64_t i = 0; i < stList_length(inputReads); i++) {
         if (st_random() < ratioToKeep) {
-            stList_append(filteredReads, stList_get(reads, i));
-            stList_append(filteredAlignments, stList_get(alignments, i));
+            stList_append(maintainedReads, stList_get(inputReads, i));
+            stList_append(maintainedAlignments, stList_get(inputAlignments, i));
         } else {
-            stList_append(discardedReads, stList_get(reads, i));
-            stList_append(discardedAlignments, stList_get(alignments, i));
+            stList_append(discardedReads, stList_get(inputReads, i));
+            stList_append(discardedAlignments, stList_get(inputAlignments, i));
         }
     }
 
     return TRUE;
 }
+
+#define HET_SITE_SCALE 2
+int64_t countVcfSitesInAlignmentRange(stList *vcfEntries, stList *alignment) {
+    if (stList_length(alignment) <= 1) return 0;
+    int64_t startPos = stIntTuple_get(stList_get(alignment, 0), 0);
+    int64_t endPos = stIntTuple_get(stList_get(alignment, stList_length(alignment) - 1), 0);
+    int64_t sites = 0;
+    for (int64_t i = 0; i < stList_length(vcfEntries); i++) {
+        VcfEntry *vcfEntry = stList_get(vcfEntries, i);
+        if (vcfEntry->refPos < startPos) continue;
+        if (vcfEntry->refPos >= endPos) break;
+        sites++;
+    }
+    return sites;
+}
+
+/* Copywrite Jordan "Big Brain" Eizinga
+ * maximize    \sum_i p_i * h_i
+ * subject to  \sum_i l_i * p_i = C * L
+ *                          p_i ≥ 0       i = 1...N
+ *                          p_i ≤ 1       i = 1...N
+ */
+double* computeReadProbsByLengthAndHets(int *read_lengths, int *read_hets, int num_reads,
+                                        double target_coverage, int region_length) {
+    lprec* lp = make_lp(0, num_reads);
+    assert(lp != NULL);
+    // this makes adding constraints more efficient
+    set_add_rowmode(lp, true);
+    // make the equality constraint to control expected coverage
+    double total_cov = target_coverage * region_length;
+    REAL* lens = (REAL*) malloc(sizeof(REAL) * (num_reads + 1));
+    lens[0] = 0; // why do these libraries have this dumb 1-based shit?
+    for (int i = 1; i <= num_reads; ++i) {
+        lens[i] = (REAL) read_lengths[i - 1];
+    }
+    add_constraint(lp, lens, EQ, total_cov);
+    free(lens);
+    // constrain each probability to [0, 1] (these are sparse constraints)
+    int* colno = (int*) malloc(sizeof(int));
+    REAL* coef = (REAL*) malloc(sizeof(REAL));
+    *coef = 1.0;
+    for (int i = 1; i <= num_reads; ++i) {
+        *colno = i;
+        add_constraintex(lp, 1, coef, colno, LE, 1.0);
+        add_constraintex(lp, 1, coef, colno, GE, 0.0);
+    }
+    free(colno);
+    free(coef);
+    // we're done adding constraints
+    set_add_rowmode(lp, false);
+    // set the objective function
+    REAL* hets = (REAL*) malloc(sizeof(REAL) * (num_reads + 1));
+    for (int i = 1; i <= num_reads; ++i) {
+        hets[i] = (REAL) read_hets[i - 1];
+    }
+    set_obj_fn(lp, hets);
+    free(hets);
+    // we want to maximize the objective
+    set_maxim(lp);
+    // only print important logging info
+    set_verbose(lp, IMPORTANT);
+    // solve the problem
+    int return_code = solve(lp);
+    assert(return_code == OPTIMAL);
+    // retrieve the results
+    REAL* probs_real = (REAL*) malloc(sizeof(REAL) * num_reads);
+    get_variables(lp, probs_real);
+    // maybe convert to double
+    double* probs = (double*) malloc(sizeof(double) * num_reads);
+    for (int i = 0; i < num_reads; ++i) {
+        probs[i] = (double) probs_real[i];
+    }
+    free(probs_real);
+    // housekeeping
+    delete_lp(lp);
+    return probs;
+}
+
+bool downsampleViaHetSpanLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *vcfEntries,
+        stList *inputReads, stList *inputAlignments, stList *maintainedReads, stList *maintainedAlignments,
+        stList *discardedReads, stList *discardedAlignments) {
+
+    // calculate depth, generate bcrwhs list
+    int64_t totalNucleotides = 0;
+    int64_t totalHetSiteCount = 0;
+    int64_t totalScaledHetSiteCount = 0;
+
+    int *readLengths = st_calloc(stList_length(inputReads), sizeof(int));
+    int *readHets = st_calloc(stList_length(inputReads), sizeof(int));
+
+    for (int64_t i = 0; i < stList_length(inputReads); i++) {
+        BamChunkRead *bcr = stList_get(inputReads, i);
+        totalNucleotides += bcr->rleRead->length;
+        readLengths[i] = (int) bcr->rleRead->length;
+        int64_t hetCount = countVcfSitesInAlignmentRange(vcfEntries, stList_get(inputAlignments, i));
+        totalHetSiteCount += hetCount;
+        // give reads a pseudocount
+        hetCount = HET_SITE_SCALE * hetCount + 1;
+        readHets[i] = (int) hetCount;
+        totalScaledHetSiteCount += hetCount;
+    }
+    int64_t chunkSize = bamChunk->chunkBoundaryEnd - bamChunk->chunkBoundaryStart;
+    double averageDepth = 1.0 * totalNucleotides / (chunkSize);
+
+    // do we need to downsample?
+    if (averageDepth < intendedDepth) {
+        free(readLengths);
+        free(readHets);
+        return FALSE;
+    }
+
+    // we do need to downsample
+    char *logIdentifier = getLogIdentifier();
+    st_logInfo(" %s Downsampling chunk via het sites with average depth %.2fx to %dx over %"PRId64" total spanned HET sites\n",
+            logIdentifier, averageDepth, intendedDepth, totalHetSiteCount);
+
+    // get likelihood of keeping each read
+    double *probs = computeReadProbsByLengthAndHets(readLengths, readHets, stList_length(inputReads), intendedDepth,
+                                                    chunkSize);
+
+    // keep some ratio of reads
+    int64_t totalKeptNucleotides = 0;
+    for (int64_t i = 0; i < stList_length(inputReads); i++) {
+        BamChunkRead *bcr = stList_get(inputReads, i);
+        if (st_random() < probs[i]) {
+            stList_append(maintainedReads, stList_get(inputReads, i));
+            stList_append(maintainedAlignments, stList_get(inputAlignments, i));
+            totalKeptNucleotides += bcr->rleRead->length;
+        } else {
+            stList_append(discardedReads, stList_get(inputReads, i));
+            stList_append(discardedAlignments, stList_get(inputAlignments, i));
+        }
+    }
+    st_logInfo(" %s Downsampled chunk via het sites to average depth %.2fx (expected %dx)\n",
+               logIdentifier, 1.0 * totalKeptNucleotides / chunkSize, intendedDepth);
+
+    free(probs);
+    free(readLengths);
+    free(readHets);
+    free(logIdentifier);
+    return TRUE;
+}
+
 
 
 void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,

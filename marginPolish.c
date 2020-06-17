@@ -345,7 +345,7 @@ int main(int argc, char *argv[]) {
 
     // update depth (if set)
     if (maxDepth >= 0) {
-        st_logCritical("> Changing maxDepth paramter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
+        st_logCritical("> Changing POLISH maxDepth parameter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
                        maxDepth);
         params->polishParams->maxDepth = (uint64_t) maxDepth;
     }
@@ -497,9 +497,10 @@ int main(int argc, char *argv[]) {
             stList *filteredAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
             stList *discardedAlignments = stList_construct3(0, (void (*)(void *)) stList_destruct);
 
-            bool didDownsample = poorMansDownsample(params->polishParams->maxDepth, bamChunk, reads, alignments,
-                                                    filteredReads, filteredAlignments, discardedReads,
-                                                    discardedAlignments);
+            bool didDownsample = downsampleViaReadLikelihood(params->polishParams->maxDepth, bamChunk, reads,
+                                                             alignments,
+                                                             filteredReads, filteredAlignments, discardedReads,
+                                                             discardedAlignments);
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
