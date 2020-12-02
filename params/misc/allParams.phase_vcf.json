@@ -11,6 +11,8 @@
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,
 		"useVariantSelectionAdaptiveSampling": false,
+		"phasesetMinBinomialReadSplitLikelihood": 0.00001,
+		"phasesetMaxDiscordantRatio": 0.25,
 		"updateAllOutputVCFFormatFields": false
 	}
 }
