@@ -213,8 +213,8 @@ void test_mergeContigChunksThreaded(CuTest *testCase) {
 
 CuSuite *stitchingTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
-//    SUITE_ADD_TEST(suite, test_stitching);
     SUITE_ADD_TEST(suite, test_mergeContigChunks);
-//    SUITE_ADD_TEST(suite, test_mergeContigChunksThreaded);
+    SUITE_ADD_TEST(suite, test_mergeContigChunksThreaded);
+    SUITE_ADD_TEST(suite, test_stitching);
     return suite;
 }

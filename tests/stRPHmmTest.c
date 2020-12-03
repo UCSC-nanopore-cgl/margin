@@ -1135,7 +1135,7 @@ void test_flipAReadsPartition(CuTest *testCase) {
 //	char *reference = stString_copy("GATACAGCGGG");
 //	char *read = stString_copy("GATTACAGCG");
 //
-//	Params *params = params_readParams(polishParamsFile);
+//	Params *params = params_readParams(POLISH_PARAMS_FILE);
 //
 //	stList *anchorAlignment = stList_construct();
 //
@@ -1167,7 +1167,7 @@ void test_flipAReadsPartition(CuTest *testCase) {
 //		char *read = evolveSequence(reference);
 //
 //		// Load params
-//		Params *params = params_readParams(polishParamsFile);
+//		Params *params = params_readParams(POLISH_PARAMS_FILE);
 //
 //		// Anchor alignment
 //		double alignmentScore;

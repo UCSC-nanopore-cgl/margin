@@ -8,9 +8,6 @@
 #include "margin.h"
 #include "lp_lib.h"
 
-//#include <htslib/vcf.h>
-//#include <htslib/faidx.h>
-//#include <htslib/bgzf.h>
 #include "bedidx.h"
 
 // This structure holds the bed information
