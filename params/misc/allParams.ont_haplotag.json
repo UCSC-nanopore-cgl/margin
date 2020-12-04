@@ -4,7 +4,7 @@
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
 		"columnAnchorTrim": 12,
-		"maxDepth": 16
+		"maxDepth": 64
 	},
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
