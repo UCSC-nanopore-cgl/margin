@@ -302,7 +302,7 @@ int phase_main(int argc, char *argv[]) {
             int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
             char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
                                     stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-            st_logCritical("> Polishing %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
+            st_logCritical("> Phasing %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
                            currentPercentage, i, bamChunker->chunkCount, timeDescriptor);
             free(timeDescriptor);
         }
@@ -406,9 +406,6 @@ int phase_main(int argc, char *argv[]) {
         // save
         updateOriginalVcfEntriesWithBubbleData(bamChunk, reads, bamChunker->readEnumerator, gf, bg,
                 vcfEntriesToBubbles, readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
-        //TODO trying to only phase VCF with primary reads
-        //updateOriginalVcfEntriesWithBubbleData(bamChunk, filteredReads, bamChunker->readEnumerator, gf, bg,
-        //        vcfEntriesToBubbles, readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
 
         // Cleanup
         if (chunkVcfEntries != NULL) stList_destruct(chunkVcfEntries);

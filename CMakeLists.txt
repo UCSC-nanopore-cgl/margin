@@ -362,11 +362,14 @@ endif ()
 add_executable(margin margin.c polish.c phase.c)
 target_link_libraries(margin marginLib)
 
-add_executable(tagBam tools/marginBamTag.c)
+add_executable(tagBam tools/tagBam.c)
 target_link_libraries(tagBam marginLib)
 
 add_executable(runLengthMatrix tools/runLengthMatrix.c)
 target_link_libraries(runLengthMatrix marginLib)
+
+add_executable(splitTaggedBam tools/splitTaggedBam.c)
+target_link_libraries(splitTaggedBam marginLib)
 
 enable_testing()
 
