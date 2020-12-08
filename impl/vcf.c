@@ -9,7 +9,7 @@
 #include <htslib/kseq.h>
 
 
-VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
+VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
         stList *alleles, int64_t gt1, int64_t gt2) {
     VcfEntry *vcfEntry = st_calloc(1, sizeof(VcfEntry));
     vcfEntry->refSeqName = stString_copy(refSeqName);
@@ -132,7 +132,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         totalEntries++;
 
         // location data
-        char *chrom = bcf_hdr_id2name(hdr, rec->rid);
+        const char *chrom = bcf_hdr_id2name(hdr, rec->rid);
         int64_t pos = rec->pos;
 
         // quick fail

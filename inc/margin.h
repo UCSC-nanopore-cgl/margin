@@ -1441,7 +1441,7 @@ struct _vcfEntry {
 };
 
 // vcf functions
-VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
+VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
         stList *alleles, int64_t gt1, int64_t gt2);
 void vcfEntry_destruct(VcfEntry *vcfEntry);
 RleString *getVcfEntryAlleleH1(VcfEntry *vcfEntry);
