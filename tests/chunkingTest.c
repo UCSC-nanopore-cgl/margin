@@ -27,14 +27,14 @@ static PolishParams *getParameters(uint64_t chunkSize, uint64_t chunkBoundary, b
 static void test_getRegionChunker(CuTest *testCase) {
     // test part of contig (less than chunk size)
     PolishParams *params = getParameters(0, 0, FALSE);
-    BamChunker *chunker = bamChunker_construct2(INPUT_BAM, "contig_1:100000-110000", params, false);
+    BamChunker *chunker = bamChunker_construct2(INPUT_BAM, "contig_1:100000-110000", NULL, params, false);
     CuAssertTrue(testCase, chunker->chunkCount == 1);
     CuAssertTrue(testCase, stString_eq(((BamChunk *) stList_get(chunker->chunks, 0))->refSeqName, "contig_1"));
     CuAssertTrue(testCase, ((BamChunk *) stList_get(chunker->chunks, 0))->chunkOverlapStart == 100000);
     CuAssertTrue(testCase, ((BamChunk *) stList_get(chunker->chunks, 0))->chunkOverlapEnd == 100008);
 
     // test whole contig by region
-    chunker = bamChunker_construct2(INPUT_BAM, "contig_1:0-3000000", params, false);
+    chunker = bamChunker_construct2(INPUT_BAM, "contig_1:0-3000000", NULL, params, false);
     CuAssertTrue(testCase, chunker->chunkCount == 1);
     CuAssertTrue(testCase, stString_eq(((BamChunk *) stList_get(chunker->chunks, 0))->refSeqName, "contig_1"));
     CuAssertTrue(testCase, ((BamChunk *) stList_get(chunker->chunks, 0))->chunkOverlapStart == 100000);
@@ -42,7 +42,7 @@ static void test_getRegionChunker(CuTest *testCase) {
     free(chunker->params);
 
     params = getParameters(100000, 0, FALSE);
-    chunker = bamChunker_construct2(INPUT_BAM, "contig_1:100000-300000", params, false);
+    chunker = bamChunker_construct2(INPUT_BAM, "contig_1:100000-300000", NULL, params, false);
     CuAssertTrue(testCase, chunker->chunkCount == 2);
     CuAssertTrue(testCase, stString_eq(((BamChunk *) stList_get(chunker->chunks, 0))->refSeqName, "contig_1"));
     CuAssertTrue(testCase, ((BamChunk *) stList_get(chunker->chunks, 0))->chunkOverlapStart == 100000);
@@ -981,7 +981,7 @@ static void test_readAlignmentsWithSoftclippingChunkEnd(CuTest *testCase) {
 static void test_readSubstringsFromVcf(CuTest *testCase) {
     Params *params = params_readParams(INPUT_PARAMS);
     params->polishParams->columnAnchorTrim = 4;
-    BamChunker *chunker = bamChunker_construct2(INPUT_MVVP_BAM, "contig_1:0-100000", params->polishParams, TRUE);
+    BamChunker *chunker = bamChunker_construct2(INPUT_MVVP_BAM, "contig_1:0-100000", NULL, params->polishParams, TRUE);
     stHash *vcfEntries = parseVcf(INPUT_MVVP_VCF, params);
     CuAssertTrue(testCase, chunker->chunkCount == 1);
 

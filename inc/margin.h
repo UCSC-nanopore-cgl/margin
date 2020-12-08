@@ -1535,7 +1535,8 @@ typedef enum {
 
 BamChunker *bamChunker_construct(char *bamFile, PolishParams *params);
 
-BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *params, bool recordFilteredReads);
+BamChunker *bamChunker_construct2(char *bamFile, char *region, stSet *validContigs, PolishParams *params,
+        bool recordFilteredReads);
 
 BamChunker *bamChunker_constructFromFasta(char *fastaFile, char *bamFile, char *regionStr, PolishParams *params);
 
@@ -1582,8 +1583,8 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
                                                                              stList *maintainedReads,
                                                                              stList *discardedReads);
 
-void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-                         stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier);
+void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet *readsInH1, stSet *readsInH2,
+        BamChunk *bamChunk, Params *params, char *logIdentifier);
 
 char *getSequenceFromReference(char *fastaFile, char *contig, int64_t startPos, int64_t endPosExcl);
 

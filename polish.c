@@ -397,7 +397,7 @@ int polish_main(int argc, char *argv[]) {
 
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     time_t chunkingStart = time(NULL);
-    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams, partitionFilteredReads);
+    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, NULL, params->polishParams, partitionFilteredReads);
     st_logCritical(
             "> Set up bam chunker in %"PRId64"s with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
             time(NULL) - chunkingStart, (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary,
@@ -869,7 +869,6 @@ int polish_main(int argc, char *argv[]) {
             // output
             outputChunkers_processChunkSequence(outputChunkers, threadIdx, chunkIdx, bamChunk->refSeqName, poa, reads);
 
-
             //ancillary files
             if (writeChunkSupplementaryOutput) {
                 poa_writeSupplementalChunkInformation(outputBase, chunkIdx, bamChunk, poa, reads, params,
@@ -948,23 +947,8 @@ int polish_main(int argc, char *argv[]) {
         }
 
         // write it
-        BamChunk *whbBamChunk = NULL;
-        if (regionStr != NULL) {
-            char regionContig[128] = "";
-            int regionStart = 0;
-            int regionEnd = 0;
-            int scanRet = sscanf(regionStr, "%[^:]:%d-%d", regionContig, &regionStart, &regionEnd);
-            if (scanRet != 3) {
-                regionEnd = (int)((BamChunk*)stList_get(bamChunker->chunks, bamChunker->chunkCount -1))->chunkOverlapEnd;
-            }
-            whbBamChunk = bamChunk_construct2(regionContig, -1, regionStart, regionStart, regionEnd,
-                    regionEnd, 0, bamChunker);
-        }
-        writeHaplotaggedBam(whbBamChunk, bamChunker->bamFile, outputBase,
-                            allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
-        if (whbBamChunk != NULL) {
-            bamChunk_destruct(whbBamChunk);
-        }
+        writeHaplotaggedBam(bamChunker->bamFile, outputBase,
+                            allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, NULL, params, "");
 
         char *hapBamTDS = getTimeDescriptorFromSeconds(time(NULL) - hapBamStart);
         st_logCritical("> Wrote haplotyped bams in %s\n", hapBamTDS);

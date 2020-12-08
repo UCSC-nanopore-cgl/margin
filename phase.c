@@ -212,16 +212,27 @@ int phase_main(int argc, char *argv[]) {
         vcfEntries = parseVcf2(vcfFile, regionStr, params);
     }
 
+    // get valid contigs (to help bam chunker construction)
+    stList *vcfContigsTmp = stHash_getKeys(vcfEntries);
+    stSet *vcfContigs = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
+    for (int64_t i = 0; i < stList_length(vcfContigsTmp); i++) {
+        stSet_insert(vcfContigs, stList_get(vcfContigsTmp, i));
+    }
+
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     time_t chunkingStart = time(NULL);
-    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams, TRUE);
+    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, vcfContigs, params->polishParams, TRUE);
+    char *regionStrInformative = regionStr != NULL ? stString_copy(regionStr) : stString_join2(",", vcfContigsTmp);
     st_logCritical(
             "> Set up bam chunker in %"PRId64"s with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
             time(NULL) - chunkingStart, (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary,
-            regionStr == NULL ? "all" : regionStr, bamChunker->chunkCount);
+            regionStrInformative, bamChunker->chunkCount);
     if (bamChunker->chunkCount == 0) {
         st_errAbort("> Found no valid reads!\n");
     }
+    free(regionStrInformative);
+    stList_destruct(vcfContigsTmp);
+    stSet_destruct(vcfContigs);
 
     // print chunk info
     char *outputChunksFile = stString_print("%s.chunks.csv", outputBase);
@@ -471,24 +482,8 @@ int phase_main(int argc, char *argv[]) {
         }
 
         // write it
-        BamChunk *whbBamChunk = NULL;
-        if (regionStr != NULL) {
-            char regionContig[128] = "";
-            int regionStart = 0;
-            int regionEnd = 0;
-            int scanRet = sscanf(regionStr, "%[^:]:%d-%d", regionContig, &regionStart, &regionEnd);
-            if (scanRet != 3) {
-                regionEnd = (int) ((BamChunk *) stList_get(bamChunker->chunks,
-                                                           bamChunker->chunkCount - 1))->chunkOverlapEnd;
-            }
-            whbBamChunk = bamChunk_construct2(regionContig, -1, regionStart, regionStart, regionEnd,
-                                              regionEnd, 0, bamChunker);
-        }
-        writeHaplotaggedBam(whbBamChunk, bamChunker->bamFile, outputBase,
-                            allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, params, "");
-        if (whbBamChunk != NULL) {
-            bamChunk_destruct(whbBamChunk);
-        }
+        writeHaplotaggedBam(bamChunker->bamFile, outputBase,
+                            allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, NULL, params, "");
 
         // loggit
         char *hapBamTDS = getTimeDescriptorFromSeconds(time(NULL) - hapBamStart);
@@ -506,7 +501,7 @@ int phase_main(int argc, char *argv[]) {
         time_t vcfWriteStart = time(NULL);
         char *outputVcfFile = stString_print("%s.phased.vcf", outputBase);
         char *outputPhaseSetFile = stString_print("%s.phaseset.bed", outputBase);
-        st_logCritical("> Writing phased VCF to %s\n", outputVcfFile);
+        st_logCritical("> Writing phased VCF to %s, phaseset info to %s\n", outputVcfFile, outputPhaseSetFile);
 
         // write it
         updateHaplotypeSwitchingInVcfEntries(bamChunker, chunkWasSwitched, vcfEntries);
