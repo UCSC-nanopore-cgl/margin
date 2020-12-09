@@ -64,8 +64,6 @@ docker pull kishwars/margin_polish:latest
 
 ### Tests ###
 
-Sample data to verify execution of the two tools is provided in the following section, with validation information in the sections after.
-
 Unit tests are contained in the 'allTests' executable, which can be run in your build directory. 
 This runs every test and can take up to an hour. 
 To test individual components, you can comment out ones you don't want to run in tests/allTests.c.
@@ -87,8 +85,7 @@ MarginPolish and MarginPhase use a JSON configuration file which contains model 
 - Graph Alignment
 - Run Length Estimation
 - Chunking
-- Read Filtering
-- Depth Downsampling
+- Read/Depth Management
 
 Both tools have specific parameter files for read data and output goals, all of which extend from a base parameters file containing shared configuration.
 
@@ -122,16 +119,11 @@ params/
 
 ```
 
-### TODO Test Data ###
-
 ## MarginPolish ##
 
 MarginPolish takes reads and alignments from the BAM and generates an initial graph describing matches, inserts, and deletes observed in the alignments.  It aligns each read to this graph and determines the probabilities for multiple likely alignments.  After all reads are aligned, it generates weighted alignment scores for each node in the graph and uses these to determine a most-likely path through the graph.  This path becomes the inital graph for the next iteration of the process.  Iteration continues until the total weighted likelihood of alignments decreases between iteration steps, or until a configured maximum iteration count is reached.
 
 All of these alignments are done in [run-length space](https://en.wikipedia.org/wiki/Run-length_encoding), which simplifies and cleans the alignments.  This reduces effects from errors in homopolymer runs, which are the primary source of error in nanopore reads.  After determining a most-likely run-length-encoded sequence, it expands the run-lengths to generate a final consensus sequence.  This expansion is done using a Bayesian model which predicts the most likely true run-length from all run-length observations in the reads aligned to the node.
-
-
-### Execution Flow ###
 
 MarginPolish first determines where there are read alignments on the initial assembly segments.  It uses these positions to determine chunk boundaries, including a configurable overlap between chunks. 
 Each chunk is polished separately (by a single thread) and the final consensus sequence is stored in memory. 
@@ -151,12 +143,78 @@ For a detailed description of the end-to-end assembly workflow, see the document
 ### Running MarginPolish ###
 
 ``` 
-TODO
+$ ./margin polish
+usage: margin polish <BAM_FILE> <ASSEMBLY_FASTA> <PARAMS> [options]
+Version: 2.0
+
+Polishes the ASSEMBLY_FASTA using alignments in BAM_FILE.
+
+Required arguments:
+    BAM_FILE is the alignment of reads to the assembly (or reference).
+    ASSEMBLY_FASTA is the reference sequence BAM file in fasta format.
+    PARAMS is the file with marginPolish parameters.
+
+Default options:
+    -h --help                : Print this help screen
+    -a --logLevel            : Set the log level [default = info]
+    -t --threads             : Set number of concurrent threads [default = 1]
+    -o --outputBase          : Name to use for output files [default = 'output']
+    -r --region              : If set, will only compute for given chromosomal region
+                                 Format: chr:start_pos-end_pos (chr3:2000-3000)
+    -p --depth               : Will override the downsampling depth set in PARAMS
+    -k --tempFilesToDisk     : Write temporary files to disk (for --diploid or supplementary output)
+
+Diploid options:
+    -2 --diploid             : Will perform diploid phasing.
+    -v --vcf                 : VCF with sites for phasing (will not perform variant detection if set)
+    -S --skipFilteredReads   : Will NOT attempt to haplotype filtered reads (--diploid only)
+    -R --skipRealignment     : Skip realignment (for haplotyping only)
+    -A --onlyVcfAlleles      : Only use alleles specified in the VCF. Requires NO RLE and 
+                                 Requires NO RLE and --skipOutputFasta
+
+HELEN feature generation options:
+    -f --produceFeatures     : output splitRleWeight or diploidRleWeight (based on -2 flag) features for HELEN
+    -F --featureType         : output specific feature type for HELEN (overwrites -f).  Valid types:
+                                 splitRleWeight:   [default] run lengths split into chunks
+                                 channelRleWeight: run lengths split into per-nucleotide channels
+                                 simpleWeight:     weighted likelihood from POA nodes (non-RLE)
+                                 diploidRleWeight: [default] produces diploid features 
+    -L --splitRleWeightMaxRL : max run length (for RLE feature types) 
+                                 [split default = 10, channel default = 10]
+    -u --trueReferenceBam    : true reference aligned to ASSEMBLY_FASTA, for HELEN
+                               features.  Setting this parameter will include labels
+                               in output.  If -2/--diploid is set, this parameter must
+                               contain two comma-separated values
+
+Miscellaneous supplementary output options:
+    -c --supplementaryChunks : Write supplementary files for each chunk (in additon to writing
+                               whole genome information)
+    -d --outputPoaDot        : Write out the poa as DOT file (only done per chunk)
+    -i --outputRepeatCounts  : Write out the repeat counts as CSV file
+    -j --outputPoaCsv        : Write out the poa as CSV file
+    -n --outputHaplotypeReads: Write out phased reads and likelihoods as CSV file (--diploid only)
+    -s --outputPhasingState  : Write out phasing likelihoods as JSON file (--diploid only)
+    -M --skipHaplotypeBAM    : Do not write out phased BAMs (--diploid only, default is to write)
+    -T --skipOutputFasta     : Do not write out phased fasta (--diploid only, default is to write)
 ```
 
 #### Sample Execution ####
 
-```./marginPolish ../tests/NA12878.np.chr3.5kb.bam ../tests/hg19.chr3.9mb.fa ../params/allParams.np.json -o example_output```
+```
+# haploid mode
+./margin polish \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
+        /path/to/margin/tests/data/realData/hg38.chr20_59M_100k.fa \
+        /path/to/margin/tests/data/realData/params/ont/r9.4/allParams.np.human.r94-g360.json
+        
+# diploid mode
+./margin polish \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
+        /path/to/margin/tests/data/realData/hg38.chr20_59M_100k.fa \
+        /path/to/margin/params/ont/r9.4/allParams.np.human.r94-g360.json \
+        --diploid
+        -v /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf
+```
 
 
 ### HELEN Image Generation ###
@@ -185,7 +243,79 @@ Across 13 whole-genome runs, we averaged roughly 350 CPU hours per gigabase of a
 
 ## MarginPhase ##
 
-TODO
+MarginPhase is a tool developed primarily to assist in the long-read variant calling pipeline PEPPER/DeepVariant.
+MarginPhase serves two uses in this capacity: haplotagging reads to assist with genotyping, and phasing variants in the final genotyped VCF.
+For both use cases, MarginPhase requires a BAM, reference, and VCF.
+
+Chunks are determined in the same way as MarginPolish. 
+For each chunk, MarginPhase extracts read substrings aligned a configurable distance up- and downstream from each variant position.
+Reads are downsampled to a configurable depth prioritizing longer reads.
+Alignment likelihoods are generated between all read substrings and the alleles (generated by mutating the reference sequence). 
+These likelihoods are fed into the phasing algorithm to haplotype alleles. 
+Any filtered read substrings (during initial extraction from the BAM or during downsampling) are aligned to the two haplotypes, and are assigned based on which haplotype they align best to.
+Stitching is performed as in MarginPolish's diploid mode.
+
+During phaseset determination, adjacent variants are phased together unless there are no reads spanning adjacent variants,
+if the ratio of the number of reads in trans to the number of reads in cis is above a threshold, 
+or if the likelihood of the read partitioning between haplotypes at the variant site is below a threshold.
+The reason for a phase break is documented in the `OUTPUT.phaseset.bed` file.
+
+### Variant Calling Workflow ###
+
+The PEPPER/DeepVariant is documented.
+
+### Running MarginPhase ###
+
+```
+$ ./margin phase
+usage: margin phase <ALIGN_BAM> <REFERENCE_FASTA> <VARIANT_VCF> <PARAMS> [options]
+Version: 2.0
+
+Tags reads in ALIGN_BAM using variants in VARIANT_VCF.
+
+Required arguments:
+    ALIGN_BAM is the alignment of reads to the reference.
+    REFERENCE_FASTA is the reference sequence BAM file in fasta format.
+    VARIANT_VCF is the set of variants to use for phasing.
+    PARAMS is the file with margin parameters.
+
+Default options:
+    -h --help                : Print this help screen
+    -a --logLevel            : Set the log level [default = info]
+    -t --threads             : Set number of concurrent threads [default = 1]
+    -o --outputBase          : Name to use for output files [default = 'output']
+    -r --region              : If set, will only compute for given chromosomal region
+                                 Format: chr:start_pos-end_pos (chr3:2000-3000)
+    -p --depth               : Will override the downsampling depth set in PARAMS
+    -k --tempFilesToDisk     : Write temporary files to disk (for --diploid or supplementary output)
+
+Output options:
+    -M --skipHaplotypeBAM    : Do not write out phased BAM
+    -V --skipPhasedVCF       : Do not write out phased VCF
+```
+
+### Sample Execution ###
+```
+# haplotagging mode
+./margin phase \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
+        /path/to/margin/tests/data/realData/hg38.chr20_59M_100k.fa \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf \
+        /path/to/margin/tests/data/realData/params/misc/allParams.ont_haplotag.json \
+        --skipPhasedVCF
+                
+# variant phasing mode
+./margin phase \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
+        /path/to/margin/tests/data/realData/hg38.chr20_59M_100k.fa \
+        /path/to/margin/tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf \
+        /path/to/margin/tests/data/realData/params/misc/allParams.ont_phase_vcf.json \
+        --skipHaplotypeBam
+```
+
+### Resource Requirements ###
+
+MarginPolish is very fast and lightweight.
 
 
 
