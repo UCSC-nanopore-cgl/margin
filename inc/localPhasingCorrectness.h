@@ -4,6 +4,13 @@
  * Released under the MIT license, see LICENSE.txt
  */
 
+#include "margin.h"
+
+#include <htslib/hts.h>
+#include <htslib/vcf.h>
+#include <htslib/kstring.h>
+#include <htslib/kseq.h>
+
 typedef struct _phasedVariant PhasedVariant;
 struct _phasedVariant {
     char *refSeqName;

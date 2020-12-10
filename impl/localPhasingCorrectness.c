@@ -1,26 +1,10 @@
 /*
- * Copyright (C) 2018 by Benedict Paten (benedictpaten@gmail.com)
+ * Copyright (C) 2017 by Benedict Paten (benedictpaten@gmail.com)
  *
  * Released under the MIT license, see LICENSE.txt
  */
 
-//#include <stdio.h>
-//#include <ctype.h>
-//#include <memory.h>
-//#include <hashTableC.h>
-//#include <unistd.h>
-//#include <time.h>
-#include <getopt.h>
-#include <math.h>
-#include "marginVersion.h"
-
-#include "margin.h"
 #include "localPhasingCorrectness.h"
-#include <htslib/hts.h>
-#include <htslib/vcf.h>
-#include <htslib/kstring.h>
-#include <htslib/kseq.h>
-
 
 PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, char * phaseSet) {
     PhasedVariant *pv = st_calloc(1, sizeof(PhasedVariant));
@@ -54,20 +38,20 @@ stHash *getPhasedVariants(const char *vcfFile) {
     // what we're saving into
     stHash *entries = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, (void(*)(void*))stList_destruct);
     time_t start = time(NULL);
-
+    
     // open file
     htsFile *fp = hts_open(vcfFile,"rb");
     if (fp == NULL) {
         st_errAbort("error: Could not open VCF %s\n", vcfFile);
     }
-
+    
     //read header
     bcf_hdr_t *hdr = bcf_hdr_read(fp);
     int nsmpl = bcf_hdr_nsamples(hdr);
     if (nsmpl > 1) {
         st_logCritical("Got %d samples reading %s, will only take VCF records for the first\n", nsmpl, vcfFile);
     }
-
+    
     // find type of phaseSet
     bool phaseSetIsInt = FALSE;
     int psId = bcf_hdr_id2int(hdr, BCF_DT_ID, "PS");
@@ -82,15 +66,15 @@ stHash *getPhasedVariants(const char *vcfFile) {
     } else {
         st_errAbort("error: Unknown PS type in VCF header for %s", vcfFile);
     }
-
-
+    
+    
     // tracking
     int64_t totalEntries = 0;
     int64_t skippedForNotPass = 0;
     int64_t skippedForHomozygous = 0;
     int64_t skippedForNoPhaseset = 0;
     int64_t totalSaved = 0;
-
+    
     // iterate over records
     bcf1_t *rec = bcf_init();
     while ( bcf_read(fp, hdr, rec) >= 0 )
@@ -98,13 +82,13 @@ stHash *getPhasedVariants(const char *vcfFile) {
         //unpack for read REF,ALT,INFO,etc
         bcf_unpack(rec, BCF_UN_ALL);
         totalEntries++;
-
+        
         // pass variant
         if (!bcf_has_filter(hdr, rec, "PASS")) {
             skippedForNotPass++;
             continue;
         }
-
+        
         // genotype
         int gt1 = -1;
         int gt2 = -1;
@@ -119,7 +103,7 @@ stHash *getPhasedVariants(const char *vcfFile) {
             skippedForHomozygous++;
             continue;
         }
-
+        
         // phase set
         char *phaseset = NULL;
         if (phaseSetIsInt) {
@@ -141,21 +125,21 @@ stHash *getPhasedVariants(const char *vcfFile) {
             }
             phaseset = stString_copy(PSs[0]);
         }
-
-
+        
+        
         // location data
         const char *chrom = bcf_hdr_id2name(hdr, rec->rid);
         int64_t pos = rec->pos;
-
+        
         // qual
         double quality = rec->qual;
-
+        
         // get alleles
         stList *alleles = stList_construct3(0, (void (*)(void*)) free);
         for (int i=0; i<rec->n_allele; ++i) {
             stList_append(alleles, stString_copy(rec->d.allele[i]));
         }
-
+        
         // save it
         PhasedVariant *pv = phasedVariant_construct(chrom, pos, quality, alleles, gt1, gt2, phaseset);
         stList *contigList = stHash_search(entries, pv->refSeqName);
@@ -166,7 +150,7 @@ stHash *getPhasedVariants(const char *vcfFile) {
         stList_append(contigList, pv);
         totalSaved++;
     }
-
+    
     // cleanup
     bcf_destroy(rec);
     bcf_hdr_destroy(hdr);
@@ -174,13 +158,13 @@ stHash *getPhasedVariants(const char *vcfFile) {
     if ( (ret=hts_close(fp)) ) {
         st_logCritical("> Failed to close VCF %s with code %d\n", vcfFile, ret);
     }
-
+    
     // loggit
     st_logCritical("Read %"PRId64" variants from %s over %"PRId64" contigs in %"PRId64"s, keeping %"PRId64" phased variants"
                    " and discarding %"PRId64" for not PASS, %"PRId64" for HOM, %"PRId64" for not phased.\n",
                    totalEntries, vcfFile, stHash_size(entries), time(NULL) - start, totalSaved, skippedForNotPass,
                    skippedForHomozygous, skippedForNoPhaseset);
-
+    
     // ensure sorted
     stHashIterator *itor = stHash_getIterator(entries);
     char *contigName = NULL;
@@ -190,12 +174,12 @@ stHash *getPhasedVariants(const char *vcfFile) {
         assert(((PhasedVariant*) stList_get(contigEntries, 0))->refPos <= ((PhasedVariant*) stList_get(contigEntries, stList_length(contigEntries) - 1))->refPos);
     }
     stHash_destructIterator(itor);
-
+    
     return entries;
 }
 
 stList *getSharedContigs(stHash *entry1, stHash *entry2) {
-
+    
     // get contigs
     stSet *contigs1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
     stSet *contigs2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
@@ -209,7 +193,7 @@ stList *getSharedContigs(stHash *entry1, stHash *entry2) {
         stSet_insert(contigs2, stString_copy(stList_get(keys, i)));
     }
     stList_destruct(keys);
-
+    
     // save intersection
     stList *sharedContigs = stList_construct3(0, free);
     stSet *intersection = stSet_getIntersection(contigs1, contigs2);
@@ -219,15 +203,15 @@ stList *getSharedContigs(stHash *entry1, stHash *entry2) {
         stList_append(sharedContigs, stString_copy(key));
     }
     stSet_destructIterator(itor);
-
+    
     // sort
     stList_sort(sharedContigs, (int (*)(const void *, const void *)) strcmp);
-
+    
     // cleanup
     stSet_destruct(intersection);
     stSet_destruct(contigs1);
     stSet_destruct(contigs2);
-
+    
     return sharedContigs;
 }
 
@@ -338,7 +322,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             if ((int) match11 + (int) match12 + (int) match21 + (int) match22 > 2) {
                 // at least one allele must be duplicated in the list of alts
                 st_logCritical("error: duplicate alleles detected at position %"PRId64" on sequence %s\n",
-                        qpv->refPos, qpv->refSeqName);
+                               qpv->refPos, qpv->refSeqName);
                 continue;
             }
             
@@ -352,7 +336,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             for (int64_t k = 0; k < stList_length(phaseSetPartialSums); ++k) {
                 
                 PartialPhaseSums *sums = stList_get(phaseSetPartialSums, k);
-
+                
                 if (strcmp(qpv->phaseSet, sums->queryPhaseSet) == 0 &&
                     strcmp(tpv->phaseSet, sums->truthPhaseSet) == 0) {
                     // the current pair of variants are co-phased with the variants
@@ -442,7 +426,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
 }
 
 double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, int64_t *lengthOut) {
-
+    
     char *prevQueryPhaseSet = NULL;
     char *prevTruthPhaseSet = NULL;
     bool prevInPhase = false;
@@ -552,204 +536,3 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
     
     return correctness;
 }
-
-void usage() {
-    fprintf(stderr, "localPhasingCorrectness\n");
-    fprintf(stderr, "Version: %s\n", MARGIN_POLISH_VERSION_H);
-    fprintf(stderr, "Generate LPC data for phase sets in both VCFs.\n\n");
-    fprintf(stderr, "usage: localPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv \n\n");
-    fprintf(stderr, "options:\n");
-    fprintf(stderr, " -n, --grid-num INT     number of length scales to compute LPC for [50]\n");
-    fprintf(stderr, " -s, --grid-skew FLOAT  controls evenness of grid between small and large values [0.0]\n");
-    fprintf(stderr, " -q, --quiet            do not log progress to stderr\n");
-    fprintf(stderr, " -h, --help             print this message and exit\n");
-    fprintf(stderr, "\n");
-}
-
-int main(int argc, char *argv[]) {
-    
-    // for logging
-    st_setLogLevel(info);
-    
-    int64_t numLengthScales = 50;
-    double lowValueBias = 1.0; // < 1 give more high values, > 1 gives more low values
-    
-    char* parseEnd = NULL;
-    
-    int c;
-    while (true){
-        static struct option long_options[] =
-        {
-            {"grid-num", required_argument, 0, 'n'},
-            {"grid-skew", required_argument, 0, 's'},
-            {"help", no_argument, 0, 'h'},
-            {0,0,0,0}
-        };
-        
-        int option_index = 0;
-        c = getopt_long (argc, argv, "n:s:h",
-                         long_options, &option_index);
-        if (c == -1){
-            break;
-        }
-        
-        switch(c){
-            case 'n':
-                numLengthScales = strtol(optarg, &parseEnd, 10);
-                if ((parseEnd - optarg) != strlen(optarg)) {
-                    fprintf(stderr, "error: Failed to parse argument %s as an integer\n\n", optarg);
-                    usage();
-                    return 1;
-                }
-                break;
-            case 's':
-                lowValueBias = exp(-strtod(optarg, &parseEnd));
-                if ((parseEnd - optarg) != strlen(optarg)) {
-                    fprintf(stderr, "error: Failed to parse argument %s as a float\n\n", optarg);
-                    usage();
-                    return 1;
-                }
-                break;
-            case 'h':
-            case '?':
-                usage();
-                return 0;
-            default:
-                usage();
-                return 1;
-        }
-    }
-    
-    if (argc - optind < 2) {
-        fprintf(stderr, "error: Missing positional arguments\n\n");
-        usage();
-        return 1;
-    }
-
-    char *truthVcfFile = stString_copy(argv[optind++]);
-    char *queryVcfFile = stString_copy(argv[optind++]);
-    
-    if (optind != argc) {
-        fprintf(stderr, "error: Unused argument %s\n\n", argv[optind]);
-        usage();
-        return 1;
-    }
-    
-    if (numLengthScales <= 2) {
-        st_errAbort("error: Must have a grid of at least 2 values\n");
-    }
-
-    // sanity check (verify files are accessible)
-    if (access(truthVcfFile, R_OK) != 0) {
-        st_errAbort("error: Could not read from truth vcf file: %s\n", truthVcfFile);
-    }
-    if (access(queryVcfFile, R_OK) != 0) {
-        st_errAbort("error: Could not read from query vcf file: %s\n", queryVcfFile);
-    }
-        
-    st_logDebug("Decay values:\n");
-    // use biased bin selection from ARGweaver paper, Rasmussen, et al. (2013)
-    double denom = numLengthScales - 1;
-    double *decayValues = (double*) malloc(numLengthScales * sizeof(double));
-    for (int64_t i = 0; i < numLengthScales; ++i) {
-        // handle the boundary conditions separately so we don't have to worry about
-        // numerical imprecision
-        if (i == 0) {
-            decayValues[i] = 0.0;
-        }
-        else if (i == numLengthScales - 1) {
-            decayValues[i] = 1.0;
-        }
-        else {
-            decayValues[i] = (exp((i / denom) * log(1.0 + lowValueBias)) - 1.0) / lowValueBias;
-        }
-        st_logDebug("\t%f\n", decayValues[i]);
-    }
-    
-    st_logDebug("Length scales:\n");
-    double *lengthScales = (double*) malloc(numLengthScales * sizeof(double));
-    for (int64_t i = 0; i < numLengthScales; ++i) {
-        if (i == 0) {
-            lengthScales[i] = 1.0;
-        }
-        else if (i == numLengthScales - 1) {
-            lengthScales[i] = -log(0.0);
-        }
-        else {
-            lengthScales[i] = 1.0 - log(2.0) / log(decayValues[i]);
-        }
-        st_logDebug("\t%f\n", lengthScales[i]);
-    }
-    
-
-    // read and parse the VCFs
-    st_logInfo("Reading VCF %s...\n", truthVcfFile);
-    stHash *truthVariants = getPhasedVariants(truthVcfFile);
-    st_logInfo("Reading VCF %s...\n", queryVcfFile);
-    stHash *queryVariants = getPhasedVariants(queryVcfFile);
-    
-    free(truthVcfFile);
-    free(queryVcfFile);
-
-    stList *sharedContigs = getSharedContigs(truthVariants, queryVariants);
-    st_logInfo("Found %"PRId64" shared contigs (truth %"PRId64", query %"PRId64")\n", stList_length(sharedContigs),
-            stHash_size(truthVariants), stHash_size(queryVariants));
-    
-    
-    double *correctnessValues = (double*) malloc(sizeof(double) * numLengthScales * stList_length(sharedContigs));
-    double *meanCorrectnessValues = (double*) malloc(sizeof(double) * numLengthScales);
-    
-    // Compute the correctness values
-    for (int64_t i = 0; i < numLengthScales; ++i) {
-        
-        double weightedMeanNumer = 0.0;
-        double weightedMeanDenom = 0.0;
-        
-        for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
-            stList *contigTruthVariants = stHash_search(truthVariants, stList_get(sharedContigs, j));
-            stList *contigQueryVariants = stHash_search(queryVariants, stList_get(sharedContigs, j));
-            
-            st_logDebug("\tComputing correctness for contig %s\n", stList_get(sharedContigs, j));
-            
-            int64_t phasedLength = 0;
-            double correctness = phasingCorrectness(contigTruthVariants, contigQueryVariants, decayValues[i],
-                                                    &phasedLength);
-            
-            correctnessValues[i * stList_length(sharedContigs) + j] = correctness;
-            
-            weightedMeanDenom += phasedLength;
-            weightedMeanNumer += phasedLength * correctness;
-        }
-        
-        meanCorrectnessValues[i] = weightedMeanNumer / weightedMeanDenom;
-        
-        if (i % (numLengthScales / 5) == (numLengthScales / 5) - 1) {
-            st_logInfo("Finished computing correctness for %"PRId64" of %"PRId64" length scales\n", i + 1, numLengthScales);
-        }
-    }
-    
-    // print out the results in a table
-    printf("decay\tlength_scale");
-    for (int64_t i = 0; i < stList_length(sharedContigs); ++i) {
-        printf("\t%s", (char*) stList_get(sharedContigs, i));
-    }
-    printf("\tweighted_mean\n");
-    for (int64_t i = 0; i < numLengthScales; ++i) {
-        printf("%f\t%f", decayValues[i], lengthScales[i]);
-        for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
-            printf("\t%f", correctnessValues[i * stList_length(sharedContigs) + j]);
-        }
-        printf("\t%f\n", meanCorrectnessValues[i]);
-    }
-    
-    free(correctnessValues);
-    free(meanCorrectnessValues);
-    free(decayValues);
-    free(lengthScales);
-    stList_destruct(sharedContigs);
-    stHash_destruct(truthVariants);
-    stHash_destruct(queryVariants);
-    
-    return 0;
-}
-

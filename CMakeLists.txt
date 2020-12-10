@@ -278,6 +278,7 @@ set(SOURCE_FILES
         impl/genomeFragment.c
         impl/helenFeatures.c
         impl/hmm.c
+        impl/localPhasingCorrectness.c
         impl/mergeColumn.c
         impl/misc.c
         impl/pairwiseAligner.c
@@ -368,8 +369,8 @@ target_link_libraries(tagBam marginLib)
 add_executable(runLengthMatrix tools/runLengthMatrix.c)
 target_link_libraries(runLengthMatrix marginLib)
 
-add_executable(localPhasingCorrectness tools/localPhasingCorrectness.c)
-target_link_libraries(localPhasingCorrectness marginLib)
+add_executable(calcLocalPhasingCorrectness tools/calcLocalPhasingCorrectness.c)
+target_link_libraries(calcLocalPhasingCorrectness marginLib)
 
 enable_testing()
 
