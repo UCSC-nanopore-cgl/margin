@@ -219,7 +219,6 @@ PartialPhaseSums* partialPhaseSums_construct(const char *queryPhaseSet, const ch
     PartialPhaseSums* pps = (PartialPhaseSums*) malloc(sizeof(PartialPhaseSums));
     pps->queryPhaseSet = stString_copy(queryPhaseSet);
     pps->truthPhaseSet = stString_copy(truthPhaseSet);
-    pps->unphasedSum = 0.0;
     pps->phaseSum1 = 0.0;
     pps->phaseSum2 = 0.0;
     return pps;
@@ -360,10 +359,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 }
                 else {
                     // this is a different phase set
-                    totalSum += sums->unphasedSum;
+                    totalSum += sums->phaseSum1 + sums->phaseSum2;
                 }
-                // the unphased sum acts as if always correctly phased
-                sums->unphasedSum += 1.0;
             }
             totalSum += outOfScopeSum;
             
@@ -381,14 +378,12 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 else {
                     sums->phaseSum2 = 1.0;
                 }
-                sums->unphasedSum = 1.0;
                 stList_append(phaseSetPartialSums, sums);
             }
             
             // decay all of the partial sums to prepare for the next iteration
             for (int64_t k = 0; k < stList_length(phaseSetPartialSums); ++k) {
                 PartialPhaseSums *sums = stList_get(phaseSetPartialSums, k);
-                sums->unphasedSum *= decay;
                 sums->phaseSum1 *= decay;
                 sums->phaseSum2 *= decay;
             }
@@ -406,7 +401,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             int64_t *truthInterval = stHash_search(truthPhaseSetIntervals, sums->truthPhaseSet);
             
             
-            st_logDebug("\tpartial sum %"PRId64":\n\t\tquery phase set %s:\n\t\ttruth phase set %s:\n\t\tunphased sum %f:\n\t\tphased sum 1 %f:\n\t\tphased sum 2 %f:\n", k, sums->queryPhaseSet, sums->truthPhaseSet, sums->unphasedSum, sums->phaseSum1, sums->phaseSum2);
+            st_logDebug("\tpartial sum %"PRId64":\n\t\tquery phase set %s:\n\t\ttruth phase set %s:\n\t\tphased sum 1 %f:\n\t\tphased sum 2 %f:\n", k, sums->queryPhaseSet, sums->truthPhaseSet, sums->phaseSum1, sums->phaseSum2);
             
             if (i < queryInterval[0] || i > queryInterval[1]
                 || j < truthInterval[0] || j > truthInterval[1]) {
@@ -415,7 +410,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 
                 st_logDebug("\t\t\tthis sum falls out of scope at this iteration\n");
                 
-                outOfScopeSum += sums->unphasedSum;
+                outOfScopeSum += sums->phaseSum1 + sums->phaseSum2;
                 
                 // remove this sum from the list of partial sums
                 partialPhaseSums_destruct(sums);

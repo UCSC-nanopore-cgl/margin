@@ -263,7 +263,7 @@ void test_executableExecutes(CuTest *testCase) {
 
 CuSuite *lpcTestSuite(void) {
     
-    st_setLogLevel(info);
+    //st_setLogLevel(debug);
     
     CuSuite *suite = CuSuiteNew();
 
