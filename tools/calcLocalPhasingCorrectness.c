@@ -18,10 +18,10 @@
 
 
 void usage() {
-    fprintf(stderr, "localPhasingCorrectness\n");
+    fprintf(stderr, "calcLocalPhasingCorrectness\n");
     fprintf(stderr, "Version: %s\n", MARGIN_POLISH_VERSION_H);
     fprintf(stderr, "Generate LPC data for phase sets in both VCFs.\n\n");
-    fprintf(stderr, "usage: localPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv \n\n");
+    fprintf(stderr, "usage: calcLocalPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv \n\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, " -n, --grid-num INT     number of length scales to compute LPC for [50]\n");
     fprintf(stderr, " -s, --grid-skew FLOAT  controls evenness of grid between small and large values [0.0]\n");
