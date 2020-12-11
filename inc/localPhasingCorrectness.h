@@ -26,12 +26,12 @@ typedef struct _partialPhaseSums PartialPhaseSums;
 struct _partialPhaseSums {
     char *queryPhaseSet;
     char *truthPhaseSet;
-    double unphasedSum;
     double phaseSum1;
     double phaseSum2;
 };
 
-PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, char * phaseSet);
+// note: takes ownership of the alleles list, but not any other pointers
+PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, const char *phaseSet);
 
 void phasedVariant_destruct(PhasedVariant *pv);
 

@@ -36,7 +36,8 @@ int main(int argc, char *argv[]) {
     st_setLogLevel(info);
     
     int64_t numLengthScales = 50;
-    double lowValueBias = 1.0; // < 1 give more high values, > 1 gives more low values
+    // < 1 give more high values, > 1 gives more low values
+    double lowValueBias = 1.0;
     
     char* parseEnd = NULL;
     
@@ -46,12 +47,13 @@ int main(int argc, char *argv[]) {
         {
             {"grid-num", required_argument, 0, 'n'},
             {"grid-skew", required_argument, 0, 's'},
+            {"quiet", no_argument, 0, 'q'},
             {"help", no_argument, 0, 'h'},
             {0,0,0,0}
         };
         
         int option_index = 0;
-        c = getopt_long (argc, argv, "n:s:h",
+        c = getopt_long (argc, argv, "n:s:qh?",
                          long_options, &option_index);
         if (c == -1){
             break;
@@ -73,6 +75,9 @@ int main(int argc, char *argv[]) {
                     usage();
                     exit(1);
                 }
+                break;
+            case 'q':
+                st_setLogLevel(critical);
                 break;
             case 'h':
             case '?':
@@ -181,6 +186,7 @@ int main(int argc, char *argv[]) {
             
             correctnessValues[i * stList_length(sharedContigs) + j] = correctness;
             
+            // TODO: would it be more consistent to weight by number of pairs?
             weightedMeanDenom += phasedLength;
             weightedMeanNumer += phasedLength * correctness;
         }

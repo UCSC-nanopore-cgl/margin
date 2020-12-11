@@ -6,7 +6,7 @@
 
 #include "localPhasingCorrectness.h"
 
-PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, char * phaseSet) {
+PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, const char * phaseSet) {
     PhasedVariant *pv = st_calloc(1, sizeof(PhasedVariant));
     pv->refSeqName = stString_copy(refSeqName);
     pv->refPos = refPos;
@@ -288,6 +288,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     
     int64_t numPhased = 0;
     
+    st_logDebug("beginning %s sum\n", forward ? "forward" : "backward");
+    
     while (i >= 0 && i < stList_length(queryPhasedVariants) && j >= 0 && j < stList_length(truthPhasedVariants)) {
         PhasedVariant *qpv = stList_get(queryPhasedVariants, i);
         PhasedVariant *tpv = stList_get(truthPhasedVariants, j);
@@ -372,8 +374,15 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             if (!foundCophasedSum) {
                 // this is the first time we've found this phase set pair, we need
                 // to initialize a new partial sum for it
-                stList_append(phaseSetPartialSums,
-                              partialPhaseSums_construct(qpv->phaseSet, tpv->phaseSet));
+                PartialPhaseSums *sums = partialPhaseSums_construct(qpv->phaseSet, tpv->phaseSet);
+                if (match11) {
+                    sums->phaseSum1 = 1.0;
+                }
+                else {
+                    sums->phaseSum2 = 1.0;
+                }
+                sums->unphasedSum = 1.0;
+                stList_append(phaseSetPartialSums, sums);
             }
             
             // decay all of the partial sums to prepare for the next iteration
@@ -387,6 +396,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             outOfScopeSum *= decay;
         }
         
+        st_logDebug("going into iteration query %"PRId64", truth %"PRId64":\n\ttotal %f\n\tpartition total %f\n\tpartition sum %f\n\tout of scope sum %f\n", i, j, totalSum, partitionTotalSum, partitionSum, outOfScopeSum);
+        
         // check if any phase set pairs have fallen out of scope
         for (int64_t k = 0; k < stList_length(phaseSetPartialSums);) {
             
@@ -394,10 +405,15 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             int64_t *queryInterval = stHash_search(queryPhaseSetIntervals, sums->queryPhaseSet);
             int64_t *truthInterval = stHash_search(truthPhaseSetIntervals, sums->truthPhaseSet);
             
+            
+            st_logDebug("\tpartial sum %"PRId64":\n\t\tquery phase set %s:\n\t\ttruth phase set %s:\n\t\tunphased sum %f:\n\t\tphased sum 1 %f:\n\t\tphased sum 2 %f:\n", k, sums->queryPhaseSet, sums->truthPhaseSet, sums->unphasedSum, sums->phaseSum1, sums->phaseSum2);
+            
             if (i < queryInterval[0] || i > queryInterval[1]
                 || j < truthInterval[0] || j > truthInterval[1]) {
                 // one of the phase sets has fallen out of scope, the unphased summands in this phase set
                 // pair can now be accumulated in the out of scope accumulator
+                
+                st_logDebug("\t\t\tthis sum falls out of scope at this iteration\n");
                 
                 outOfScopeSum += sums->unphasedSum;
                 
@@ -510,6 +526,8 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
         st_errAbort("error: Decay factor is %d, must be between 0.0 and 1.0\n", decay);
     }
     
+    st_logDebug("calculating correctness with decay %f\n", decay);
+    
     if (decay == 0.0) {
         // this has to be handled as a special case, because it's actually a limit rather
         // than direct evaluation. if computed directly, leads to division by 0
@@ -531,6 +549,9 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
     stHash_destruct(truthPhaseSetIntervals);
     
     double correctness = (forwardSums[0] + reverseSums[0]) / (forwardSums[1] + reverseSums[1]);
+    st_logDebug("fwd numer %f, bwd numer %f, fwd denom %f, bwd denom %f, final answer %f\n",
+                forwardSums[0], reverseSums[0], forwardSums[1], reverseSums[1], correctness);
+    
     free(forwardSums);
     free(reverseSums);
     
