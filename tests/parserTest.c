@@ -12,7 +12,6 @@ void test_jsmnParsing(CuTest *testCase) {
 
     char *paramsFile = "../params/ont/r10.3/allParams.np.human.r103-g3210.json";
 
-    //Params *allParams = params_readParams(paramsFile);
     Params *allParams = params_readParams(paramsFile);
     stRPHmmParameters *params = allParams->phaseParams;
 

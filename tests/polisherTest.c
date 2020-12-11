@@ -608,30 +608,12 @@ static void test_poa_realign_example(CuTest *testCase, char *trueReference, char
                    2.0 * nonRLEReferenceMatches / (strlen(trueReference) + strlen(reference)));
     }
 
-    if (st_getLogLevel() >= debug && !stString_eq(rleTrueReference->rleString, poaRefined->refString->rleString)) {
-        //poa_print(poa, stderr, 5);
-        //poa_print(poaRefined, stderr, reads, 2, 0);
-
-        //poa_printTSV(poa, stderr, reads, 2, 0);
-
-        ///poa_printRepeatCounts(poa, stderr, reads);
-    }
-
     // Cleanup
     params_destruct(params);
     poa_destruct(poa);
     poa_destruct(poaRefined);
     poa_destruct(poaTrue);
-//	free(trueReference);
-//	free(reference);
-    //rleString_destruct(rleTrueReference);
-    //rleString_destruct(rleReference);
     free(nonRLEConsensusString);
-    //poa_destruct(poaReads1);
-    //poa_destruct(poaReads2);
-    //stList_destruct(anchorAlignments);
-    //stList_destruct(reads1);
-    //stList_destruct(reads2);
 }
 
 static struct List *readSequences(char *fastaFile, struct List **headers) {
@@ -675,11 +657,6 @@ static void test_poa_realign_examples(CuTest *testCase, const char **examples, i
                                                          stString_copy(nucleotides->list[i]), NULL, strand == 'F',
                                                          rle));
         }
-
-        //if(strlen(reads->list[0]) > strlen(trueReferenceList->list[0]) * 0.8 || reads->length < 30) {
-        //	fprintf(stderr, "Got short input ref:\n%s\n%s\n", reads->list[0], trueReferenceList->list[0]);
-        //	continue;
-        //}
 
         // Run poa iterative realign
         test_poa_realign_example(testCase, trueReferenceList->list[0], nucleotides->list[0], reads,
@@ -875,15 +852,6 @@ void test_polishParams(CuTest *testCase) {
     CuAssertDblEquals(testCase, polishParams->p->gapGamma, 0.25, 0);
     CuAssertTrue(testCase, !polishParams->p->alignAmbiguityCharacters);
 
-    /*CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, a, 0, 0, 0), -0.059686935, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, c, 0, 0, 0), -0.055418707, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, g, 0, 0, 0), -0.05438334, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, t, 0, 0, 0), -0.035762809, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, a, 1, 0, 0), -0.036856437, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, c, 1, 0, 0), -0.062816805, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, g, 1, 0, 0), -0.055853556, 0);
-    CuAssertDblEquals(testCase,  repeatSubMatrix_getLogProb(polishParams->repeatSubMatrix, t, 1, 0, 0), -0.065273937, 0);*/
-
     params_destruct(params);
 }
 
@@ -986,65 +954,6 @@ int64_t polishingTest(char *bamFile, char *referenceFile, char *paramsFile, char
     return i;
 }
 
-void test_polish5kb_rle(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/realData/NA12878.np.chr3.5kb.bam";
-    char *region = "chr3:2150000-2155000";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    st_logInfo("\n\nTesting diploid polishing on %s\n", bamFile);
-    i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, TRUE);
-    CuAssertTrue(testCase, i == 0);
-}
-
-void checkLargeGapOutput(CuTest *testCase) {
-    //read output file, find non-n sequence
-    char *outputFile = "output.fa";
-    FILE *fh = fopen(outputFile, "r");
-    stHash *referenceSequences = fastaReadToMap(fh);  //valgrind says blocks from this allocation are "still reachable"
-    fclose(fh);
-    char *polished = stHash_search(referenceSequences, "chr3");
-    stList *splitByNs = stString_splitByString(polished, "N");
-    CuAssertTrue(testCase, stList_length(splitByNs) > 2);
-
-    for (int64_t i = 0; i < stList_length(splitByNs); i++) {
-        int64_t partLength = strlen(stList_get(splitByNs, i));
-        CuAssertTrue(testCase, partLength == 0 || (partLength > 1900 && partLength < 2100));
-    }
-
-    stList_destruct(splitByNs);
-    stHash_destruct(referenceSequences);
-}
-
-void test_largeGap(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/largeGapTest/largeGapTest.bam";
-    char *region = "chr3:10000-17000";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    checkLargeGapOutput(testCase);
-}
-
-void test_largeGap2(CuTest *testCase) {
-    char *referenceFile = "../tests/data/realData/hg19.chr3.9mb.fa";
-    bool verbose = false;
-    char *bamFile = "../tests/data/largeGapTest/largeGapTest2.bam";
-    char *region = "chr3:10000-17000";
-
-    st_logInfo("\n\nTesting polishing on %s\n", bamFile);
-    int64_t i = polishingTest(bamFile, referenceFile, polishParamsFile, region, verbose, FALSE);
-    CuAssertTrue(testCase, i == 0);
-
-    checkLargeGapOutput(testCase);
-}
 
 void test_binomialPValue(CuTest *testCase) {
     CuAssertDblEquals(testCase, 252.0, bionomialCoefficient(10, 5), 0.001);
@@ -1057,29 +966,26 @@ void test_binomialPValue(CuTest *testCase) {
 CuSuite *polisherTestSuite(void) {
     CuSuite *suite = CuSuiteNew();
 
-//    SUITE_ADD_TEST(suite, test_poa_getReferenceGraph);
-//    SUITE_ADD_TEST(suite, test_getShift);
-//    SUITE_ADD_TEST(suite, test_rleString_examples);
-//    SUITE_ADD_TEST(suite, test_rle_rotateString);
-//    SUITE_ADD_TEST(suite, test_poa_augment_example);
-//    SUITE_ADD_TEST(suite, test_poa_realign_tiny_example1);
-//    SUITE_ADD_TEST(suite, test_poa_realign);
-//    SUITE_ADD_TEST(suite, test_getShift);
-//    SUITE_ADD_TEST(suite, test_rleString_examples);
-//    SUITE_ADD_TEST(suite, test_addInsert);
-//    SUITE_ADD_TEST(suite, test_removeDelete);
-//    SUITE_ADD_TEST(suite, test_polishParams);
+    SUITE_ADD_TEST(suite, test_poa_getReferenceGraph);
+    SUITE_ADD_TEST(suite, test_getShift);
+    SUITE_ADD_TEST(suite, test_rleString_examples);
+    SUITE_ADD_TEST(suite, test_rle_rotateString);
+    SUITE_ADD_TEST(suite, test_poa_augment_example);
+    SUITE_ADD_TEST(suite, test_poa_realign_tiny_example1);
+    SUITE_ADD_TEST(suite, test_poa_realign);
+    SUITE_ADD_TEST(suite, test_getShift);
+    SUITE_ADD_TEST(suite, test_rleString_examples);
+    SUITE_ADD_TEST(suite, test_addInsert);
+    SUITE_ADD_TEST(suite, test_removeDelete);
+    SUITE_ADD_TEST(suite, test_polishParams);
     SUITE_ADD_TEST(suite, test_removeOverlapExample);
     SUITE_ADD_TEST(suite, test_removeOverlap_RandomExamples);
-//    SUITE_ADD_TEST(suite, test_binomialPValue);
-//    SUITE_ADD_TEST(suite, test_poa_realignIterative);
-//    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_rle);
-//    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_no_rle);
-//    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_rle);
-//    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_no_rle);
-//    SUITE_ADD_TEST(suite, test_polish5kb_rle);
-//    SUITE_ADD_TEST(suite, test_largeGap);
-//    SUITE_ADD_TEST(suite, test_largeGap2);
+    SUITE_ADD_TEST(suite, test_binomialPValue);
+    SUITE_ADD_TEST(suite, test_poa_realignIterative);
+    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_rle);
+    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_examples_no_rle);
+    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_rle);
+    SUITE_ADD_TEST(suite, test_poa_realign_ecoli_many_examples_no_rle);
 
     return suite;
 }

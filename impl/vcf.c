@@ -972,7 +972,8 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         minPhaseSetLen = psLen < minPhaseSetLen ? psLen : minPhaseSetLen;
         maxPhaseSetLen = maxPhaseSetLen < psLen ? psLen : maxPhaseSetLen;
     }
-    int64_t avgPhaseSetLen = totalPhaseSetLength / stList_length(phaseSetLengths);
+    int64_t totalPhaseSets = stList_length(phaseSetLengths);
+    int64_t avgPhaseSetLen = totalPhaseSetLength / (totalPhaseSets == 0 ? 1 : totalPhaseSets);
     int64_t n50PhaseSetLen = 0;
     int64_t n50tmp = 0;
     for (int64_t i = 0; i < stList_length(phaseSetLengths); i++) {

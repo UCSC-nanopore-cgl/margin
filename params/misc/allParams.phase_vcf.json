@@ -4,13 +4,15 @@
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
 		"columnAnchorTrim": 12,
-		"maxDepth": 16
+		"maxDepth": 32
 	},
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,
 		"useVariantSelectionAdaptiveSampling": false,
+		"phasesetMinBinomialReadSplitLikelihood": 0.0000001,
+		"phasesetMaxDiscordantRatio": 0.5,
 		"updateAllOutputVCFFormatFields": false
 	}
 }
