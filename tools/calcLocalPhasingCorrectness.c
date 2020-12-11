@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     
-    if (numLengthScales <= 2) {
+    if (numLengthScales < 2) {
         st_errAbort("error: Must have a grid of at least 2 values\n");
     }
 
@@ -168,6 +168,15 @@ int main(int argc, char *argv[]) {
     double *correctnessValues = (double*) malloc(sizeof(double) * numLengthScales * stList_length(sharedContigs));
     double *meanCorrectnessValues = (double*) malloc(sizeof(double) * numLengthScales);
     
+    int64_t reportIterations[5];
+    for (int64_t i = 0; i < 5; ++i) {
+        reportIterations[i] = ((i + 1) * numLengthScales) / 5;
+    }
+    int64_t nextReportIdx = 0;
+    while (reportIterations[nextReportIdx] == 0 && nextReportIdx < 5) {
+        ++nextReportIdx;
+    }
+    
     // Compute the correctness values
     for (int64_t i = 0; i < numLengthScales; ++i) {
         
@@ -190,11 +199,14 @@ int main(int argc, char *argv[]) {
             weightedMeanDenom += phasedLength;
             weightedMeanNumer += phasedLength * correctness;
         }
-        
+                
         meanCorrectnessValues[i] = weightedMeanNumer / weightedMeanDenom;
         
-        if (i % (numLengthScales / 5) == (numLengthScales / 5) - 1) {
+        if (i + 1 == reportIterations[nextReportIdx]) {
             st_logInfo("Finished computing correctness for %"PRId64" of %"PRId64" length scales\n", i + 1, numLengthScales);
+            while (i + 1 == reportIterations[nextReportIdx] && nextReportIdx < 5) {
+                ++nextReportIdx;
+            }
         }
     }
     

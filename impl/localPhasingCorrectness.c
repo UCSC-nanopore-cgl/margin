@@ -488,15 +488,12 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
             ++numPhasedVariants;
             
             if (prevQueryPhaseSet != NULL && prevTruthPhaseSet != NULL) {
-                if (stString_eq(qpv->phaseSet, prevQueryPhaseSet) && stString_eq(tpv->phaseSet, prevTruthPhaseSet)) {
-                    // because we've filtered down to 1) only het sites, and  2) sites
-                    // where the alleles match, the only two combinations of matching
-                    // that are allowed are 1-1/2-2 or 1-2/2-1
-                    if (match11 == prevInPhase) {
-                        ++numCorrectlyPhasedPairs;
-                    }
-                }
-                else {
+                // because we've filtered down to 1) only het sites, and  2) sites
+                // where the alleles match, the only two combinations of matching
+                // that are allowed are 1-1/2-2 or 1-2/2-1
+                if (!stString_eq(qpv->phaseSet, prevQueryPhaseSet) ||
+                    !stString_eq(tpv->phaseSet, prevTruthPhaseSet) ||
+                    match11 == prevInPhase) {
                     ++numCorrectlyPhasedPairs;
                 }
             }
