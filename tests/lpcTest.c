@@ -121,7 +121,7 @@ void test_correctValueSimple(CuTest *testCase) {
     for (int64_t i = 0; i < numDecayValues; ++i) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                &numPhased);
+                                                false, &numPhased);
         double direct = directLPC(variants[0], variants[1], decayValues[i]);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
@@ -152,7 +152,7 @@ void test_correctValueSimple(CuTest *testCase) {
     for (int64_t i = 0; i < numDecayValues; ++i) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                &numPhased);
+                                                false, &numPhased);
         double direct = directLPC(variants[0], variants[1], decayValues[i]);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
@@ -212,7 +212,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
     for (int64_t i = 0; i < numDecayValues; ++i) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                &numPhased);
+                                                false, &numPhased);
         double direct = directLPC(variants[0], variants[1], decayValues[i]);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
@@ -230,7 +230,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
     for (int64_t i = 0; i < numDecayValues; ++i) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                &numPhased);
+                                                false, &numPhased);
         double direct = directLPC(variants[0], variants[1], decayValues[i]);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);

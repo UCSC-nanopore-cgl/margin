@@ -252,7 +252,7 @@ stHash *phaseSetIntervals(stList *phasedVariants) {
     return intervals;
 }
 
-double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
+double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay, bool bySeqDist,
                                    stHash *queryPhaseSetIntervals, stHash *truthPhaseSetIntervals, bool forward,
                                    int64_t *lengthOut) {
     
@@ -272,6 +272,10 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     // accumulator for the unphased partial sums of phase set pairs that have fallen out of scope
     double outOfScopeSum = 0.0;
     
+    // where along the contig do the first and last phased variants occur?
+    int64_t firstPhasedVariantPos = -1;
+    int64_t finalPhasedVariantPos = -1;
+    
     // which direction are we iterating down the list of variants
     int64_t i, j, incr;
     if (forward) {
@@ -286,6 +290,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     }
     
     int64_t numPhased = 0;
+    
+    int64_t prevPosition = -1;
     
     st_logDebug("beginning %s sum\n", forward ? "forward" : "backward");
     
@@ -327,7 +333,29 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 continue;
             }
             
+            double decayValue;
+            if (bySeqDist) {
+                int64_t seqDist = forward ? qpv->refPos - prevPosition : prevPosition - qpv->refPos;
+                decayValue = pow(decay, seqDist);
+            }
+            else {
+                decayValue = decay;
+            }
+            
+            // decay all of the previous partial sums
+            for (int64_t k = 0; k < stList_length(phaseSetPartialSums); ++k) {
+                PartialPhaseSums *sums = stList_get(phaseSetPartialSums, k);
+                sums->phaseSum1 *= decay;
+                sums->phaseSum2 *= decay;
+            }
+            partitionSum *= decay;
+            outOfScopeSum *= decay;
+            
             ++numPhased;
+            if (firstPhasedVariantPos == -1) {
+                firstPhasedVariantPos = qpv->refPos;
+            }
+            finalPhasedVariantPos = qpv->refPos;
             
             // do we find a phase set pair that matches this variant's phase set pair?
             bool foundCophasedSum = false;
@@ -381,14 +409,7 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 stList_append(phaseSetPartialSums, sums);
             }
             
-            // decay all of the partial sums to prepare for the next iteration
-            for (int64_t k = 0; k < stList_length(phaseSetPartialSums); ++k) {
-                PartialPhaseSums *sums = stList_get(phaseSetPartialSums, k);
-                sums->phaseSum1 *= decay;
-                sums->phaseSum2 *= decay;
-            }
-            partitionSum *= decay;
-            outOfScopeSum *= decay;
+            prevPosition = qpv->refPos;
         }
         
         st_logDebug("going into iteration query %"PRId64", truth %"PRId64":\n\ttotal %f\n\tpartition total %f\n\tpartition sum %f\n\tout of scope sum %f\n", i, j, totalSum, partitionTotalSum, partitionSum, outOfScopeSum);
@@ -424,7 +445,13 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     }
     
     if (lengthOut) {
-        *lengthOut = numPhased;
+        if (bySeqDist) {
+            *lengthOut = forward ? finalPhasedVariantPos - firstPhasedVariantPos
+                                 : firstPhasedVariantPos - finalPhasedVariantPos;
+        }
+        else {
+            *lengthOut = numPhased;
+        }
     }
     
     stList_destruct(phaseSetPartialSums);
@@ -436,15 +463,18 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     return returnVal;
 }
 
-double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, int64_t *lengthOut) {
+double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, bool bySeqDist, int64_t *lengthOut) {
     
     char *prevQueryPhaseSet = NULL;
     char *prevTruthPhaseSet = NULL;
     bool prevInPhase = false;
-    
+    int64_t prevPosition = -1;
+    int64_t minAdjacentDist = LONG_MAX;
     int64_t numPhasedVariants = 0;
-    
     int64_t numCorrectlyPhasedPairs = 0;
+    int64_t numPossiblyPhasedPairs = 0;
+    int64_t firstPhasedVariantPos = -1;
+    int64_t finalPhasedVariantPos = -1;
     
     for (int64_t i = 0, j = 0; i < stList_length(queryPhasedVariants) && j < stList_length(truthPhasedVariants);) {
         
@@ -486,8 +516,22 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
             }
             
             ++numPhasedVariants;
+            if (firstPhasedVariantPos == -1) {
+                firstPhasedVariantPos = qpv->refPos;
+            }
+            finalPhasedVariantPos = qpv->refPos;
             
             if (prevQueryPhaseSet != NULL && prevTruthPhaseSet != NULL) {
+                
+                int64_t newMinAdjacentDist = qpv->refPos - prevPosition < minAdjacentDist ? qpv->refPos - prevPosition
+                                                                                          : minAdjacentDist;
+                
+                if (newMinAdjacentDist < minAdjacentDist && bySeqDist) {
+                    // only the nearest pairs together count, so we throw away all previously
+                    // recorded pairs that had a larger distance between
+                    numPossiblyPhasedPairs = 0;
+                    numCorrectlyPhasedPairs = 0;
+                }
                 // because we've filtered down to 1) only het sites, and  2) sites
                 // where the alleles match, the only two combinations of matching
                 // that are allowed are 1-1/2-2 or 1-2/2-1
@@ -496,23 +540,31 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
                     match11 == prevInPhase) {
                     ++numCorrectlyPhasedPairs;
                 }
+                ++numPossiblyPhasedPairs;
+                minAdjacentDist = newMinAdjacentDist;
             }
             
             prevInPhase = match11;
             prevQueryPhaseSet = qpv->phaseSet;
             prevTruthPhaseSet = tpv->phaseSet;
+            prevPosition = qpv->refPos;
         }
     }
     
     if (lengthOut != NULL) {
-        *lengthOut = numPhasedVariants;
+        if (bySeqDist) {
+            *lengthOut = finalPhasedVariantPos - firstPhasedVariantPos;
+        }
+        else {
+            *lengthOut = numPhasedVariants;
+        }
     }
     
-    return ((double) numCorrectlyPhasedPairs) / (numPhasedVariants - 1);
+    return ((double) numCorrectlyPhasedPairs) / numPossiblyPhasedPairs;
 }
 
 double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                          int64_t *lengthOut) {
+                          bool bySeqDist, int64_t *lengthOut) {
     
     if (decay < 0.0 || decay > 1.0) {
         st_errAbort("error: Decay factor is %d, must be between 0.0 and 1.0\n", decay);
@@ -523,17 +575,17 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
     if (decay == 0.0) {
         // this has to be handled as a special case, because it's actually a limit rather
         // than direct evaluation. if computed directly, leads to division by 0
-        return switchCorrectness(queryPhasedVariants, truthPhasedVariants, lengthOut);
+        return switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, lengthOut);
     }
     
     // the interval of variant indexes that each phase set is contained in
     stHash *queryPhaseSetIntervals = phaseSetIntervals(queryPhasedVariants);
     stHash *truthPhaseSetIntervals = phaseSetIntervals(truthPhasedVariants);
     
-    double *forwardSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,
+    double *forwardSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,bySeqDist,
                                                      queryPhaseSetIntervals, truthPhaseSetIntervals, true,
                                                      lengthOut);
-    double *reverseSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,
+    double *reverseSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay, bySeqDist,
                                                      queryPhaseSetIntervals, truthPhaseSetIntervals, false,
                                                      lengthOut);
     
