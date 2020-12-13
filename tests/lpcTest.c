@@ -17,7 +17,7 @@ static char *TEST_VCF = "../tests/data/localPhasingCorrectness/smallPhased.vcf";
 double redundantSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants) {
     
     
-    int64_t numSwitches = 0;
+    int64_t numUnswitched = 0;
     
     for (int64_t i = 1; i < stList_length(queryPhasedVariants); ++i) {
         
@@ -30,15 +30,58 @@ double redundantSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhas
             !stString_eq(tpv_prev->phaseSet, tpv->phaseSet) ||
             (qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
             
-            ++numSwitches;
+            ++numUnswitched;
         }
     }
     
-    return ((double) numSwitches) / (stList_length(queryPhasedVariants) - 1);
+    return ((double) numUnswitched) / (stList_length(queryPhasedVariants) - 1);
+}
+
+double redundantBaseSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants) {
+    
+    
+    int64_t numUnswitched = 0;
+    
+    int64_t minDist = INT_MAX;
+    for (int64_t i = 1; i < stList_length(queryPhasedVariants); ++i) {
+        PhasedVariant *qpv_prev = stList_get(queryPhasedVariants, i - 1);
+        PhasedVariant *qpv = stList_get(queryPhasedVariants, i);
+        if (qpv->refPos - qpv_prev->refPos < minDist) {
+            minDist = qpv->refPos - qpv_prev->refPos;
+        }
+    }
+    
+    st_logDebug("calc min dist at %"PRId64"\n", minDist);
+    
+    int64_t numAtMinDist = 0;
+    for (int64_t i = 1; i < stList_length(queryPhasedVariants); ++i) {
+        
+        st_logDebug("iter i = %"PRId64"\n", i);
+        
+        PhasedVariant *qpv_prev = stList_get(queryPhasedVariants, i - 1);
+        PhasedVariant *tpv_prev = stList_get(truthPhasedVariants, i - 1);
+        PhasedVariant *qpv = stList_get(queryPhasedVariants, i);
+        PhasedVariant *tpv = stList_get(truthPhasedVariants, i);
+        
+        if (qpv->refPos - qpv_prev->refPos == minDist) {
+            if (!stString_eq(qpv_prev->phaseSet, qpv->phaseSet) ||
+                !stString_eq(tpv_prev->phaseSet, tpv->phaseSet) ||
+                (qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
+                
+                ++numUnswitched;
+            }
+            ++numAtMinDist;
+            
+            st_logDebug("num unswitched %"PRId64", num min dist %"PRId64"\n", numUnswitched, numAtMinDist);
+        }
+    }
+    
+    return ((double) numUnswitched) / numAtMinDist;
 }
 
 // a less efficient but simpler algorithm for LPC
-double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay) {
+double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
+                 bool bySeqDist) {
     
     // i'll assume that the variants are identical between the two lists for
     // this dumber version of the algorithm, and also assume that ref and alt are the
@@ -48,7 +91,12 @@ double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, doubl
     assert(stList_length(queryPhasedVariants) == stList_length(truthPhasedVariants));
     
     if (decay == 0.0) {
-        return redundantSwitchCorrectness(queryPhasedVariants, truthPhasedVariants);
+        if (bySeqDist) {
+            return redundantBaseSwitchCorrectness(queryPhasedVariants, truthPhasedVariants);
+        }
+        else {
+            return redundantSwitchCorrectness(queryPhasedVariants, truthPhasedVariants);
+        }
     }
     
     double lpcNumer = 0.0;
@@ -68,7 +116,13 @@ double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, doubl
             PhasedVariant *tpvi = stList_get(truthPhasedVariants, i);
             PhasedVariant *tpvj = stList_get(truthPhasedVariants, j);
             
-            double summand = pow(decay, fabs((double) (i - j)));
+            double summand;
+            if (bySeqDist) {
+                summand = pow(decay, fabs((double) (qpvi->refPos - qpvj->refPos)));
+            }
+            else {
+                summand = pow(decay, fabs((double) (i - j)));
+            }
             
             lpcDenom += summand;
             
@@ -111,7 +165,7 @@ void test_correctValueSimple(CuTest *testCase) {
         variants[i] = stList_construct3(0, (void (*)(void *)) phasedVariant_destruct);
         for (int64_t j = 0; j < numSites; ++j) {
             stList_append(variants[i],
-                          phasedVariant_construct("ref", 1, 60.0,
+                          phasedVariant_construct("ref", j * j + 1, 60.0,
                                                   stList_get(alleles[i], j),
                                                   0, 1, "ps"));
         }
@@ -122,12 +176,22 @@ void test_correctValueSimple(CuTest *testCase) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
                                                 false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i]);
+        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
         CuAssertDblEquals(testCase, correctness, direct, 0.000001);
         // everything in this test is perfectly phased
         CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
+
+        int64_t distPhased;
+        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                true, &distPhased);
+        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
+        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
+        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
+        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
+        // everything in this test is perfectly phased
+        CuAssertDblEquals(testCase, correctnessByDist, 1.0, 0.000001);
     }
     
     // set up new variants with errors
@@ -153,12 +217,23 @@ void test_correctValueSimple(CuTest *testCase) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
                                                 false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i]);
+        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
         CuAssertDblEquals(testCase, correctness, direct, 0.000001);
         CuAssertTrue(testCase, correctness >= 0.0);
         CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
+
+
+        int64_t distPhased;
+        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                      true, &distPhased);
+        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
+        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
+        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
+        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
+        CuAssertTrue(testCase, correctnessByDist >= 0.0);
+        CuAssertTrue(testCase, correctnessByDist < 1.00000001); // a little room for numerical slop
     }
     
     
@@ -202,7 +277,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
             }
             const char *phaseSet = (i == 0 || j < 4) ? "ps1" : "ps2";
             stList_append(variants[i],
-                          phasedVariant_construct("ref", 1, 60.0,
+                          phasedVariant_construct("ref", j * j + 1, 60.0,
                                                   stList_get(alleles[i], j),
                                                   gt1, gt2, phaseSet));
         }
@@ -213,12 +288,22 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
                                                 false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i]);
+        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
         CuAssertDblEquals(testCase, correctness, direct, 0.000001);
         // the only error occurs at the boundary of a phase set
         CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
+        
+        int64_t distPhased;
+        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                      true, &distPhased);
+        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
+        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
+        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
+        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
+        // everything in this test is perfectly phased
+        CuAssertDblEquals(testCase, correctnessByDist, 1.0, 0.000001);
     }
     
     PhasedVariant* var1 = stList_get(variants[1], 1);
@@ -231,12 +316,22 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
         int64_t numPhased;
         double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
                                                 false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i]);
+        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
         st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
         CuAssertTrue(testCase, numPhased == numSites);
         CuAssertDblEquals(testCase, correctness, direct, 0.000001);
         CuAssertTrue(testCase, correctness >= 0.0);
         CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
+        
+        int64_t distPhased;
+        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                      true, &distPhased);
+        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
+        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
+        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
+        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
+        CuAssertTrue(testCase, correctnessByDist >= 0.0);
+        CuAssertTrue(testCase, correctnessByDist < 1.00000001); // a little room for numerical slop
     }
     
     // clean up
