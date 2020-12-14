@@ -6,6 +6,8 @@
 
 #include "margin.h"
 
+#include <limits.h>
+
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
 #include <htslib/kstring.h>
@@ -49,5 +51,5 @@ void partialPhaseSums_destruct(PartialPhaseSums *pps);
 stHash *phaseSetIntervals(stList *phasedVariants);
 
 double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                          int64_t *lengthOut);
+                          bool bySeqDist, int64_t *lengthOut);
 
