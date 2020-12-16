@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
 //    // < 1 give more high values, > 1 gives more low values
 //    double lowValueBias = 1.0;
     bool bySeqDist = false;
-    bool ignoreCrossBlock = true;
+    bool crossBlockCorrect = false;
     
     char* parseEnd = NULL;
     
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
                 bySeqDist = true;
                 break;
             case 'c':
-                ignoreCrossBlock = false;
+                crossBlockCorrect = true;
                 break;
             case 'q':
                 st_setLogLevel(critical);
@@ -203,7 +203,7 @@ int main(int argc, char *argv[]) {
             
             int64_t phasedLength = 0;
             double correctness = phasingCorrectness(contigTruthVariants, contigQueryVariants, decayValues[i],
-                                                    bySeqDist, ignoreCrossBlock, &phasedLength);
+                                                    bySeqDist, crossBlockCorrect, &phasedLength);
             
             correctnessValues[i * stList_length(sharedContigs) + j] = correctness;
             
