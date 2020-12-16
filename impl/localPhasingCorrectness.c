@@ -252,7 +252,8 @@ stHash *phaseSetIntervals(stList *phasedVariants) {
     return intervals;
 }
 
-double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay, bool bySeqDist,
+double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPhasedVariants,
+                                   double decay, bool bySeqDist, bool crossBlockCorrect,
                                    stHash *queryPhaseSetIntervals, stHash *truthPhaseSetIntervals, bool forward,
                                    int64_t *lengthOut) {
     
@@ -266,7 +267,6 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     double totalSum = 0.0;
     
     // accumulator for the max value of the sum
-    double partitionSum = 0.0;
     double partitionTotalSum = 0.0;
     
     // accumulator for the unphased partial sums of phase set pairs that have fallen out of scope
@@ -347,10 +347,9 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 sums->phaseSum1 *= decayValue;
                 sums->phaseSum2 *= decayValue;
             }
-            partitionSum *= decayValue;
             outOfScopeSum *= decayValue;
             
-            st_logDebug("going into iteration query %"PRId64", truth %"PRId64":\n\tref pos %"PRId64"\n\titer decay %f\n\ttotal %f\n\tpartition total %f\n\tpartition sum %f\n\tout of scope sum %f\n", i - incr, j - incr, qpv->refPos, decayValue, totalSum, partitionTotalSum, partitionSum, outOfScopeSum);
+            st_logDebug("going into iteration query %"PRId64", truth %"PRId64":\n\tref pos %"PRId64"\n\titer decay %f\n\ttotal %f\n\tpartition total %f\n\tout of scope sum %f\n", i - incr, j - incr, qpv->refPos, decayValue, totalSum, partitionTotalSum, outOfScopeSum);
             
             ++numPhased;
             if (firstPhasedVariantPos == -1) {
@@ -374,6 +373,9 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                     
                     foundCophasedSum = true;
                     
+                    // partition functions acts as if correctly phased with everything
+                    partitionTotalSum += sums->phaseSum1 + sums->phaseSum2;
+                    
                     // because we've filtered down to 1) only het sites, and  2) sites
                     // where the alleles match, the only two combinations of matching
                     // that are allowed are 1-1/2-2 or 1-2/2-1
@@ -386,16 +388,17 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                         sums->phaseSum2 += 1.0;
                     }
                 }
-                else {
-                    // this is a different phase set
+                else if (crossBlockCorrect) {
+                    // this is a different phase set, but we're counting those summands
+                    // as correct
                     totalSum += sums->phaseSum1 + sums->phaseSum2;
+                    partitionTotalSum += sums->phaseSum1 + sums->phaseSum2;
                 }
             }
-            totalSum += outOfScopeSum;
             
-            // partition function is the max value, always counts pairs as phased
-            partitionTotalSum += partitionSum;
-            partitionSum += 1.0;
+            // add any summands from out of scope phase set pairs
+            totalSum += outOfScopeSum;
+            partitionTotalSum += outOfScopeSum;
             
             if (!foundCophasedSum) {
                 // this is the first time we've found this phase set pair, we need
@@ -429,7 +432,9 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 
                 st_logDebug("\t\tthis sum falls out of scope at this iteration\n");
                 
-                outOfScopeSum += sums->phaseSum1 + sums->phaseSum2;
+                if (crossBlockCorrect) {
+                    outOfScopeSum += sums->phaseSum1 + sums->phaseSum2;
+                }
                 
                 // remove this sum from the list of partial sums
                 partialPhaseSums_destruct(sums);
@@ -461,7 +466,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
     return returnVal;
 }
 
-double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, bool bySeqDist, int64_t *lengthOut) {
+double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, bool bySeqDist,
+                         bool crossBlockCorrect, int64_t *lengthOut) {
     
     char *prevQueryPhaseSet = NULL;
     char *prevTruthPhaseSet = NULL;
@@ -525,29 +531,38 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
                 
                 st_logDebug("checking phasing between var at position %"PRId64" in phase %d and var at position %"PRId64" in phase %d\n", prevPosition, prevInPhase, qpv->refPos, match11);
                 
-                if (phasePairDist < minAdjacentDist) {
-                    if (bySeqDist) {
-                        // only the nearest pairs together count, so we throw away all previously
-                        // recorded pairs that had a larger distance between
-                        numPossiblyPhasedPairs = 0;
-                        numCorrectlyPhasedPairs = 0;
-                        
-                        st_logDebug("new minimum distance, discarding previous pair phasing data\n");
-                    }
+                // TODO: this could break if the minimum distance is achieved at pairs that aren't
+                
+                bool phaseSetPairMatch = (stString_eq(qpv->phaseSet, prevQueryPhaseSet)
+                                          && stString_eq(tpv->phaseSet, prevTruthPhaseSet));
+                
+                if (phasePairDist < minAdjacentDist && bySeqDist && (phaseSetPairMatch || crossBlockCorrect)) {
+                    // only the nearest pairs together count, so we throw away all previously
+                    // recorded pairs that had a larger distance between
+                    // note: the min distance will not be maintained unless using by seq dist
+                    
+                    st_logDebug("new minimum distance of %"PRId64" from %"PRId64", discarding previous pair phasing data\n", phasePairDist, minAdjacentDist);
+                    
+                    numPossiblyPhasedPairs = 0;
+                    numCorrectlyPhasedPairs = 0;
                     minAdjacentDist = phasePairDist;
                 }
                 
                 if (phasePairDist == minAdjacentDist || !bySeqDist) {
                     
-                    // because we've filtered down to 1) only het sites, and  2) sites
-                    // where the alleles match, the only two combinations of matching
-                    // that are allowed are 1-1/2-2 or 1-2/2-1
-                    if (!stString_eq(qpv->phaseSet, prevQueryPhaseSet) ||
-                        !stString_eq(tpv->phaseSet, prevTruthPhaseSet) ||
-                        match11 == prevInPhase) {
-                        ++numCorrectlyPhasedPairs;
+                    if (phaseSetPairMatch) {
+                        // because we've filtered down to 1) only het sites, and  2) sites
+                        // where the alleles match, the only two combinations of matching
+                        // that are allowed are 1-1/2-2 or 1-2/2-1
+                        if (match11 == prevInPhase) {
+                            ++numCorrectlyPhasedPairs;
+                        }
+                        ++numPossiblyPhasedPairs;
                     }
-                    ++numPossiblyPhasedPairs;
+                    else if (crossBlockCorrect) {
+                        ++numCorrectlyPhasedPairs;
+                        ++numPossiblyPhasedPairs;
+                    }
                     
                     st_logDebug("num phased incremented to %"PRId64", possibly phased incremented to %"PRId64"\n", numCorrectlyPhasedPairs, numPossiblyPhasedPairs);
                 }
@@ -573,7 +588,7 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
 }
 
 double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                          bool bySeqDist, int64_t *lengthOut) {
+                          bool bySeqDist, bool crossBlockCorrect, int64_t *lengthOut) {
     
     if (decay < 0.0 || decay > 1.0) {
         st_errAbort("error: Decay factor is %d, must be between 0.0 and 1.0\n", decay);
@@ -584,19 +599,22 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
     if (decay == 0.0) {
         // this has to be handled as a special case, because it's actually a limit rather
         // than direct evaluation. if computed directly, leads to division by 0
-        return switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, lengthOut);
+        return switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, crossBlockCorrect,
+                                 lengthOut);
     }
     
     // the interval of variant indexes that each phase set is contained in
     stHash *queryPhaseSetIntervals = phaseSetIntervals(queryPhasedVariants);
     stHash *truthPhaseSetIntervals = phaseSetIntervals(truthPhasedVariants);
     
-    double *forwardSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,bySeqDist,
-                                                     queryPhaseSetIntervals, truthPhaseSetIntervals, true,
-                                                     lengthOut);
-    double *reverseSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay, bySeqDist,
-                                                     queryPhaseSetIntervals, truthPhaseSetIntervals, false,
-                                                     lengthOut);
+    double *forwardSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,
+                                                     bySeqDist, crossBlockCorrect,
+                                                     queryPhaseSetIntervals, truthPhaseSetIntervals,
+                                                     true, lengthOut);
+    double *reverseSums = phasingCorrectnessInternal(queryPhasedVariants, truthPhasedVariants, decay,
+                                                     bySeqDist, crossBlockCorrect,
+                                                     queryPhaseSetIntervals, truthPhaseSetIntervals,
+                                                     false, lengthOut);
     
     stHash_destruct(queryPhaseSetIntervals);
     stHash_destruct(truthPhaseSetIntervals);

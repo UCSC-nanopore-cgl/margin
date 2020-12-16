@@ -51,5 +51,5 @@ void partialPhaseSums_destruct(PartialPhaseSums *pps);
 stHash *phaseSetIntervals(stList *phasedVariants);
 
 double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                          bool bySeqDist, int64_t *lengthOut);
+                          bool bySeqDist, bool crossBlockCorrect, int64_t *lengthOut);
 

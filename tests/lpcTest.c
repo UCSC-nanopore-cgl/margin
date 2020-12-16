@@ -14,10 +14,12 @@ static char *TEST_VCF = "../tests/data/localPhasingCorrectness/smallPhased.vcf";
 
 // in lieu of a separate algorithm for switch correctness, i'll just have an independent
 // implementation
-double redundantSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants) {
+double redundantSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants,
+                                  bool crossBlockCorrect) {
     
     
     int64_t numUnswitched = 0;
+    int64_t numPossibleUnswitched = 0;
     
     for (int64_t i = 1; i < stList_length(queryPhasedVariants); ++i) {
         
@@ -26,27 +28,40 @@ double redundantSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhas
         PhasedVariant *qpv = stList_get(queryPhasedVariants, i);
         PhasedVariant *tpv = stList_get(truthPhasedVariants, i);
         
-        if (!stString_eq(qpv_prev->phaseSet, qpv->phaseSet) ||
-            !stString_eq(tpv_prev->phaseSet, tpv->phaseSet) ||
-            (qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
-            
+        if (stString_eq(qpv_prev->phaseSet, qpv->phaseSet) &&
+            stString_eq(tpv_prev->phaseSet, tpv->phaseSet)) {
+            if ((qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
+                ++numUnswitched;
+            }
+            ++numPossibleUnswitched;
+        }
+        else if (crossBlockCorrect) {
             ++numUnswitched;
+            ++numPossibleUnswitched;
         }
     }
     
-    return ((double) numUnswitched) / (stList_length(queryPhasedVariants) - 1);
+    return ((double) numUnswitched) / numPossibleUnswitched;
 }
 
-double redundantBaseSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants) {
+double redundantBaseSwitchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants,
+                                      bool crossBlockCorrect) {
     
     
     int64_t numUnswitched = 0;
     
     int64_t minDist = INT_MAX;
     for (int64_t i = 1; i < stList_length(queryPhasedVariants); ++i) {
+        
         PhasedVariant *qpv_prev = stList_get(queryPhasedVariants, i - 1);
+        PhasedVariant *tpv_prev = stList_get(truthPhasedVariants, i - 1);
         PhasedVariant *qpv = stList_get(queryPhasedVariants, i);
-        if (qpv->refPos - qpv_prev->refPos < minDist) {
+        PhasedVariant *tpv = stList_get(truthPhasedVariants, i);
+        
+        if (qpv->refPos - qpv_prev->refPos < minDist &&
+            ((stString_eq(qpv_prev->phaseSet, qpv->phaseSet) &&
+              stString_eq(tpv_prev->phaseSet, tpv->phaseSet))
+             || crossBlockCorrect)) {
             minDist = qpv->refPos - qpv_prev->refPos;
         }
     }
@@ -64,13 +79,18 @@ double redundantBaseSwitchCorrectness(stList *queryPhasedVariants, stList *truth
         PhasedVariant *tpv = stList_get(truthPhasedVariants, i);
         
         if (qpv->refPos - qpv_prev->refPos == minDist) {
-            if (!stString_eq(qpv_prev->phaseSet, qpv->phaseSet) ||
-                !stString_eq(tpv_prev->phaseSet, tpv->phaseSet) ||
-                (qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
-                
-                ++numUnswitched;
+            if (stString_eq(qpv_prev->phaseSet, qpv->phaseSet) &&
+                stString_eq(tpv_prev->phaseSet, tpv->phaseSet)) {
+                if ((qpv_prev->gt1 == tpv_prev->gt1) == (qpv->gt1 == tpv->gt1)) {
+                    
+                    ++numUnswitched;
+                }
+                ++numAtMinDist;
             }
-            ++numAtMinDist;
+            else if (crossBlockCorrect) {
+                ++numUnswitched;
+                ++numAtMinDist;
+            }
             
             st_logDebug("num unswitched %"PRId64", num min dist %"PRId64"\n", numUnswitched, numAtMinDist);
         }
@@ -81,7 +101,7 @@ double redundantBaseSwitchCorrectness(stList *queryPhasedVariants, stList *truth
 
 // a less efficient but simpler algorithm for LPC
 double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                 bool bySeqDist) {
+                 bool bySeqDist, bool crossBlockCorrect) {
     
     // i'll assume that the variants are identical between the two lists for
     // this dumber version of the algorithm, and also assume that ref and alt are the
@@ -92,10 +112,12 @@ double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, doubl
     
     if (decay == 0.0) {
         if (bySeqDist) {
-            return redundantBaseSwitchCorrectness(queryPhasedVariants, truthPhasedVariants);
+            return redundantBaseSwitchCorrectness(queryPhasedVariants, truthPhasedVariants,
+                                                  crossBlockCorrect);
         }
         else {
-            return redundantSwitchCorrectness(queryPhasedVariants, truthPhasedVariants);
+            return redundantSwitchCorrectness(queryPhasedVariants, truthPhasedVariants,
+                                              crossBlockCorrect);
         }
     }
     
@@ -115,6 +137,12 @@ double directLPC(stList *queryPhasedVariants, stList *truthPhasedVariants, doubl
             PhasedVariant *qpvj = stList_get(queryPhasedVariants, j);
             PhasedVariant *tpvi = stList_get(truthPhasedVariants, i);
             PhasedVariant *tpvj = stList_get(truthPhasedVariants, j);
+            
+            if ((!stString_eq(qpvi->phaseSet, qpvj->phaseSet)
+                 || !stString_eq(tpvi->phaseSet, tpvj->phaseSet))
+                && !crossBlockCorrect) {
+                continue;
+            }
             
             double summand;
             if (bySeqDist) {
@@ -173,25 +201,30 @@ void test_correctValueSimple(CuTest *testCase) {
     
     st_logDebug("TEST BLOCK: perfect phasing\n");
     for (int64_t i = 0; i < numDecayValues; ++i) {
-        int64_t numPhased;
-        double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
-        CuAssertTrue(testCase, numPhased == numSites);
-        CuAssertDblEquals(testCase, correctness, direct, 0.000001);
-        // everything in this test is perfectly phased
-        CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
-
-        int64_t distPhased;
-        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                true, &distPhased);
-        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
-        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
-        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
-        // everything in this test is perfectly phased
-        CuAssertDblEquals(testCase, correctnessByDist, 1.0, 0.000001);
+        for (int64_t byDist = 0; byDist < 2; ++byDist) {
+            for (int64_t crossBlockCorrect = 0; crossBlockCorrect < 2; ++crossBlockCorrect) {
+                bool doByDist = byDist;
+                bool doCrossBlockCorrect = crossBlockCorrect;
+                
+                int64_t length;
+                double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                        doByDist, doCrossBlockCorrect, &length);
+                double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
+                                          doCrossBlockCorrect);
+                st_logDebug("decay %f, by dist %d, cross block correct %d, algorithm %f, direct %f\n", decayValues[i], doByDist, doCrossBlockCorrect, correctness, direct);
+                CuAssertDblEquals(testCase, correctness, direct, 0.000001);
+                // everything in this test is perfectly phased
+                CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
+                
+                if (doByDist) {
+                    // the distance between
+                    CuAssertTrue(testCase, length == (numSites - 1) * (numSites - 1));
+                }
+                else {
+                    CuAssertTrue(testCase, length == numSites);
+                }
+            }
+        }
     }
     
     // set up new variants with errors
@@ -214,26 +247,31 @@ void test_correctValueSimple(CuTest *testCase) {
     
     st_logDebug("TEST BLOCK: phasing with errors\n");
     for (int64_t i = 0; i < numDecayValues; ++i) {
-        int64_t numPhased;
-        double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
-        CuAssertTrue(testCase, numPhased == numSites);
-        CuAssertDblEquals(testCase, correctness, direct, 0.000001);
-        CuAssertTrue(testCase, correctness >= 0.0);
-        CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
-
-
-        int64_t distPhased;
-        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                      true, &distPhased);
-        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
-        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
-        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
-        CuAssertTrue(testCase, correctnessByDist >= 0.0);
-        CuAssertTrue(testCase, correctnessByDist < 1.00000001); // a little room for numerical slop
+        for (int64_t byDist = 0; byDist < 2; ++byDist) {
+            for (int64_t crossBlockCorrect = 0; crossBlockCorrect < 2; ++crossBlockCorrect) {
+                bool doByDist = byDist;
+                bool doCrossBlockCorrect = crossBlockCorrect;
+                
+                int64_t length;
+                double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                        doByDist, doCrossBlockCorrect, &length);
+                double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
+                                          doCrossBlockCorrect);
+                st_logDebug("decay %f, by dist %d, cross block correct %d, algorithm %f, direct %f\n", decayValues[i], doByDist, doCrossBlockCorrect, correctness, direct);
+                CuAssertDblEquals(testCase, correctness, direct, 0.000001);
+                // everything in this test is perfectly phased
+                CuAssertTrue(testCase, correctness >= 0.0);
+                CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
+                
+                if (doByDist) {
+                    // the distance between
+                    CuAssertTrue(testCase, length == (numSites - 1) * (numSites - 1));
+                }
+                else {
+                    CuAssertTrue(testCase, length == numSites);
+                }
+            }
+        }
     }
     
     
@@ -249,7 +287,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
     int64_t numDecayValues = 11;
     double decayValues[11] = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
     
-    int64_t numSites = 8;
+    int64_t numSites = 10;
     stList *alleles[2];
     for (int64_t i = 0; i < 2; ++i) {
         alleles[i] = stList_construct();
@@ -275,7 +313,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
                 gt1 = 1;
                 gt2 = 0;
             }
-            const char *phaseSet = (i == 0 || j < 4) ? "ps1" : "ps2";
+            const char *phaseSet = (i == 0 || j < 4) ? "ps1" : (j < 8 ? "ps2" :"ps3");
             stList_append(variants[i],
                           phasedVariant_construct("ref", j * j + 1, 60.0,
                                                   stList_get(alleles[i], j),
@@ -285,25 +323,30 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
     
     st_logDebug("TEST BLOCK: perfect phasing in two blocks\n");
     for (int64_t i = 0; i < numDecayValues; ++i) {
-        int64_t numPhased;
-        double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
-        CuAssertTrue(testCase, numPhased == numSites);
-        CuAssertDblEquals(testCase, correctness, direct, 0.000001);
-        // the only error occurs at the boundary of a phase set
-        CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
-        
-        int64_t distPhased;
-        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                      true, &distPhased);
-        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
-        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
-        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
-        // everything in this test is perfectly phased
-        CuAssertDblEquals(testCase, correctnessByDist, 1.0, 0.000001);
+        for (int64_t byDist = 0; byDist < 2; ++byDist) {
+            for (int64_t crossBlockCorrect = 0; crossBlockCorrect < 2; ++crossBlockCorrect) {
+                bool doByDist = byDist;
+                bool doCrossBlockCorrect = crossBlockCorrect;
+                
+                int64_t length;
+                double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                        doByDist, doCrossBlockCorrect, &length);
+                double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
+                                          doCrossBlockCorrect);
+                st_logDebug("decay %f, by dist %d, cross block correct %d, algorithm %f, direct %f\n", decayValues[i], doByDist, doCrossBlockCorrect, correctness, direct);
+                CuAssertDblEquals(testCase, correctness, direct, 0.000001);
+                // everything in this test is perfectly phased
+                CuAssertDblEquals(testCase, correctness, 1.0, 0.000001);
+                
+                if (doByDist) {
+                    // the distance between
+                    CuAssertTrue(testCase, length == (numSites - 1) * (numSites - 1));
+                }
+                else {
+                    CuAssertTrue(testCase, length == numSites);
+                }
+            }
+        }
     }
     
     PhasedVariant* var1 = stList_get(variants[1], 1);
@@ -313,25 +356,31 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
     
     st_logDebug("TEST BLOCK: imperfect phasing across interlocking sets\n");
     for (int64_t i = 0; i < numDecayValues; ++i) {
-        int64_t numPhased;
-        double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                false, &numPhased);
-        double direct = directLPC(variants[0], variants[1], decayValues[i], false);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctness, direct);
-        CuAssertTrue(testCase, numPhased == numSites);
-        CuAssertDblEquals(testCase, correctness, direct, 0.000001);
-        CuAssertTrue(testCase, correctness >= 0.0);
-        CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
-        
-        int64_t distPhased;
-        double correctnessByDist = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                      true, &distPhased);
-        double directByDist = directLPC(variants[0], variants[1], decayValues[i], true);
-        st_logDebug("decay %f, algorithm %f, direct %f\n", decayValues[i], correctnessByDist, directByDist);
-        CuAssertTrue(testCase, distPhased == (numSites - 1) * (numSites - 1));
-        CuAssertDblEquals(testCase, correctnessByDist, directByDist, 0.000001);
-        CuAssertTrue(testCase, correctnessByDist >= 0.0);
-        CuAssertTrue(testCase, correctnessByDist < 1.00000001); // a little room for numerical slop
+        for (int64_t byDist = 0; byDist < 2; ++byDist) {
+            for (int64_t crossBlockCorrect = 0; crossBlockCorrect < 2; ++crossBlockCorrect) {
+                bool doByDist = byDist;
+                bool doCrossBlockCorrect = crossBlockCorrect;
+                
+                int64_t length;
+                double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
+                                                        doByDist, doCrossBlockCorrect, &length);
+                double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
+                                          doCrossBlockCorrect);
+                st_logDebug("decay %f, by dist %d, cross block correct %d, algorithm %f, direct %f\n", decayValues[i], doByDist, doCrossBlockCorrect, correctness, direct);
+                CuAssertDblEquals(testCase, correctness, direct, 0.000001);
+                // everything in this test is perfectly phased
+                CuAssertTrue(testCase, correctness >= 0.0);
+                CuAssertTrue(testCase, correctness < 1.00000001); // a little room for numerical slop
+                
+                if (doByDist) {
+                    // the distance between
+                    CuAssertTrue(testCase, length == (numSites - 1) * (numSites - 1));
+                }
+                else {
+                    CuAssertTrue(testCase, length == numSites);
+                }
+            }
+        }
     }
     
     // clean up
