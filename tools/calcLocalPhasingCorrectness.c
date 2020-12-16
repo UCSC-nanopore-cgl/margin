@@ -23,11 +23,12 @@ void usage() {
     fprintf(stderr, "Generate LPC data for phase sets in both VCFs.\n\n");
     fprintf(stderr, "usage: calcLocalPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv\n\n");
     fprintf(stderr, "options:\n");
-    fprintf(stderr, " -n, --grid-num INT     number of length scales to compute LPC for [200]\n");
-    fprintf(stderr, " -d, --by-seq-dist      measure length by base pairs rather than number of variants\n");
-    //fprintf(stderr, " -s, --grid-skew FLOAT  controls evenness of grid between small and large values [0.0]\n");
-    fprintf(stderr, " -q, --quiet            do not log progress to stderr\n");
-    fprintf(stderr, " -h, --help             print this message and exit\n");
+    fprintf(stderr, " -n, --grid-num INT         number of length scales to compute LPC for [200]\n");
+    fprintf(stderr, " -d, --by-seq-dist          measure length by base pairs rather than number of variants\n");
+    fprintf(stderr, " -c, --cross-block-correct  count variants in different blocks as correctly phased together\n");
+    fprintf(stderr, " -s, --grid-skew FLOAT      controls evenness of grid between small and large values [0.0]\n");
+    fprintf(stderr, " -q, --quiet                do not log progress to stderr\n");
+    fprintf(stderr, " -h, --help                 print this message and exit\n");
     fprintf(stderr, "\n");
 }
 
@@ -37,9 +38,9 @@ int main(int argc, char *argv[]) {
     st_setLogLevel(info);
     
     int64_t numLengthScales = 200;
-//    // < 1 give more high values, > 1 gives more low values
-//    double lowValueBias = 1.0;
+    double gridPower = 1.0;
     bool bySeqDist = false;
+    bool crossBlockCorrect = false;
     
     char* parseEnd = NULL;
     
@@ -49,14 +50,15 @@ int main(int argc, char *argv[]) {
         {
             {"grid-num", required_argument, 0, 'n'},
             {"by-seq-dist", no_argument, 0, 'd'},
-            //{"grid-skew", required_argument, 0, 's'},
+            {"cross-block-correct", no_argument, 0, 'c'},
+            {"grid-skew", required_argument, 0, 's'},
             {"quiet", no_argument, 0, 'q'},
             {"help", no_argument, 0, 'h'},
             {0,0,0,0}
         };
         
         int option_index = 0;
-        c = getopt_long (argc, argv, "n:dqh?",
+        c = getopt_long (argc, argv, "n:dcs:qh?",
                          long_options, &option_index);
         if (c == -1){
             break;
@@ -71,16 +73,19 @@ int main(int argc, char *argv[]) {
                     exit(1);
                 }
                 break;
-//            case 's':
-//                lowValueBias = exp(-strtod(optarg, &parseEnd));
-//                if ((parseEnd - optarg) != strlen(optarg)) {
-//                    fprintf(stderr, "error: Failed to parse argument %s as a float\n\n", optarg);
-//                    usage();
-//                    exit(1);
-//                }
-//                break;
+            case 's':
+                gridPower = exp(-strtod(optarg, &parseEnd));
+                if ((parseEnd - optarg) != strlen(optarg)) {
+                    fprintf(stderr, "error: Failed to parse argument %s as a float\n\n", optarg);
+                    usage();
+                    exit(1);
+                }
+                break;
             case 'd':
                 bySeqDist = true;
+                break;
+            case 'c':
+                crossBlockCorrect = true;
                 break;
             case 'q':
                 st_setLogLevel(critical);
@@ -136,7 +141,7 @@ int main(int argc, char *argv[]) {
             decayValues[i] = 1.0;
         }
         else {
-            decayValues[i] = i / denom;
+            decayValues[i] = pow(i / denom, gridPower);
         }
         st_logDebug("\t%f\n", decayValues[i]);
     }
@@ -197,7 +202,7 @@ int main(int argc, char *argv[]) {
             
             int64_t phasedLength = 0;
             double correctness = phasingCorrectness(contigTruthVariants, contigQueryVariants, decayValues[i],
-                                                    bySeqDist, &phasedLength);
+                                                    bySeqDist, crossBlockCorrect, &phasedLength);
             
             correctnessValues[i * stList_length(sharedContigs) + j] = correctness;
             
