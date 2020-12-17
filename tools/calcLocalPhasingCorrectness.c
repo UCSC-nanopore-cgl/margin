@@ -129,6 +129,13 @@ int main(int argc, char *argv[]) {
     if (numLengthScales < 4) {
         st_errAbort("error: Must have a grid of at least 4 values\n");
     }
+    if (gridMin >= gridMax) {
+        st_errAbort("error: Minimum grid value must be less than maximum grid value\n");
+    }
+    if (gridMin <= 0.0) {
+        st_errAbort("error: Minimum grid value must be > 0\n");
+    }
+    
 
     // sanity check (verify files are accessible)
     if (access(truthVcfFile, R_OK) != 0) {
