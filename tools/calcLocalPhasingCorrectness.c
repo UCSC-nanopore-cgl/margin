@@ -24,9 +24,10 @@ void usage() {
     fprintf(stderr, "usage: calcLocalPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv\n\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, " -n, --grid-num INT         number of length scales to compute LPC for [200]\n");
+    fprintf(stderr, " -m, --grid-min FLOAT       smallest positive length scale [1e-5]\n");
+    fprintf(stderr, " -M, --grid-max FLOAT       largest length scale [1e5]\n");
     fprintf(stderr, " -d, --by-seq-dist          measure length by base pairs rather than number of variants\n");
     fprintf(stderr, " -c, --cross-block-correct  count variants in different blocks as correctly phased together\n");
-    fprintf(stderr, " -s, --grid-skew FLOAT      controls evenness of grid between small and large values [0.0]\n");
     fprintf(stderr, " -q, --quiet                do not log progress to stderr\n");
     fprintf(stderr, " -h, --help                 print this message and exit\n");
     fprintf(stderr, "\n");
@@ -38,7 +39,8 @@ int main(int argc, char *argv[]) {
     st_setLogLevel(info);
     
     int64_t numLengthScales = 200;
-    double gridPower = 1.0;
+    double gridMin = 1e-5;
+    double gridMax = 1e5;
     bool bySeqDist = false;
     bool crossBlockCorrect = false;
     
@@ -49,16 +51,17 @@ int main(int argc, char *argv[]) {
         static struct option long_options[] =
         {
             {"grid-num", required_argument, 0, 'n'},
+            {"grid-min", required_argument, 0, 'm'},
+            {"grid-max", required_argument, 0, 'M'},
             {"by-seq-dist", no_argument, 0, 'd'},
             {"cross-block-correct", no_argument, 0, 'c'},
-            {"grid-skew", required_argument, 0, 's'},
             {"quiet", no_argument, 0, 'q'},
             {"help", no_argument, 0, 'h'},
             {0,0,0,0}
         };
         
         int option_index = 0;
-        c = getopt_long (argc, argv, "n:dcs:qh?",
+        c = getopt_long (argc, argv, "n:m:M:dcqh?",
                          long_options, &option_index);
         if (c == -1){
             break;
@@ -73,8 +76,16 @@ int main(int argc, char *argv[]) {
                     exit(1);
                 }
                 break;
-            case 's':
-                gridPower = exp(-strtod(optarg, &parseEnd));
+            case 'm':
+                gridMin = strtod(optarg, &parseEnd);
+                if ((parseEnd - optarg) != strlen(optarg)) {
+                    fprintf(stderr, "error: Failed to parse argument %s as a float\n\n", optarg);
+                    usage();
+                    exit(1);
+                }
+                break;
+            case 'M':
+                gridMax = strtod(optarg, &parseEnd);
                 if ((parseEnd - optarg) != strlen(optarg)) {
                     fprintf(stderr, "error: Failed to parse argument %s as a float\n\n", optarg);
                     usage();
@@ -115,9 +126,16 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     
-    if (numLengthScales < 2) {
-        st_errAbort("error: Must have a grid of at least 2 values\n");
+    if (numLengthScales < 4) {
+        st_errAbort("error: Must have a grid of at least 4 values\n");
     }
+    if (gridMin >= gridMax) {
+        st_errAbort("error: Minimum grid value must be less than maximum grid value\n");
+    }
+    if (gridMin <= 0.0) {
+        st_errAbort("error: Minimum grid value must be > 0\n");
+    }
+    
 
     // sanity check (verify files are accessible)
     if (access(truthVcfFile, R_OK) != 0) {
@@ -126,10 +144,25 @@ int main(int argc, char *argv[]) {
     if (access(queryVcfFile, R_OK) != 0) {
         st_errAbort("error: Could not read from query vcf file: %s\n", queryVcfFile);
     }
+    
+    st_logDebug("Length scales:\n");
+    double *lengthScales = (double*) malloc(numLengthScales * sizeof(double));
+    double step = (log(gridMax) - log(gridMin)) / (numLengthScales - 3);
+    for (int64_t i = 0; i < numLengthScales; ++i) {
+        // the first and last are always the same, the rest is filled in by the grid
+        if (i == 0) {
+            lengthScales[i] = 0.0;
+        }
+        else if (i == numLengthScales - 1) {
+            lengthScales[i] = -log(0.0);
+        }
+        else {
+            lengthScales[i] = exp(log(gridMin) + (i - 1) * step);
+        }
+        st_logDebug("\t%f\n", lengthScales[i]);
+    }
         
     st_logDebug("Decay values:\n");
-    // use biased bin selection from ARGweaver paper, Rasmussen, et al. (2013)
-    double denom = numLengthScales - 1;
     double *decayValues = (double*) malloc(numLengthScales * sizeof(double));
     for (int64_t i = 0; i < numLengthScales; ++i) {
         // handle the boundary conditions separately so we don't have to worry about
@@ -141,26 +174,10 @@ int main(int argc, char *argv[]) {
             decayValues[i] = 1.0;
         }
         else {
-            decayValues[i] = pow(i / denom, gridPower);
+            decayValues[i] = exp(-log(2.0) / lengthScales[i]);
         }
         st_logDebug("\t%f\n", decayValues[i]);
     }
-    
-    st_logDebug("Length scales:\n");
-    double *lengthScales = (double*) malloc(numLengthScales * sizeof(double));
-    for (int64_t i = 0; i < numLengthScales; ++i) {
-        if (i == 0) {
-            lengthScales[i] = 0.0;
-        }
-        else if (i == numLengthScales - 1) {
-            lengthScales[i] = -log(0.0);
-        }
-        else {
-            lengthScales[i] = -log(2.0) / log(decayValues[i]);
-        }
-        st_logDebug("\t%f\n", lengthScales[i]);
-    }
-    
 
     // read and parse the VCFs
     st_logInfo("Reading VCF %s...\n", truthVcfFile);
@@ -175,7 +192,6 @@ int main(int argc, char *argv[]) {
     st_logInfo("Found %"PRId64" shared contigs (truth %"PRId64", query %"PRId64")\n", stList_length(sharedContigs),
             stHash_size(truthVariants), stHash_size(queryVariants));
     
-    
     double *correctnessValues = (double*) malloc(sizeof(double) * numLengthScales * stList_length(sharedContigs));
     double *meanCorrectnessValues = (double*) malloc(sizeof(double) * numLengthScales);
     
@@ -187,6 +203,8 @@ int main(int argc, char *argv[]) {
     while (reportIterations[nextReportIdx] == 0 && nextReportIdx < 5) {
         ++nextReportIdx;
     }
+    
+    double variantDist = meanVariantDist(truthVariants, queryVariants, sharedContigs);
     
     // Compute the correctness values
     for (int64_t i = 0; i < numLengthScales; ++i) {
@@ -222,13 +240,23 @@ int main(int argc, char *argv[]) {
     }
     
     // print out the results in a table
-    printf("decay\tlength_scale");
+    printf("decay\t");
+    if (bySeqDist) {
+        printf("approx_");
+    }
+    printf("length_scale_num_vars\t");
+    if (!bySeqDist) {
+        printf("approx_");
+    }
+    printf("length_scale_bps\t");
     for (int64_t i = 0; i < stList_length(sharedContigs); ++i) {
         printf("\t%s", (char*) stList_get(sharedContigs, i));
     }
     printf("\tweighted_mean\n");
     for (int64_t i = 0; i < numLengthScales; ++i) {
-        printf("%f\t%f", decayValues[i], lengthScales[i]);
+        printf("%f\t%f\t%f", decayValues[i],
+               bySeqDist ? lengthScales[i] / variantDist : lengthScales[i],
+               bySeqDist ? lengthScales[i] : lengthScales[i] * variantDist);
         for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
             printf("\t%f", correctnessValues[i * stList_length(sharedContigs) + j]);
         }

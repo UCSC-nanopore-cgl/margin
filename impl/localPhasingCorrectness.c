@@ -215,6 +215,67 @@ stList *getSharedContigs(stHash *entry1, stHash *entry2) {
     return sharedContigs;
 }
 
+double meanVariantDist(stHash *query, stHash *truth, stList *sharedContigs) {
+    
+    int64_t distSum = 0;
+    int64_t numPairs = 0;
+    for (int64_t i = 0; i < stList_length(sharedContigs); ++i) {
+        char *contig = stList_get(sharedContigs, i);
+        stList *queryPhasedVariants = stHash_search(query, contig);
+        stList *truthPhasedVariants = stHash_search(truth, contig);
+        int64_t prevPos = -1;
+        for (int64_t j = 0, k = 0; j < stList_length(queryPhasedVariants) && k < stList_length(truthPhasedVariants); ) {
+            
+            PhasedVariant *qpv = stList_get(queryPhasedVariants, j);
+            PhasedVariant *tpv = stList_get(truthPhasedVariants, k);
+            
+            if (qpv->refPos < tpv->refPos) {
+                // variant only in query
+                ++j;
+            }
+            else if (tpv->refPos < qpv->refPos) {
+                // variant only in truth
+                ++k;
+            }
+            else {
+                
+                // TODO: duplicative with localCorrectnessInternal
+                
+                // match up the alleles
+                bool match11 = stString_eq(stList_get(qpv->alleles, qpv->gt1), stList_get(tpv->alleles, tpv->gt1));
+                bool match12 = stString_eq(stList_get(qpv->alleles, qpv->gt1), stList_get(tpv->alleles, tpv->gt2));
+                bool match21 = stString_eq(stList_get(qpv->alleles, qpv->gt2), stList_get(tpv->alleles, tpv->gt1));
+                bool match22 = stString_eq(stList_get(qpv->alleles, qpv->gt2), stList_get(tpv->alleles, tpv->gt2));
+                
+                ++j;
+                ++k;
+                
+                if (!(match11 || match12) || !(match21 || match22)) {
+                    // the site is shared, but the alleles are not, just skip this variant
+                    // TODO: is this the best way to handle this case?
+                    continue;
+                }
+                
+                if ((int) match11 + (int) match12 + (int) match21 + (int) match22 > 2) {
+                    // at least one allele must be duplicated in the list of alts
+                    st_logCritical("error: duplicate alleles detected at position %"PRId64" on sequence %s\n",
+                                   qpv->refPos, qpv->refSeqName);
+                    continue;
+                }
+                
+                if (prevPos != -1) {
+                    distSum += (qpv->refPos - prevPos);
+                    ++numPairs;
+                }
+                
+                prevPos = qpv->refPos;
+            }
+        }
+    }
+    
+    return ((double) distSum) / numPairs;
+}
+
 PartialPhaseSums* partialPhaseSums_construct(const char *queryPhaseSet, const char *truthPhaseSet) {
     PartialPhaseSums* pps = (PartialPhaseSums*) malloc(sizeof(PartialPhaseSums));
     pps->queryPhaseSet = stString_copy(queryPhaseSet);
@@ -328,8 +389,6 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
             
             if ((int) match11 + (int) match12 + (int) match21 + (int) match22 > 2) {
                 // at least one allele must be duplicated in the list of alts
-                st_logCritical("error: duplicate alleles detected at position %"PRId64" on sequence %s\n",
-                               qpv->refPos, qpv->refSeqName);
                 continue;
             }
             
@@ -514,8 +573,6 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
             
             if ((int) match11 + (int) match12 + (int) match21 + (int) match22 > 2) {
                 // at least one allele must be duplicated in the list of alts
-                st_logCritical("error: duplicate alleles detected at position %"PRId64" on sequence %s\n",
-                               qpv->refPos, qpv->refSeqName);
                 continue;
             }
             

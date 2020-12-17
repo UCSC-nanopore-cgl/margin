@@ -43,6 +43,7 @@ stHash *getPhasedVariants(const char *vcfFile);
 
 stList *getSharedContigs(stHash *entry1, stHash *entry2);
 
+double meanVariantDist(stHash *query, stHash *truth, stList *sharedContigs);
 
 PartialPhaseSums *partialPhaseSums_construct(const char *queryPhaseSet, const char *truthPhaseSet);
 
