@@ -545,6 +545,11 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
     int64_t minAdjacentDist = LONG_MAX;
     int64_t numCorrectlyPhasedPairs = 0;
     int64_t numPossiblyPhasedPairs = 0;
+    int64_t minCounted = 0;
+    bool prevPairCounted = false;
+    bool prevPairCorrect = false;
+    bool pairCounted = false;
+    bool pairCorrect = false;
     
     for (int64_t i = 0, j = 0; i < stList_length(queryPhasedVariants) && j < stList_length(truthPhasedVariants);) {
         
@@ -583,10 +588,8 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
                 continue;
             }
             
-            // TODO: the definition is fiddly, especially by seq dist. need to implement this still.
-            if (variantCorrectnessOut) {
-                stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0));
-            }
+            pairCounted = false;
+            pairCorrect = false;
             
             if (prevQueryPhaseSet != NULL && prevTruthPhaseSet != NULL) {
                 
@@ -608,26 +611,38 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
                     
                     numPossiblyPhasedPairs = 0;
                     numCorrectlyPhasedPairs = 0;
+                    prevPairCounted = false;
                     minAdjacentDist = phasePairDist;
+                    
+                    if (variantCorrectnessOut) {
+                        minCounted = stList_length(variantCorrectnessOut);
+                    }
                 }
                 
                 if (phasePairDist == minAdjacentDist || !bySeqDist) {
                     
-                    if (phaseSetPairMatch) {
-                        // because we've filtered down to 1) only het sites, and  2) sites
-                        // where the alleles match, the only two combinations of matching
-                        // that are allowed are 1-1/2-2 or 1-2/2-1
-                        if (match11 == prevVarInPhase) {
-                            ++numCorrectlyPhasedPairs;
-                        }
+                    pairCounted = (phaseSetPairMatch || crossBlockCorrect);
+                    pairCorrect = ((phaseSetPairMatch && match11 == prevVarInPhase) ||
+                                   (!phaseSetPairMatch && crossBlockCorrect));
+                    
+                    if (pairCounted) {
                         ++numPossiblyPhasedPairs;
                     }
-                    else if (crossBlockCorrect) {
+                    if (pairCorrect) {
                         ++numCorrectlyPhasedPairs;
-                        ++numPossiblyPhasedPairs;
                     }
                     
                     st_logDebug("num phased incremented to %"PRId64", possibly phased incremented to %"PRId64"\n", numCorrectlyPhasedPairs, numPossiblyPhasedPairs);
+                }
+            }
+            
+            if (variantCorrectnessOut) {
+                stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0));
+                if (stList_length(variantCorrectnessOut) > 1) {
+                    VariantCorrectness* pvc = stList_get(variantCorrectnessOut,
+                                                         stList_length(variantCorrectnessOut) - 2);
+                    
+                    pvc->correctness = ((int) (prevPairCorrect && prevPairCounted)) + ((int) (pairCorrect && pairCounted));
                 }
             }
             
@@ -635,6 +650,21 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
             prevQueryPhaseSet = qpv->phaseSet;
             prevTruthPhaseSet = tpv->phaseSet;
             prevPosition = qpv->refPos;
+            prevPairCorrect = pairCorrect;
+            prevPairCounted = pairCounted;
+        }
+    }
+    
+    if (variantCorrectnessOut && stList_length(variantCorrectnessOut) != 0) {
+        VariantCorrectness* vc = stList_get(variantCorrectnessOut,
+                                            stList_length(variantCorrectnessOut) - 1);
+        vc->correctness = pairCorrect && pairCounted;
+        
+        // reset any variants that were counted before finding the min distance
+        // (if doing sequence-based distance)
+        for (int64_t i = 0; i < minCounted; ++i) {
+            VariantCorrectness* uncounted = stList_get(variantCorrectnessOut, i);
+            uncounted->correctness = 0.0;
         }
     }
     
@@ -658,8 +688,25 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
     if (decay == 0.0) {
         // this has to be handled as a special case, because it's actually a limit rather
         // than direct evaluation. if computed directly, leads to division by 0
-        return switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, crossBlockCorrect,
-                                 effectivePairCountOut, variantCorrectnessOut);
+        
+        // always extract pair count in case we need it for normaling per-variant correctness
+        double effectivePairCount;
+        double correctness = switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, crossBlockCorrect,
+                                               &effectivePairCount, variantCorrectnessOut);
+        
+        if (effectivePairCountOut) {
+            *effectivePairCountOut = effectivePairCount;
+        }
+        
+        // normalize the per-variant correctness
+        if (variantCorrectnessOut) {
+            for (int64_t i = 0; i < stList_length(variantCorrectnessOut); ++i) {
+                VariantCorrectness *vc = stList_get(variantCorrectnessOut, i);
+                vc->correctness /= effectivePairCount;
+            }
+        }
+        
+        return correctness;
     }
     
     // the interval of variant indexes that each phase set is contained in
@@ -680,7 +727,7 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
                                                      queryPhaseSetIntervals, truthPhaseSetIntervals,
                                                      false, revVariantCorrectness);
     
-    // add the backward half of the variants' sum into the forward half
+    // add the backward half of the variants' sum into the forward half and normalize
     if (variantCorrectnessOut) {
         for (int64_t i = 0; i < stList_length(variantCorrectnessOut); ++i) {
             VariantCorrectness *fvc = stList_get(variantCorrectnessOut, i);
