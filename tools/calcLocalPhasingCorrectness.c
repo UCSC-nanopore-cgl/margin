@@ -24,7 +24,7 @@ void usage() {
     fprintf(stderr, "usage: calcLocalPhasingCorrectness [options] TRUTH_VCF QUERY_VCF > lpc_table.tsv\n\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, " -n, --grid-num INT         number of length scales to compute LPC for [200]\n");
-    fprintf(stderr, " -m, --grid-min FLOAT       smallest positive length scale [1e-5]\n");
+    fprintf(stderr, " -m, --grid-min FLOAT       smallest positive length scale [1e-2]\n");
     fprintf(stderr, " -M, --grid-max FLOAT       largest length scale [1e5]\n");
     fprintf(stderr, " -d, --by-seq-dist          measure length by base pairs rather than number of variants\n");
     fprintf(stderr, " -c, --cross-block-correct  count variants in different blocks as correctly phased together\n");
@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
     st_setLogLevel(info);
     
     int64_t numLengthScales = 200;
-    double gridMin = 1e-5;
+    double gridMin = 1e-2;
     double gridMax = 1e5;
     bool bySeqDist = false;
     bool crossBlockCorrect = false;
@@ -254,13 +254,13 @@ int main(int argc, char *argv[]) {
     }
     printf("weighted_mean\n");
     for (int64_t i = 0; i < numLengthScales; ++i) {
-        printf("%f\t%f\t%f\t", decayValues[i],
+        printf("%.17g\t%.17g\t%.17g\t", decayValues[i],
                bySeqDist ? lengthScales[i] / variantDist : lengthScales[i],
                bySeqDist ? lengthScales[i] : lengthScales[i] * variantDist);
         for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
-            printf("%f\t", correctnessValues[i * stList_length(sharedContigs) + j]);
+            printf("%.17g\t", correctnessValues[i * stList_length(sharedContigs) + j]);
         }
-        printf("%f\n", meanCorrectnessValues[i]);
+        printf("%.17g\n", meanCorrectnessValues[i]);
     }
     
     free(correctnessValues);
