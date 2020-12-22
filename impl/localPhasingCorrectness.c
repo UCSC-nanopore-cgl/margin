@@ -686,7 +686,7 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
             VariantCorrectness *fvc = stList_get(variantCorrectnessOut, i);
             VariantCorrectness *rvc = stList_get(revVariantCorrectness,
                                                  stList_length(revVariantCorrectness) - i - 1);
-            fvc->correctness += rvc->correctness;
+            fvc->correctness = (fvc->correctness + rvc->correctness) / (forwardSums[1] + reverseSums[1]);
         }
         stList_destruct(revVariantCorrectness);
     }
