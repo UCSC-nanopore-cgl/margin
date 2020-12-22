@@ -254,6 +254,9 @@ int main(int argc, char *argv[]) {
         }
         printf("\t%s", (char*) stList_get(sharedContigs, i));
     }
+    if (reportEffectiveSize) {
+        printf("\ttotal_eff_size");
+    }
     printf("\tweighted_mean\n");
     for (int64_t i = 0; i < numLengthScales; ++i) {
         printf("%.17g\t%.17g\t%.17g", decayValues[i],
