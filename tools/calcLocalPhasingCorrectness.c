@@ -28,6 +28,7 @@ void usage() {
     fprintf(stderr, " -M, --grid-max FLOAT       largest length scale [1e5]\n");
     fprintf(stderr, " -d, --by-seq-dist          measure length by base pairs rather than number of variants\n");
     fprintf(stderr, " -c, --cross-block-correct  count variants in different blocks as correctly phased together\n");
+    fprintf(stderr, " -s, --report-eff-size      add a column for the effective pair count of each contig\n");
     fprintf(stderr, " -q, --quiet                do not log progress to stderr\n");
     fprintf(stderr, " -h, --help                 print this message and exit\n");
     fprintf(stderr, "\n");
@@ -43,6 +44,7 @@ int main(int argc, char *argv[]) {
     double gridMax = 1e5;
     bool bySeqDist = false;
     bool crossBlockCorrect = false;
+    bool reportEffectiveSize = false;
     
     char* parseEnd = NULL;
     
@@ -55,13 +57,14 @@ int main(int argc, char *argv[]) {
             {"grid-max", required_argument, 0, 'M'},
             {"by-seq-dist", no_argument, 0, 'd'},
             {"cross-block-correct", no_argument, 0, 'c'},
+            {"report-eff-size", no_argument, 0, 's'},
             {"quiet", no_argument, 0, 'q'},
             {"help", no_argument, 0, 'h'},
             {0,0,0,0}
         };
         
         int option_index = 0;
-        c = getopt_long (argc, argv, "n:m:M:dcqh?",
+        c = getopt_long (argc, argv, "n:m:M:dcsqh?",
                          long_options, &option_index);
         if (c == -1){
             break;
@@ -98,6 +101,9 @@ int main(int argc, char *argv[]) {
             case 'c':
                 crossBlockCorrect = true;
                 break;
+            case 's':
+                reportEffectiveSize = true;
+                break;
             case 'q':
                 st_setLogLevel(critical);
                 break;
@@ -106,6 +112,7 @@ int main(int argc, char *argv[]) {
                 usage();
                 return 0;
             default:
+                fprintf(stderr, "error: Unrecognized option %c\n\n", c);
                 usage();
                 return 1;
         }
@@ -114,7 +121,7 @@ int main(int argc, char *argv[]) {
     if (argc - optind < 2) {
         fprintf(stderr, "error: Missing required positional arguments\n\n");
         usage();
-        exit(1);
+        return 1;
     }
 
     char *truthVcfFile = stString_copy(argv[optind++]);
@@ -123,7 +130,7 @@ int main(int argc, char *argv[]) {
     if (optind != argc) {
         fprintf(stderr, "error: Unused argument %s\n\n", argv[optind]);
         usage();
-        exit(1);
+        return 1;
     }
     
     if (numLengthScales < 4) {
@@ -193,7 +200,7 @@ int main(int argc, char *argv[]) {
             stHash_size(truthVariants), stHash_size(queryVariants));
     
     double *correctnessValues = (double*) malloc(sizeof(double) * numLengthScales * stList_length(sharedContigs));
-    double *meanCorrectnessValues = (double*) malloc(sizeof(double) * numLengthScales);
+    double *effectivePairCounts = (double*) malloc(sizeof(double) * numLengthScales * stList_length(sharedContigs));
     
     int64_t reportIterations[5];
     for (int64_t i = 0; i < 5; ++i) {
@@ -209,27 +216,19 @@ int main(int argc, char *argv[]) {
     // Compute the correctness values
     for (int64_t i = 0; i < numLengthScales; ++i) {
         
-        double weightedMeanNumer = 0.0;
-        double weightedMeanDenom = 0.0;
-        
         for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
             stList *contigTruthVariants = stHash_search(truthVariants, stList_get(sharedContigs, j));
             stList *contigQueryVariants = stHash_search(queryVariants, stList_get(sharedContigs, j));
             
             st_logDebug("\tComputing correctness for contig %s\n", stList_get(sharedContigs, j));
             
-            int64_t phasedLength = 0;
+            double effectivePairCount;
             double correctness = phasingCorrectness(contigTruthVariants, contigQueryVariants, decayValues[i],
-                                                    bySeqDist, crossBlockCorrect, &phasedLength);
+                                                    bySeqDist, crossBlockCorrect, &effectivePairCount);
             
             correctnessValues[i * stList_length(sharedContigs) + j] = correctness;
-            
-            // TODO: would it be more consistent to weight by number of pairs?
-            weightedMeanDenom += phasedLength;
-            weightedMeanNumer += phasedLength * correctness;
+            effectivePairCounts[i * stList_length(sharedContigs) + j] = effectivePairCount;
         }
-                
-        meanCorrectnessValues[i] = weightedMeanNumer / weightedMeanDenom;
         
         if (i + 1 == reportIterations[nextReportIdx]) {
             st_logInfo("Finished computing correctness for %"PRId64" of %"PRId64" length scales\n", i + 1, numLengthScales);
@@ -250,6 +249,9 @@ int main(int argc, char *argv[]) {
     }
     printf("length_scale_bps\t");
     for (int64_t i = 0; i < stList_length(sharedContigs); ++i) {
+        if (reportEffectiveSize) {
+            printf("\t%s_eff_size", (char*) stList_get(sharedContigs, i));
+        }
         printf("\t%s", (char*) stList_get(sharedContigs, i));
     }
     printf("\tweighted_mean\n");
@@ -257,14 +259,25 @@ int main(int argc, char *argv[]) {
         printf("%.17g\t%.17g\t%.17g", decayValues[i],
                bySeqDist ? lengthScales[i] / variantDist : lengthScales[i],
                bySeqDist ? lengthScales[i] : lengthScales[i] * variantDist);
+        double weightedNumer = 0.0;
+        double weightedDenom = 0.0;
         for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
+            weightedNumer += (correctnessValues[i * stList_length(sharedContigs) + j]
+                              * effectivePairCounts[i * stList_length(sharedContigs) + j]);
+            weightedDenom += effectivePairCounts[i * stList_length(sharedContigs) + j];
+            if (reportEffectiveSize) {
+                printf("\t%.17g", effectivePairCounts[i * stList_length(sharedContigs) + j]);
+            }
             printf("\t%.17g", correctnessValues[i * stList_length(sharedContigs) + j]);
         }
-        printf("\t%.17g\n", meanCorrectnessValues[i]);
+        if (reportEffectiveSize) {
+            printf("\t%.17g", weightedDenom);
+        }
+        printf("\t%.17g\n", weightedNumer / weightedDenom);
     }
     
     free(correctnessValues);
-    free(meanCorrectnessValues);
+    free(effectivePairCounts);
     free(decayValues);
     free(lengthScales);
     stList_destruct(sharedContigs);
