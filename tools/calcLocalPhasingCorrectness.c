@@ -250,17 +250,17 @@ int main(int argc, char *argv[]) {
     }
     printf("length_scale_bps\t");
     for (int64_t i = 0; i < stList_length(sharedContigs); ++i) {
-        printf("\t%s", (char*) stList_get(sharedContigs, i));
+        printf("%s\t", (char*) stList_get(sharedContigs, i));
     }
-    printf("\tweighted_mean\n");
+    printf("weighted_mean\n");
     for (int64_t i = 0; i < numLengthScales; ++i) {
-        printf("%f\t%f\t%f", decayValues[i],
+        printf("%f\t%f\t%f\t", decayValues[i],
                bySeqDist ? lengthScales[i] / variantDist : lengthScales[i],
                bySeqDist ? lengthScales[i] : lengthScales[i] * variantDist);
         for (int64_t j = 0; j < stList_length(sharedContigs); ++j) {
-            printf("\t%f", correctnessValues[i * stList_length(sharedContigs) + j]);
+            printf("%f\t", correctnessValues[i * stList_length(sharedContigs) + j]);
         }
-        printf("\t%f\n", meanCorrectnessValues[i]);
+        printf("%f\n", meanCorrectnessValues[i]);
     }
     
     free(correctnessValues);
