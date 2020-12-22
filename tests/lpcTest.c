@@ -212,7 +212,7 @@ void test_correctValueSimple(CuTest *testCase) {
                 
                 double effectiveSize;
                 double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                        doByDist, doCrossBlockCorrect, &effectiveSize);
+                                                        doByDist, doCrossBlockCorrect, &effectiveSize, NULL);
                 double directEffectiveSize;
                 double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
                                           doCrossBlockCorrect, &directEffectiveSize);
@@ -252,7 +252,7 @@ void test_correctValueSimple(CuTest *testCase) {
                 
                 double effectiveSize;
                 double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                        doByDist, doCrossBlockCorrect, &effectiveSize);
+                                                        doByDist, doCrossBlockCorrect, &effectiveSize, NULL);
                 double directEffectiveSize;
                 double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
                                           doCrossBlockCorrect, &directEffectiveSize);
@@ -322,7 +322,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
                 
                 double effectiveSize;
                 double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                        doByDist, doCrossBlockCorrect, &effectiveSize);
+                                                        doByDist, doCrossBlockCorrect, &effectiveSize, NULL);
                 double directEffectiveSize;
                 double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
                                           doCrossBlockCorrect, &directEffectiveSize);
@@ -349,7 +349,7 @@ void test_correctValueWithPhaseSets(CuTest *testCase) {
                 
                 double effectiveSize;
                 double correctness = phasingCorrectness(variants[0], variants[1], decayValues[i],
-                                                        doByDist, doCrossBlockCorrect, &effectiveSize);
+                                                        doByDist, doCrossBlockCorrect, &effectiveSize, NULL);
                 double directEffectiveSize;
                 double direct = directLPC(variants[0], variants[1], decayValues[i], doByDist,
                                           doCrossBlockCorrect, &directEffectiveSize);

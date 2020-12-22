@@ -32,6 +32,12 @@ struct _partialPhaseSums {
     double phaseSum2;
 };
 
+typedef struct _variantCorrectness VariantCorrectness;
+struct _variantCorrectness {
+    int64_t refPos;
+    double correctness;
+};
+
 // note: takes ownership of the alleles list, but not any other pointers
 PhasedVariant *phasedVariant_construct(const char *refSeqName, int64_t refPos, double quality, stList *alleles, int64_t gt1, int64_t gt2, const char *phaseSet);
 
@@ -43,6 +49,10 @@ stHash *getPhasedVariants(const char *vcfFile);
 
 stList *getSharedContigs(stHash *entry1, stHash *entry2);
 
+VariantCorrectness *variantCorrectness_construct(int64_t refPos, double correctness);
+
+void variantCorrectness_destruct(VariantCorrectness* vc);
+
 double meanVariantDist(stHash *query, stHash *truth, stList *sharedContigs);
 
 PartialPhaseSums *partialPhaseSums_construct(const char *queryPhaseSet, const char *truthPhaseSet);
@@ -52,5 +62,6 @@ void partialPhaseSums_destruct(PartialPhaseSums *pps);
 stHash *phaseSetIntervals(stList *phasedVariants);
 
 double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariants, double decay,
-                          bool bySeqDist, bool crossBlockCorrect, double *effectivePairCountOut);
+                          bool bySeqDist, bool crossBlockCorrect, double *effectivePairCountOut,
+                          stList* variantCorrectnessOut);
 
