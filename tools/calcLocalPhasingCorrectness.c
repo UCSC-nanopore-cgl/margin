@@ -328,18 +328,8 @@ int main(int argc, char *argv[]) {
             stList *contigVars = stList_get(arbitraryRow, i);
             char *contigName = stList_get(sharedContigs, i);
             for (int64_t j = 0; j < stList_length(contigVars); ++j) {
-                printf("\t%s", contigName);
-            }
-        }
-        printf("\n");
-        // placeholders for decay and length scales
-        printf("%.17g\t%.17g\t%.17g", NAN, NAN, NAN);
-        // the variant position
-        for (int64_t i = 0; i < stList_length(arbitraryRow); ++i) {
-            stList *contigVars = stList_get(arbitraryRow, i);
-            for (int64_t j = 0; j < stList_length(contigVars); ++j) {
                 VariantCorrectness *vc = stList_get(contigVars, j);
-                printf("\t%"PRId64"", vc->refPos);
+                printf("\t%s_%"PRId64"", contigName, vc->refPos);
             }
         }
         printf("\n");
@@ -355,7 +345,12 @@ int main(int argc, char *argv[]) {
                 stList *contigVars = stList_get(lengthScalePerVarContigs, j);
                 for (int64_t k = 0; k < stList_length(contigVars); ++k) {
                     VariantCorrectness *vc = stList_get(contigVars, k);
-                    printf("\t%.17g", vc->correctness);
+                    if (vc->maxCorrectness != 0.0) {
+                        printf("\t%.17g", vc->correctness / vc->maxCorrectness);
+                    }
+                    else {
+                        printf("\t%g", NAN);
+                    }
                 }
             }
             printf("\n");

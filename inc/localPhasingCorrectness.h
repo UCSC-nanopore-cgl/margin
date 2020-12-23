@@ -36,6 +36,7 @@ typedef struct _variantCorrectness VariantCorrectness;
 struct _variantCorrectness {
     int64_t refPos;
     double correctness;
+    double maxCorrectness;
 };
 
 // note: takes ownership of the alleles list, but not any other pointers
@@ -49,7 +50,7 @@ stHash *getPhasedVariants(const char *vcfFile);
 
 stList *getSharedContigs(stHash *entry1, stHash *entry2);
 
-VariantCorrectness *variantCorrectness_construct(int64_t refPos, double correctness);
+VariantCorrectness *variantCorrectness_construct(int64_t refPos, double correctness, double maxCorrectness);
 
 void variantCorrectness_destruct(VariantCorrectness* vc);
 
