@@ -215,10 +215,11 @@ stList *getSharedContigs(stHash *entry1, stHash *entry2) {
     return sharedContigs;
 }
 
-VariantCorrectness *variantCorrectness_construct(int64_t refPos, double correctness) {
+VariantCorrectness *variantCorrectness_construct(int64_t refPos, double correctness, double maxCorrectness) {
     VariantCorrectness* vc = malloc(sizeof(VariantCorrectness));
     vc->refPos = refPos;
     vc->correctness = correctness;
+    vc->maxCorrectness = maxCorrectness;
     return vc;
 }
 
@@ -442,7 +443,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                         sums->phaseSum1 += 1.0;
                         
                         if (variantCorrectnessOut) {
-                            stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum1));
+                            stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum1,
+                                                                                              sums->phaseSum1 + sums->phaseSum2));
                         }
                     }
                     else {
@@ -450,7 +452,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                         sums->phaseSum2 += 1.0;
                         
                         if (variantCorrectnessOut) {
-                            stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum2));
+                            stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum2,
+                                                                                              sums->phaseSum1 + sums->phaseSum2));
                         }
                     }
                 }
@@ -461,7 +464,8 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                     partitionTotalSum += sums->phaseSum1 + sums->phaseSum2;
                     
                     if (variantCorrectnessOut) {
-                        stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum1 + sums->phaseSum2));
+                        stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, sums->phaseSum1 + sums->phaseSum2,
+                                                                                          sums->phaseSum1 + sums->phaseSum2));
                     }
                 }
             }
@@ -483,13 +487,14 @@ double *phasingCorrectnessInternal(stList *queryPhasedVariants, stList *truthPha
                 stList_append(phaseSetPartialSums, sums);
                 
                 if (variantCorrectnessOut) {
-                    stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0));
+                    stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0, 0.0));
                 }
             }
             
             if (variantCorrectnessOut) {
                 VariantCorrectness *vc = stList_get(variantCorrectnessOut, stList_length(variantCorrectnessOut) - 1);
                 vc->correctness += outOfScopeSum;
+                vc->maxCorrectness += outOfScopeSum;
             }
             
             prevPosition = qpv->refPos;
@@ -637,12 +642,13 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
             }
             
             if (variantCorrectnessOut) {
-                stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0));
+                stList_append(variantCorrectnessOut, variantCorrectness_construct(qpv->refPos, 0.0, 0.0));
                 if (stList_length(variantCorrectnessOut) > 1) {
                     VariantCorrectness* pvc = stList_get(variantCorrectnessOut,
                                                          stList_length(variantCorrectnessOut) - 2);
                     
                     pvc->correctness = ((int) (prevPairCorrect && prevPairCounted)) + ((int) (pairCorrect && pairCounted));
+                    pvc->maxCorrectness = ((int) prevPairCounted + (int) pairCounted);
                 }
             }
             
@@ -659,12 +665,14 @@ double switchCorrectness(stList *queryPhasedVariants, stList *truthPhasedVariant
         VariantCorrectness* vc = stList_get(variantCorrectnessOut,
                                             stList_length(variantCorrectnessOut) - 1);
         vc->correctness = pairCorrect && pairCounted;
+        vc->maxCorrectness = pairCounted;
         
         // reset any variants that were counted before finding the min distance
         // (if doing sequence-based distance)
         for (int64_t i = 0; i < minCounted; ++i) {
             VariantCorrectness* uncounted = stList_get(variantCorrectnessOut, i);
             uncounted->correctness = 0.0;
+            uncounted->maxCorrectness = 0.0;
         }
     }
     
@@ -689,22 +697,8 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
         // this has to be handled as a special case, because it's actually a limit rather
         // than direct evaluation. if computed directly, leads to division by 0
         
-        // always extract pair count in case we need it for normaling per-variant correctness
-        double effectivePairCount;
         double correctness = switchCorrectness(queryPhasedVariants, truthPhasedVariants, bySeqDist, crossBlockCorrect,
-                                               &effectivePairCount, variantCorrectnessOut);
-        
-        if (effectivePairCountOut) {
-            *effectivePairCountOut = effectivePairCount;
-        }
-        
-        // normalize the per-variant correctness
-        if (variantCorrectnessOut) {
-            for (int64_t i = 0; i < stList_length(variantCorrectnessOut); ++i) {
-                VariantCorrectness *vc = stList_get(variantCorrectnessOut, i);
-                vc->correctness /= effectivePairCount;
-            }
-        }
+                                               effectivePairCountOut, variantCorrectnessOut);
         
         return correctness;
     }
@@ -733,7 +727,8 @@ double phasingCorrectness(stList *queryPhasedVariants, stList *truthPhasedVarian
             VariantCorrectness *fvc = stList_get(variantCorrectnessOut, i);
             VariantCorrectness *rvc = stList_get(revVariantCorrectness,
                                                  stList_length(revVariantCorrectness) - i - 1);
-            fvc->correctness = (fvc->correctness + rvc->correctness) / (forwardSums[1] + reverseSums[1]);
+            fvc->correctness += rvc->correctness;
+            fvc->maxCorrectness += rvc->maxCorrectness;
         }
         stList_destruct(revVariantCorrectness);
     }
