@@ -284,7 +284,7 @@ int main(int argc, char *argv[]) {
     if (!bySeqDist) {
         printf("approx_");
     }
-    printf("length_scale_bps\t");
+    printf("length_scale_bps");
 
     if (!perVariant) {
         // show results aggregated across contigs
