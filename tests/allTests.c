@@ -27,6 +27,8 @@ CuSuite *stitchingTestSuite(void);
 
 CuSuite *vcfTestSuite(void);
 
+CuSuite *lpcTestSuite(void);
+
 // New tests for marginPhase interface
 int marginPhaseTests(void) {
 
@@ -47,6 +49,7 @@ int marginPhaseTests(void) {
     CuSuiteAddSuite(suite, featureTestSuite());
 #endif
     CuSuiteAddSuite(suite, vcfTestSuite());
+    CuSuiteAddSuite(suite, lpcTestSuite());
 
 
     CuSuiteRun(suite);
