@@ -467,7 +467,7 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
         float haplotype2Prob = gF->haplotypeProbs2[primaryBubbleIdx];
 
         // vcf data
-        VcfEntry *chunkVcfEntry = stList_get(chunkVcfEntriesToBubbles, primaryBubbleIdx);
+        VcfEntry *chunkVcfEntry = stList_get(chunkVcfEntriesToBubbles, gF->refStart + primaryBubbleIdx);
         VcfEntry *rootVcfEntry = chunkVcfEntry->rootVcfEntry;
 
         // sanity checks
