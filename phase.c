@@ -415,11 +415,9 @@ int phase_main(int argc, char *argv[]) {
                                                   params);
 
         // save
+        // only use primary reads (not filteredReads) to track read phasing
         updateOriginalVcfEntriesWithBubbleData(bamChunk, reads, bamChunker->readEnumerator, gf, bg,
                 vcfEntriesToBubbles, readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
-        //TODO trying to only phase VCF with primary reads
-        //updateOriginalVcfEntriesWithBubbleData(bamChunk, filteredReads, bamChunker->readEnumerator, gf, bg,
-        //        vcfEntriesToBubbles, readsBelongingToHap1, readsBelongingToHap2, logIdentifier);
 
         // Cleanup
         if (chunkVcfEntries != NULL) stList_destruct(chunkVcfEntries);

@@ -461,7 +461,7 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
         Bubble *primaryBubble = &bg->bubbles[gF->refStart + primaryBubbleIdx];
         int64_t hap1AlleleNo = gF->haplotypeString1[primaryBubbleIdx];
         int64_t hap2AlleleNo = gF->haplotypeString2[primaryBubbleIdx];
-        // TODO these probs are in log space: convert to [0-1]
+        // these probs are in log space: convert to [0-1] later
         float genotypeProb = gF->genotypeProbs[primaryBubbleIdx];
         float haplotype1Prob = gF->haplotypeProbs1[primaryBubbleIdx];
         float haplotype2Prob = gF->haplotypeProbs2[primaryBubbleIdx];

@@ -1744,15 +1744,6 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
         int64_t hap2AlleleNo = gF->haplotypeString2[primaryBubbleIdx];
         VcfEntry *vcfEntry = stList_get(vcfEntriesToBubbles, gF->refStart + primaryBubbleIdx);
 
-        if (!(stList_length(primaryBubble->variantPositionOffsets) == 1 &&
-              vcfEntry->refPos == (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0))) {
-            st_logCritical("%s\n", getLogIdentifier());
-            st_logCritical("stList_length(primaryBubble->variantPositionOffsets) == %d\n", stList_length(primaryBubble->variantPositionOffsets));
-            st_logCritical("vcfEntry->refPos == %d\n", vcfEntry->refPos);
-            st_logCritical("(int64_t) stList_get(primaryBubble->variantPositionOffsets, 0) == %d\n", (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0));
-            st_errAbort("yeah");
-        }
-
         assert(stList_length(primaryBubble->variantPositionOffsets) == 1 &&
              vcfEntry->refPos == (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0));
 
