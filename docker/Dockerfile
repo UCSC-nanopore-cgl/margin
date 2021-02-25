@@ -31,17 +31,17 @@ RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9
 
 # get marginPolish
 WORKDIR /opt
-RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
-    cd /opt/MarginPolish && \
+RUN git clone https://github.com/UCSC-nanopore-cgl/margin.git && \
+    cd /opt/margin && \
     git fetch && \
     git checkout $git_commit && \
     git submodule update --init && \
-    rm -rf /opt/MarginPolish/.git && \
     mkdir build && \
     cd build && \
     cmake .. && \
     make && \
-    ln -s /opt/MarginPolish/build/margin /usr/local/bin/margin && \
+    rm -rf /opt/margin/.git && \
+    ln -s /opt/margin/build/margin /usr/local/bin/margin && \
     margin
 
 WORKDIR /data
