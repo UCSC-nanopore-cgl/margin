@@ -1750,7 +1750,7 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
             st_logCritical("stList_length(primaryBubble->variantPositionOffsets) == %d\n", stList_length(primaryBubble->variantPositionOffsets));
             st_logCritical("vcfEntry->refPos == %d\n", vcfEntry->refPos);
             st_logCritical("(int64_t) stList_get(primaryBubble->variantPositionOffsets, 0) == %d\n", (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0));
-            st_errAbort("yeah");
+            st_errAbort("Mismatch between refPos and variantPosition!");
         }
 
         assert(stList_length(primaryBubble->variantPositionOffsets) == 1 &&
