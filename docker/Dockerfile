@@ -5,7 +5,7 @@ ARG git_commit
 
 # update and install dependencies
 RUN apt-get update && \
-    apt-get -y install time git make wget autoconf gcc g++ zlib1g-dev libcurl4-openssl-dev libbz2-dev libhdf5-dev && \
+    apt-get -y install time git make wget autoconf gcc g++ zlib1g-dev libcurl4-openssl-dev libbz2-dev libhdf5-dev liblzma-dev && \
     apt-get clean && \
     apt-get purge && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -42,6 +42,7 @@ RUN git clone https://github.com/UCSC-nanopore-cgl/margin.git && \
     make && \
     rm -rf /opt/margin/.git && \
     ln -s /opt/margin/build/margin /usr/local/bin/margin && \
-    margin
+    margin phase -h && \
+    margin polish -h
 
 WORKDIR /data
