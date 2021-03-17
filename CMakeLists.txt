@@ -11,7 +11,7 @@ project(marginPhase LANGUAGES C)
 
 # configure a header file to pass some of the CMake settings
 set(MARGIN_VERSION_MAJOR 2)
-set(MARGIN_VERSION_MINOR 0)
+set(MARGIN_VERSION_MINOR 1)
 execute_process(
         COMMAND git log -1 --format=%h
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

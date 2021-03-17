@@ -1191,7 +1191,7 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
 }
 
 
-void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet *readsInH1, stSet *readsInH2,
+void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *regionStr, stSet *readsInH1, stSet *readsInH2,
                          BamChunk *bamChunk, Params *params, char *logIdentifier) {
     /*
      * Write out sam files with reads in each split based on which haplotype partition they are in.
@@ -1255,6 +1255,8 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet 
     samview_settings_t settings = { .bed = NULL };
     char* region[1] = {};
 
+    // should just write specific region
+    bool useRegion = FALSE;
     if (bamChunk != NULL) {
         region[0] = stString_print("%s:%d-%d", bamChunk->refSeqName, bamChunk->chunkOverlapStart,
                                    bamChunk->chunkOverlapEnd);
@@ -1264,15 +1266,30 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet 
         int regcount = 0;
         hts_reglist_t *reglist = bed_reglist(settings.bed, filter_state, &regcount);
         if (!reglist) {
-            st_errAbort("ERROR: Could not create list of regions for read conversion");
+            st_errAbort("ERROR: Could not create list of regions for read conversion from BamChunk");
         }
         if ((iter = sam_itr_regions(idx, bamHdr, reglist, regcount)) == 0) {
             st_errAbort("ERROR: Cannot open iterator for region %s for bam file %s\n", region[0], inputBamLocation);
         }
+        useRegion = TRUE;
+    } else if (regionStr != NULL) {
+        region[0] = stString_copy(regionStr);
+        settings.bed = bed_hash_regions(settings.bed, region, 0, 1,
+                                        &filter_op); //insert(1) or filter out(0) the regions from the command line in the same hash table as the bed file
+        if (!filter_op) filter_state = FILTERED;
+        int regcount = 0;
+        hts_reglist_t *reglist = bed_reglist(settings.bed, filter_state, &regcount);
+        if (!reglist) {
+            st_errAbort("ERROR: Could not create list of regions for read conversion from region string");
+        }
+        if ((iter = sam_itr_regions(idx, bamHdr, reglist, regcount)) == 0) {
+            st_errAbort("ERROR: Cannot open iterator for region %s for bam file %s\n", region[0], inputBamLocation);
+        }
+        useRegion = TRUE;
     }
 
     // fetch alignments (either all reads or without reads)
-    while ((bamChunk == NULL ? sam_read1(in,bamHdr,aln) : sam_itr_multi_next(in, iter, aln)) >= 0) {
+    while ((!useRegion ? sam_read1(in,bamHdr,aln) : sam_itr_multi_next(in, iter, aln)) >= 0) {
         // basic filtering (no read length, no cigar)
         if (aln->core.l_qseq <= 0) continue;
         if (aln->core.n_cigar == 0) continue;
@@ -1318,7 +1335,7 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet 
             h1Count, h2Count, h0Count);
 
     // Cleanup
-    if (bamChunk != NULL) {
+    if (useRegion) {
         hts_itr_multi_destroy(iter);
         free(region[0]);
         bed_destroy(settings.bed);
@@ -1407,7 +1424,7 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
 
         // write it
-        writeHaplotaggedBam(bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, bamChunk, params,
+        writeHaplotaggedBam(bamChunk->parent->bamFile, outputBase, NULL, readIdsInHap1, readIdsInHap2, bamChunk, params,
                             logIdentifier);
 
         // cleanup

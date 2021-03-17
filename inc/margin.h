@@ -1583,7 +1583,7 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
                                                                              stList *maintainedReads,
                                                                              stList *discardedReads);
 
-void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet *readsInH1, stSet *readsInH2,
+void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *regionStr, stSet *readsInH1, stSet *readsInH2,
         BamChunk *bamChunk, Params *params, char *logIdentifier);
 
 char *getSequenceFromReference(char *fastaFile, char *contig, int64_t startPos, int64_t endPosExcl);
