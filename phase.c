@@ -480,7 +480,7 @@ int phase_main(int argc, char *argv[]) {
         }
 
         // write it
-        writeHaplotaggedBam(bamChunker->bamFile, outputBase,
+        writeHaplotaggedBam(bamChunker->bamFile, outputBase, regionStr,
                             allReadIdsForHaplotypingHap1, allReadIdsForHaplotypingHap2, NULL, params, "");
 
         // loggit
