@@ -10,14 +10,16 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOP
 project(marginPhase LANGUAGES C)
 
 # configure a header file to pass some of the CMake settings
-set(MARGIN_VERSION_MAJOR 2)
-set(MARGIN_VERSION_MINOR 1)
 execute_process(
         COMMAND git log -1 --format=%h
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_COMMIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+set(MARGIN_VERSION_MAJOR 2)
+set(MARGIN_VERSION_MINOR 2)
+#set(MARGIN_VERSION_COMMIT dev-${GIT_COMMIT_HASH})
+set(MARGIN_VERSION_COMMIT 0)
 configure_file(
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h.in"
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h"
