@@ -1488,6 +1488,9 @@ ChunkToStitch *mergeContigChunkz(ChunkToStitch **chunks, int64_t startIdx, int64
     return stitched;
 }
 
+//TODO this is currently unused
+// refactored to not use this function.  we now multithread per contig and stitch all chunks linearly within contigs
+// this function is kept here in case we revert back, but can eventually be removed.
 ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startIdx, int64_t endIdxExclusive, int64_t numThreads,
                                 bool phased, Params *params, char *referenceSequenceName) {
 
@@ -1538,7 +1541,6 @@ ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startId
     free(outputChunks); //these chunks were freed after switching
     return stitched;
 }
-
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount) {
     outputChunkers_stitchAndTrackExtraData(outputChunkers, phased, chunkCount, NULL, NULL, NULL);
@@ -1591,88 +1593,79 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
     // prep for merging
     int64_t contigStartIdx = 0;
     char *referenceSequenceName = stString_copy(chunks[0]->seqName);
-    int64_t  lastReportedPercentage = 0;
-    time_t mergeStartTime = time(NULL);
+    stList *contigChunkPositions = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
+    stList *contigNames = stList_construct3(0, (void(*)(void*))free);
     st_logCritical("> Merging results from %"PRIu64" chunks.\n", chunkCount);
 
-    // find which chunks belong to each contig, merge each contig threaded, write out
+    // find which chunks belong to each contig
     for (int64_t chunkIdx = 1; chunkIdx <= chunkCount; chunkIdx++) {
 
         // we encountered the last chunk in the contig (end of list or new refSeqName)
         if (chunkIdx == chunkCount || !stString_eq(referenceSequenceName, chunks[chunkIdx]->seqName)) {
 
-            // generate and save sequences
-            ChunkToStitch *stitched = mergeContigChunkzThreaded(chunks, contigStartIdx, chunkIdx,
-                    outputChunkers->noOfOutputChunkers, phased, outputChunkers->params, referenceSequenceName);
-            stitched->seqName = stString_copy(referenceSequenceName);
-            stitched->startOfSequence = true;
-            outputChunkers_writeChunk(outputChunkers, stitched);
-
-            // to write to bam, we need to add all these
-            if (readIdsHap1 != NULL && readIdsHap2 != NULL) {
-                stHash *chunkReadToProbHap1 = getReadNames(stitched->readsHap1Lines);
-                stHash *chunkReadToProbHap2 = getReadNames(stitched->readsHap2Lines);
-                stList *chunkReadsHap1 = stHash_getKeys(chunkReadToProbHap1);
-                stList *chunkReadsHap2 = stHash_getKeys(chunkReadToProbHap2);
-                stList_appendAll(readIdsHap1, chunkReadsHap1);
-                stList_appendAll(readIdsHap2, chunkReadsHap2);
-                stHash_setDestructKeys(chunkReadToProbHap1, NULL);
-                stHash_setDestructKeys(chunkReadToProbHap2, NULL);
-                stList_setDestructor(chunkReadsHap1, NULL);
-                stList_setDestructor(chunkReadsHap2, NULL);
-                stHash_destruct(chunkReadToProbHap1);
-                stHash_destruct(chunkReadToProbHap2);
-                stList_destruct(chunkReadsHap1);
-                stList_destruct(chunkReadsHap2);
-            }
-
-            // log progress
-            int64_t currentPercentage = (int64_t) (100 * chunkIdx / chunkCount);
-            if (currentPercentage != lastReportedPercentage) {
-                lastReportedPercentage = currentPercentage;
-                int64_t timeTaken = (int64_t) (time(NULL) - mergeStartTime);
-                int64_t secondsRemaining = (int64_t) floor(
-                        1.0 * timeTaken / currentPercentage * (double) (100 - currentPercentage));
-                char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
-                                        stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-                st_logCritical("> Merging %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                               currentPercentage, chunkIdx, chunkCount, timeDescriptor);
-                free(timeDescriptor);
-            }
-
-            // Clean up
-            chunkToStitch_destruct(stitched);
-            free(referenceSequenceName);
+            stList_append(contigChunkPositions, stIntTuple_construct2(contigStartIdx, chunkIdx));
+            stList_append(contigNames, stString_copy(referenceSequenceName));
 
             // Reset for next reference sequence
             if (chunkIdx != chunkCount) {
                 contigStartIdx = chunkIdx;
                 referenceSequenceName = stString_copy(chunks[chunkIdx]->seqName);
             }
+
         }
         // nothing to do otherwise, just wait until end or new contig
     }
 
-    // cleanup and potentially track switched state
-    int64_t numThreads = outputChunkers->noOfOutputChunkers;
-    int64_t chunksPerThread = (int64_t) ceil(1.0 * chunkCount / numThreads);
-    while (chunksPerThread * (numThreads - 1) >= chunkCount) {numThreads--;}
+    // in parallel, stitch each contig linearly
     #pragma omp parallel for schedule(static,1)
-    for (int64_t thread = 0; thread < numThreads; thread++) {
-        int64_t threadedStartIdx = chunksPerThread * thread;
-        int64_t threadedEndIdxExclusive = threadedStartIdx + chunksPerThread;
-        if (chunkCount < threadedEndIdxExclusive) threadedEndIdxExclusive = chunkCount;
+    for (int64_t contigIdx = 0; contigIdx < stList_length(contigChunkPositions); contigIdx++) {
+        // get indices
+        stIntTuple *contigChunkPos = stList_get(contigChunkPositions, contigIdx);
+        int64_t startIdx = stIntTuple_get(contigChunkPos, 0);
+        int64_t endIdxExcl = stIntTuple_get(contigChunkPos, 1);
 
-        // merge for this thread
-        for (int64_t i = threadedStartIdx; i < threadedEndIdxExclusive; i++) {
+        // merge and write out
+        ChunkToStitch *stitched = mergeContigChunkz(chunks, startIdx, endIdxExcl, phased, outputChunkers->params);
+        stitched->seqName = stString_copy(stList_get(contigNames, contigIdx));
+        stitched->startOfSequence = true;
+
+        // update stitched state
+        for (int64_t i = startIdx; i < endIdxExcl; i++) {
             if (switchedState != NULL) {
                 switchedState[i] = chunks[i]->wasSwitched;
             }
             chunkToStitch_destruct(chunks[i]);
         }
+
+        // write contents
+        outputChunkers_writeChunk(outputChunkers, stitched);
+
+        // to write to bam, we need to add all these
+        if (readIdsHap1 != NULL && readIdsHap2 != NULL) {
+            stHash *chunkReadToProbHap1 = getReadNames(stitched->readsHap1Lines);
+            stHash *chunkReadToProbHap2 = getReadNames(stitched->readsHap2Lines);
+            stList *chunkReadsHap1 = stHash_getKeys(chunkReadToProbHap1);
+            stList *chunkReadsHap2 = stHash_getKeys(chunkReadToProbHap2);
+            stList_appendAll(readIdsHap1, chunkReadsHap1);
+            stList_appendAll(readIdsHap2, chunkReadsHap2);
+            stHash_setDestructKeys(chunkReadToProbHap1, NULL);
+            stHash_setDestructKeys(chunkReadToProbHap2, NULL);
+            stList_setDestructor(chunkReadsHap1, NULL);
+            stList_setDestructor(chunkReadsHap2, NULL);
+            stHash_destruct(chunkReadToProbHap1);
+            stHash_destruct(chunkReadToProbHap2);
+            stList_destruct(chunkReadsHap1);
+            stList_destruct(chunkReadsHap2);
+        }
+
+        // Clean up
+        chunkToStitch_destruct(stitched);
+        free(referenceSequenceName);
     }
 
     // cleanup
+    stList_destruct(contigChunkPositions);
+    stList_destruct(contigNames);
     free(chunks); //chunks are freed as they're merged
 
 }
