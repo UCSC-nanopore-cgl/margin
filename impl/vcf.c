@@ -9,7 +9,7 @@
 #include <htslib/kseq.h>
 
 
-VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
+VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
         stList *alleles, int64_t gt1, int64_t gt2) {
     VcfEntry *vcfEntry = st_calloc(1, sizeof(VcfEntry));
     vcfEntry->refSeqName = stString_copy(refSeqName);
@@ -132,7 +132,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         totalEntries++;
 
         // location data
-        char *chrom = bcf_hdr_id2name(hdr, rec->rid);
+        const char *chrom = bcf_hdr_id2name(hdr, rec->rid);
         int64_t pos = rec->pos;
 
         // quick fail
@@ -461,13 +461,13 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
         Bubble *primaryBubble = &bg->bubbles[gF->refStart + primaryBubbleIdx];
         int64_t hap1AlleleNo = gF->haplotypeString1[primaryBubbleIdx];
         int64_t hap2AlleleNo = gF->haplotypeString2[primaryBubbleIdx];
-        // TODO these probs are in log space: convert to [0-1]
+        // these probs are in log space: convert to [0-1] later
         float genotypeProb = gF->genotypeProbs[primaryBubbleIdx];
         float haplotype1Prob = gF->haplotypeProbs1[primaryBubbleIdx];
         float haplotype2Prob = gF->haplotypeProbs2[primaryBubbleIdx];
 
         // vcf data
-        VcfEntry *chunkVcfEntry = stList_get(chunkVcfEntriesToBubbles, primaryBubbleIdx);
+        VcfEntry *chunkVcfEntry = stList_get(chunkVcfEntriesToBubbles, gF->refStart + primaryBubbleIdx);
         VcfEntry *rootVcfEntry = chunkVcfEntry->rootVcfEntry;
 
         // sanity checks

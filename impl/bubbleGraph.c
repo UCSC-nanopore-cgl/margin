@@ -1742,7 +1742,17 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
         Bubble *primaryBubble = &bg->bubbles[gF->refStart + primaryBubbleIdx];
         int64_t hap1AlleleNo = gF->haplotypeString1[primaryBubbleIdx];
         int64_t hap2AlleleNo = gF->haplotypeString2[primaryBubbleIdx];
-        VcfEntry *vcfEntry = stList_get(vcfEntriesToBubbles, primaryBubbleIdx);
+        VcfEntry *vcfEntry = stList_get(vcfEntriesToBubbles, gF->refStart + primaryBubbleIdx);
+
+        /*if (!(stList_length(primaryBubble->variantPositionOffsets) == 1 &&
+              vcfEntry->refPos == (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0))) {
+            st_logCritical("%s\n", getLogIdentifier());
+            st_logCritical("stList_length(primaryBubble->variantPositionOffsets) == %d\n", stList_length(primaryBubble->variantPositionOffsets));
+            st_logCritical("vcfEntry->refPos == %d\n", vcfEntry->refPos);
+            st_logCritical("(int64_t) stList_get(primaryBubble->variantPositionOffsets, 0) == %d\n", (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0));
+            st_errAbort("Mismatch between refPos and variantPosition!");
+        }*/
+
         assert(stList_length(primaryBubble->variantPositionOffsets) == 1 &&
              vcfEntry->refPos == (int64_t) stList_get(primaryBubble->variantPositionOffsets, 0));
 

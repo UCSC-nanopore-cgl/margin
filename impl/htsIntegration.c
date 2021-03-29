@@ -197,10 +197,11 @@ void storeReadDepthInformation(stList *depthList, int64_t startPos, int64_t endP
  * with sizes determined by the parameters.
  */
 BamChunker *bamChunker_construct(char *bamFile, PolishParams *params) {
-    return bamChunker_construct2(bamFile, NULL, params, false);
+    return bamChunker_construct2(bamFile, NULL, NULL, params, false);
 }
 
-BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, PolishParams *params, bool recordFilteredReads) {
+BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validContigs, PolishParams *params,
+        bool recordFilteredReads) {
 
     // are we doing region filtering?
     bool filterByRegion = false;
@@ -308,6 +309,12 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, PolishParams *
 
         //data
         char *chr = bamHdr->target_name[aln->core.tid];
+        // not present in vcf (for margin phase)
+        // if we want this to be more efficient, we'd need to iterate over valid contigs and fetch from index for each
+        //   for now though, this is fast enough w/ htslib multithreading
+        if (validContigs != NULL && stSet_search(validContigs, chr) == NULL)
+            continue;
+
         int64_t start_softclip = 0;
         int64_t end_softclip = 0;
         int64_t alnReadLength = getAlignedReadLength3(aln, &start_softclip, &end_softclip, FALSE);
@@ -1184,10 +1191,8 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
 }
 
 
-
-
-void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-                         stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier) {
+void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet *readsInH1, stSet *readsInH2,
+                         BamChunk *bamChunk, Params *params, char *logIdentifier) {
     /*
      * Write out sam files with reads in each split based on which haplotype partition they are in.
      */
@@ -1197,9 +1202,6 @@ void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outpu
     char *chunkIdentifier = NULL;
     if (bamChunk == NULL) {
         chunkIdentifier = stString_print("");
-    } else if (bamChunk->chunkIdx == -1) {
-        chunkIdentifier = stString_print(".%s-%"PRId64"-%"PRId64, bamChunk->refSeqName,
-            bamChunk->chunkOverlapStart, bamChunk->chunkOverlapEnd);
     } else {
         chunkIdentifier = stString_print(".C%05"PRId64".%s-%"PRId64"-%"PRId64, bamChunk->chunkIdx, bamChunk->refSeqName,
                                          bamChunk->chunkOverlapStart, bamChunk->chunkOverlapEnd);
@@ -1405,7 +1407,7 @@ void poa_writeSupplementalChunkInformationDiploid(char *outputBase, int64_t chun
         stSet *readIdsInHap2 = bamChunkRead_to_readName(readsInHap2);
 
         // write it
-        writeHaplotaggedBam(bamChunk, bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, params,
+        writeHaplotaggedBam(bamChunk->parent->bamFile, outputBase, readIdsInHap1, readIdsInHap2, bamChunk, params,
                             logIdentifier);
 
         // cleanup

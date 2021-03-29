@@ -1441,7 +1441,7 @@ struct _vcfEntry {
 };
 
 // vcf functions
-VcfEntry *vcfEntry_construct(char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
+VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
         stList *alleles, int64_t gt1, int64_t gt2);
 void vcfEntry_destruct(VcfEntry *vcfEntry);
 RleString *getVcfEntryAlleleH1(VcfEntry *vcfEntry);
@@ -1535,7 +1535,8 @@ typedef enum {
 
 BamChunker *bamChunker_construct(char *bamFile, PolishParams *params);
 
-BamChunker *bamChunker_construct2(char *bamFile, char *region, PolishParams *params, bool recordFilteredReads);
+BamChunker *bamChunker_construct2(char *bamFile, char *region, stSet *validContigs, PolishParams *params,
+        bool recordFilteredReads);
 
 BamChunker *bamChunker_constructFromFasta(char *fastaFile, char *bamFile, char *regionStr, PolishParams *params);
 
@@ -1582,8 +1583,8 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
                                                                              stList *maintainedReads,
                                                                              stList *discardedReads);
 
-void writeHaplotaggedBam(BamChunk *bamChunk, char *inputBamLocation, char *outputBamFileBase,
-                         stSet *readsInH1, stSet *readsInH2, Params *params, char *logIdentifier);
+void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, stSet *readsInH1, stSet *readsInH2,
+        BamChunk *bamChunk, Params *params, char *logIdentifier);
 
 char *getSequenceFromReference(char *fastaFile, char *contig, int64_t startPos, int64_t endPosExcl);
 

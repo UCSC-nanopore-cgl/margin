@@ -5,7 +5,7 @@ ARG git_commit
 
 # update and install dependencies
 RUN apt-get update && \
-    apt-get -y install time git make wget autoconf gcc g++ zlib1g-dev libcurl4-openssl-dev libbz2-dev libhdf5-dev && \
+    apt-get -y install time git make wget autoconf gcc g++ zlib1g-dev libcurl4-openssl-dev libbz2-dev libhdf5-dev liblzma-dev && \
     apt-get clean && \
     apt-get purge && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -31,17 +31,18 @@ RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9
 
 # get marginPolish
 WORKDIR /opt
-RUN git clone https://github.com/UCSC-nanopore-cgl/MarginPolish.git && \
-    cd /opt/MarginPolish && \
+RUN git clone https://github.com/UCSC-nanopore-cgl/margin.git && \
+    cd /opt/margin && \
     git fetch && \
     git checkout $git_commit && \
     git submodule update --init && \
-    rm -rf /opt/MarginPolish/.git && \
     mkdir build && \
     cd build && \
     cmake .. && \
     make && \
-    ln -s /opt/MarginPolish/build/margin /usr/local/bin/margin && \
-    margin
+    rm -rf /opt/margin/.git && \
+    ln -s /opt/margin/build/margin /usr/local/bin/margin && \
+    margin phase -h && \
+    margin polish -h
 
 WORKDIR /data

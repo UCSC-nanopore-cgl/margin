@@ -1,8 +1,9 @@
 # Definitions
 git_commit ?= $(shell git log --pretty=oneline -n 1 | cut -f1 -d " ")
 name = tpesout/margin_polish
-version = 1.3
+version = 2.0.0
 tag = ${version}--${git_commit}
+tag = ${version}
 
 # Steps
 build:

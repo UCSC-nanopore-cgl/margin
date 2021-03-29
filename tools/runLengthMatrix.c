@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
 
     // get chunker for bam.  if regionStr is NULL, it will be ignored
     time_t chunkingStart = time(NULL);
-    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, params->polishParams, TRUE);
+    BamChunker *bamChunker = bamChunker_construct2(bamInFile, regionStr, NULL, params->polishParams, TRUE);
     st_logCritical(
             "> Set up bam chunker in %"PRId64"s with chunk size %i and overlap %i (for region=%s), resulting in %i total chunks\n",
             time(NULL) - chunkingStart, (int) bamChunker->chunkSize, (int) bamChunker->chunkBoundary,
