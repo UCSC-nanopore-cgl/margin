@@ -1604,7 +1604,7 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
         if (chunkIdx == chunkCount || !stString_eq(referenceSequenceName, chunks[chunkIdx]->seqName)) {
 
             stList_append(contigChunkPositions, stIntTuple_construct2(contigStartIdx, chunkIdx));
-            stList_append(contigNames, stString_copy(referenceSequenceName));
+            stList_append(contigNames, referenceSequenceName);
 
             // Reset for next reference sequence
             if (chunkIdx != chunkCount) {
@@ -1660,7 +1660,6 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
 
         // Clean up
         chunkToStitch_destruct(stitched);
-        free(referenceSequenceName);
     }
 
     // cleanup

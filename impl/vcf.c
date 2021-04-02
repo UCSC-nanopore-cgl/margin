@@ -265,6 +265,7 @@ stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refS
     // binary search through list for start pos
     int64_t startIdx = binarySearchVcfListForFirstIndexAtOrAfterRefPos(vcfEntries, startPos);
     if (startIdx == -1) {
+        stList_destruct(filteredEntries);
         return regionEntries;
     }
 
