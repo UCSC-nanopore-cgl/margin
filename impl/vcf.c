@@ -357,9 +357,9 @@ stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeq
             refAlleleLen = i;
             break;
         }
-        char refChar = referenceSeq[pos + i];
-        char alleleChar = refAllele[i];
-        assert(refChar == alleleChar);
+        char refChar = (char) toupper(referenceSeq[pos + i]);
+        char alleleChar = (char) toupper(refAllele[i]);
+        assert(refChar == alleleChar || (refChar != 'A' && refChar != 'C' && refChar != 'G' && refChar != 'T'));
     }
     free(refAllele);
 
