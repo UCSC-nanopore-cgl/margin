@@ -1616,6 +1616,8 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
         // nothing to do otherwise, just wait until end or new contig
     }
 
+    ChunkToStitch **stitchedContigs = st_calloc(stList_length(contigChunkPositions), sizeof(ChunkToStitch*));
+
     // in parallel, stitch each contig linearly
     #pragma omp parallel for schedule(static,1)
     for (int64_t contigIdx = 0; contigIdx < stList_length(contigChunkPositions); contigIdx++) {
@@ -1636,6 +1638,12 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
             }
             chunkToStitch_destruct(chunks[i]);
         }
+        stitchedContigs[contigIdx] = stitched;
+    }
+
+    // write everything single-threaded
+    for (int64_t contigIdx = 0; contigIdx < stList_length(contigChunkPositions); contigIdx++) {
+        ChunkToStitch *stitched = stitchedContigs[contigIdx];
 
         // write contents
         outputChunkers_writeChunk(outputChunkers, stitched);
@@ -1662,9 +1670,11 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
         chunkToStitch_destruct(stitched);
     }
 
+
     // cleanup
     stList_destruct(contigChunkPositions);
     stList_destruct(contigNames);
+    free(stitchedContigs);
     free(chunks); //chunks are freed as they're merged
 
 }
