@@ -18,8 +18,8 @@ execute_process(
 )
 set(MARGIN_VERSION_MAJOR 2)
 set(MARGIN_VERSION_MINOR 2)
-#set(MARGIN_VERSION_COMMIT dev-${GIT_COMMIT_HASH})
-set(MARGIN_VERSION_COMMIT 2)
+set(MARGIN_VERSION_COMMIT dev-${GIT_COMMIT_HASH})
+#set(MARGIN_VERSION_COMMIT 2)
 configure_file(
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h.in"
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h"
