@@ -13,6 +13,7 @@
 #include <time.h>
 #include "marginVersion.h"
 
+#include <htslib/thread_pool.h>
 #include "margin.h"
 #include "htsIntegration.h"
 #include "helenFeatures.h"
@@ -23,7 +24,7 @@
  */
 
 void usage() {
-    fprintf(stderr, "usage: marginTagBam <IN_BAM_FILE> <TAG_INFO_FILE> <OUT_BAM_FILE> \n");
+    fprintf(stderr, "usage: marginTagBam <IN_BAM_FILE> <TAG_INFO_FILE> <OUT_BAM_FILE> [THREAD_COUNT]\n");
     fprintf(stderr, "Version: %s \n\n", MARGIN_POLISH_VERSION_H);
     fprintf(stderr, "Tag IN_BAM_FILE with haplotype info in TAG_INFO_FILE, writing out to OUT_BAM_FILE.\n");
 
@@ -31,6 +32,7 @@ void usage() {
     fprintf(stderr, "    IN_BAM_FILE input file in BAM format\n");
     fprintf(stderr, "    TAG_INFO_FILE file in format \"read_id\\t[none|H1|H2]\\t...\n");
     fprintf(stderr, "    OUT_BAM_FILE output file in BAM format\n");
+    fprintf(stderr, "    THREAD_COUNT optional parameter for number of thread to use\n");
     fprintf(stderr, "\n");
 }
 
@@ -50,6 +52,12 @@ int main(int argc, char *argv[]) {
     bamInFile = stString_copy(argv[1]);
     readInfoFile = stString_copy(argv[2]);
     bamOutFile = stString_copy(argv[3]);
+
+    int tc = 1;
+    if (argc >= 5) {
+        tc = atoi(argv[4]);
+        st_logCritical("Using %d threads.\n", tc);
+    }
 
     // for logging
     st_setLogLevel(critical);
@@ -107,7 +115,6 @@ int main(int argc, char *argv[]) {
     fclose(fp);
     st_logCritical("Read %"PRId64" read haplotags, with %d H1 and %d H2\n", stHash_size(readInfo), hap1Count, hap2Count);
 
-
     // counting
     int64_t h1Count = 0;
     int64_t h2Count = 0;
@@ -129,6 +136,15 @@ int main(int argc, char *argv[]) {
     st_logCritical("Writing to BAM: %s \n", bamOutFile);
     samFile *out = hts_open(bamOutFile, "wb");
     r = sam_hdr_write(out, bamHdr);
+
+
+    // thread stuff
+    htsThreadPool threadPool = {NULL, 0};
+    if (!(threadPool.pool = hts_tpool_init(tc))) {
+        fprintf(stderr, "Error creating thread pool\n");
+    }
+    hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool);
+    hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool);
 
     // fetch alignments
     while (sam_read1(in,bamHdr,aln) >= 0) {
@@ -170,6 +186,7 @@ int main(int argc, char *argv[]) {
     bam_hdr_destroy(bamHdr);
     sam_close(in);
     sam_close(out);
+    hts_tpool_destroy(threadPool.pool);
     stHash_destruct(readInfo);
 
     st_logInfo("Fin.");
