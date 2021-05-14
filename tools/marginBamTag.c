@@ -30,7 +30,7 @@ void usage() {
 
     fprintf(stderr, "\nRequired arguments:\n");
     fprintf(stderr, "    IN_BAM_FILE input file in BAM format\n");
-    fprintf(stderr, "    TAG_INFO_FILE file in format \"read_id\\t[none|H1|H2]\\t...\n");
+    fprintf(stderr, "    TAG_INFO_FILE file in format \"read_id\\t[none|H0|H1|H2|HP:i:0|HP:i:1|HP:i:2]\\t...\n");
     fprintf(stderr, "    OUT_BAM_FILE output file in BAM format\n");
     fprintf(stderr, "    THREAD_COUNT optional parameter for number of thread to use\n");
     fprintf(stderr, "\n");
@@ -95,15 +95,15 @@ int main(int argc, char *argv[]) {
         // haplotag
         int64_t ht = -1;
         char *htInfo = stList_get(elements, 1);
-        if (stString_eq(htInfo, "H1")) {
+        if (stString_eq(htInfo, "H1") || stString_eq(htInfo, "HP:i:1")) {
             ht = 1;
             hap1Count++;
-        } else if (stString_eq(htInfo, "H2")) {
+        } else if (stString_eq(htInfo, "H2") || stString_eq(htInfo, "HP:i:2")) {
             ht = 2;
             hap2Count++;
-        } else if (!stString_eq(htInfo, "none")) {
-            st_errAbort("Unexpected haplotag descriptor, expected \"H1\", \"H2\", or \"none\": %s\n\tline %d: \"%s\"",
-                    htInfo, linenr, line);
+        } else if (!(stString_eq(htInfo, "none") || stString_eq(htInfo, "H0") || stString_eq(htInfo, "HP:i:0"))) {
+            st_errAbort("Unexpected haplotag descriptor, see --help for possible values: %s\n\tline %d: \"%s\"",
+                        htInfo, linenr, line);
         }
         // save
         st_logInfo("  Saving %s with tag value %"PRId64"\n", readName, ht);
