@@ -86,7 +86,7 @@
           "stitchWithPrimaryReadsOnly": false,
           "useVariantSelectionAdaptiveSampling": true,
           "variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
-          "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 1000,
+          "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
           "minVariantQuality": 0,
           "updateAllOutputVCFFormatFields": true,
           "phasesetMinBinomialReadSplitLikelihood": 0.0,
