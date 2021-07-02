@@ -109,6 +109,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         }
     }
     int64_t totalEntries = 0;
+    int64_t keptEntries = 0;
     int64_t skippedForRegion = 0;
     int64_t skippedForIndel = 0;
     int64_t skippedForNotPass = 0;
@@ -184,6 +185,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
             stHash_insert(entries, stString_copy(entry->refSeqName), contigList);
         }
         stList_append(contigList, entry);
+        keptEntries++;
     }
 
     // cleanup
@@ -195,11 +197,11 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
     }
 
     // logging
-    st_logCritical("> Parsed %"PRId64" %sVCF entries from %s; skipped %"PRId64" for region, %"PRId64" for not being "
+    st_logCritical("> Parsed %"PRId64" total VCF entries from %s; kept %"PRId64"%s, skipped %"PRId64" for region, %"PRId64" for not being "
                    "PASS, %"PRId64" for being homozygous, %"PRId64" for being INDEL\n",
-                   totalEntries, params->phaseParams->includeHomozygousVCFEntries ? " " : "HET ", vcfFile,
+                   totalEntries, vcfFile, keptEntries, params->phaseParams->includeHomozygousVCFEntries ? "" : "HETs",
                    skippedForRegion, skippedForNotPass, skippedForHomozygous, skippedForIndel);
-    if (totalEntries == 0) {
+    if (keptEntries == 0) {
         st_errAbort("No valid VCF entries found!");
     }
 
