@@ -12,5 +12,6 @@ vcfTest2	73	.	A	ACTG,CCC	30	.	.	GT	0/1
 vcfTest2	81	.	GGG	G	30	.	.	GT	0/1
 vcfTest2	89	.	AGGG	A,AG	30	.	.	GT	0/1
 vcfTest2	97	.	CCC	A,GGA,CAGAGAGA	30	.	.	GT	0/1
+vcfTest2	126	.	T	A	30	.	.	GT	0/1
 vcfTest2	127	.	A	G	30	.	.	GT	0/1
 vcfTest2	128	.	C	A	30	.	.	GT	0/1

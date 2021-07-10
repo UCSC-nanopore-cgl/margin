@@ -197,7 +197,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
     // logging
     st_logCritical("> Parsed %"PRId64" %sVCF entries from %s; skipped %"PRId64" for region, %"PRId64" for not being "
                    "PASS, %"PRId64" for being homozygous, %"PRId64" for being INDEL\n",
-                   totalEntries, params->phaseParams->includeHomozygousVCFEntries ? " " : "HET ", vcfFile,
+                   totalEntries, params->phaseParams->includeHomozygousVCFEntries ? "" : "HET ", vcfFile,
                    skippedForRegion, skippedForNotPass, skippedForHomozygous, skippedForIndel);
     if (totalEntries == 0) {
         st_errAbort("No valid VCF entries found!");
@@ -422,6 +422,101 @@ void updateVcfEntriesWithSubstringsAndPositions(stList *vcfEntries, char *refere
                 &vcfEntry->refAlnStopIncl, refPosInPOASpace, params->polishParams->columnAnchorTrim,
                 params->polishParams->useRunLengthEncoding);
 
+    }
+}
+
+
+
+
+
+stList *getAlleleSubstringByRleLength(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
+        int64_t *refEndPosExcl, bool putRefPosInPOASpace, int64_t expansion) {
+    stList *substrings = stList_construct3(0, (void (*)(void*)) rleString_destruct);
+    assert(stList_length(entry->alleles) >= 1);
+
+    // parameters for substringing
+    int64_t pos = entry->refPos;
+    // at this point, reference positions are in poa-space (1-based), need to convert to ref-space (0-based)
+    pos--;
+
+    //get ref info
+    char *refAllele = rleString_expand(stList_get(entry->alleles, 0));
+    int64_t refAlleleLen = strlen(refAllele);
+    for (int64_t i = 0; i < refAlleleLen; i++) {
+        // if we have an insert at the end of a chunk
+        if (pos+i >= refSeqLen) {
+            assert(pos+1 == refSeqLen);
+            refAlleleLen = i;
+            break;
+        }
+        char refChar = (char) toupper(referenceSeq[pos + i]);
+        char alleleChar = (char) toupper(refAllele[i]);
+        assert(refChar == alleleChar || (refChar != 'A' && refChar != 'C' && refChar != 'G' && refChar != 'T'));
+    }
+    free(refAllele);
+
+    // get prefix and suffix strings (from ref seq)
+    int64_t pStart = pos == 0 ? 0 : pos - 1;
+    int64_t pExpansion = expansion;
+    while (pStart > 0 && pExpansion > 0) {
+        pStart--;
+        if (toupper(referenceSeq[pStart]) != toupper(referenceSeq[pStart + 1])) {
+            pExpansion--;
+        }
+    }
+    if (pStart != 0) pStart++; // we terminate after pExpansion hits 0 which will always be on a changed nucl
+
+    int64_t sStart = pos + refAlleleLen;
+    int64_t sEnd = sStart;
+    int64_t sExpansion = expansion;
+    if (toupper(referenceSeq[sStart]) == toupper(referenceSeq[sStart - 1])) sExpansion++;
+    while (sEnd < refSeqLen && sExpansion > 0) {
+        sEnd++;
+        if (toupper(referenceSeq[sEnd]) != toupper(referenceSeq[sEnd - 1])) {
+            sExpansion--;
+        }
+    }
+    if (sEnd != refSeqLen) sEnd--; // we terminate after sExpansion hits 0 which will always be on a changed nucl
+
+
+    assert(pStart >= 0);
+    assert(sEnd <= refSeqLen);
+    *refStartPos = pStart;
+    *refEndPosExcl = sEnd >= refSeqLen ? refSeqLen : sEnd + 1;
+
+    int64_t sLen = *refEndPosExcl >= refSeqLen ? refSeqLen - sStart : *refEndPosExcl - sStart;
+    char *prefix = stString_getSubString(referenceSeq, *refStartPos, pos - *refStartPos);
+    char *suffix = stString_getSubString(referenceSeq, sStart, sLen);
+
+    // get alleles
+    for (int64_t i = 0; i < stList_length(entry->alleles); i++) {
+        char *expandedAllele = rleString_expand(stList_get(entry->alleles, i));
+        char *fullAlleleSubstring = stString_print("%s%s%s", prefix, expandedAllele, suffix);
+        stList_append(substrings, rleString_construct(fullAlleleSubstring));
+        free(expandedAllele);
+        free(fullAlleleSubstring);
+    }
+
+    // cleanup
+    free(prefix);
+    free(suffix);
+
+    // put refStartPos and endPos back in poa-space
+    if (putRefPosInPOASpace) {
+        (*refStartPos)++;
+        (*refEndPosExcl)++;
+    }
+    return substrings;
+}
+
+
+void updateVcfEntriesWithSubstringsAndPositionsByRleLength(stList *vcfEntries, char *referenceSeq, int64_t refSeqLen,
+        bool refPosInPOASpace, Params *params) {
+    for (int64_t i = 0; i < stList_length(vcfEntries); i++) {
+        VcfEntry *vcfEntry = stList_get(vcfEntries, i);
+        assert(vcfEntry->alleleSubstrings == NULL);
+        vcfEntry->alleleSubstrings = getAlleleSubstringByRleLength(vcfEntry, referenceSeq, refSeqLen,
+                &vcfEntry->refAlnStart, &vcfEntry->refAlnStopIncl, refPosInPOASpace, params->polishParams->columnAnchorTrim);
     }
 }
 

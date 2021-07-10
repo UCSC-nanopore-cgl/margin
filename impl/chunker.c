@@ -34,13 +34,14 @@ BamChunkRead *bamChunkRead_construct3(char *readName, char *nucleotides, uint8_t
     return r;
 }
 BamChunkRead *bamChunkRead_constructWithVcfEntrySubstrings(char *readName, bool forwardStrand, int64_t fullReadLength,
-                                                           BamChunkReadVcfEntrySubstrings *bcrves) {
+                                                           int64_t hap, BamChunkReadVcfEntrySubstrings *bcrves) {
     BamChunkRead *r = calloc(1, sizeof(BamChunkRead));
     r->readName = stString_copy(readName);
     r->forwardStrand = forwardStrand;
     r->fullReadLength = fullReadLength;
     r->rleRead = NULL;
     r->qualities = NULL;
+    r->haplotype = hap;
     r->bamChunkReadVcfEntrySubstrings = bcrves;
 
     return r;

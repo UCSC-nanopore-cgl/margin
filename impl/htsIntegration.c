@@ -1616,9 +1616,16 @@ uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcf
                                                                                       1);
         if (nextVcfEntriesIndex == -1) continue; // all vcf entries are before this read's start
         stHash *currentVcfEntries = stHash_construct(); // current vcf entries to read start pos
+
+        // try to get haplotype (if present)
+        int64_t hap = 0;
+        uint8_t *hpTag = NULL;
+        if ((hpTag = bam_aux_get(aln, "HP")) != NULL) {
+            hap = bam_aux2i(hpTag);
+        }
         // the bcrves we will be populating with vcf substrings
         BamChunkReadVcfEntrySubstrings *bcrves = bamChunkReadVcfEntrySubstrings_construct();
-        BamChunkRead *bcr = bamChunkRead_constructWithVcfEntrySubstrings(readName, forwardStrand, alnReadLength, bcrves);
+        BamChunkRead *bcr = bamChunkRead_constructWithVcfEntrySubstrings(readName, forwardStrand, alnReadLength, hap, bcrves);
 
         // get cigar and rep
         uint32_t *cigar = bam_get_cigar(aln);

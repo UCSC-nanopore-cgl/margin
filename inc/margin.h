@@ -1083,6 +1083,7 @@ typedef struct _bamChunkRead {
 	uint8_t *qualities;            // quality scores. will be NULL if not given, else will be of length rleRead->length
 	bool forwardStrand;            // whether the alignment is matched to the forward strand
 	int64_t fullReadLength;   // total length for whole read (not just chunk portion)
+	int64_t haplotype;        // for use with haplotagged bams doing indel candidate prediction
 	BamChunkReadVcfEntrySubstrings *bamChunkReadVcfEntrySubstrings; // for ultra-fast phasing work
 } BamChunkRead;
 
@@ -1091,7 +1092,7 @@ BamChunkRead *bamChunkRead_construct2(char *readName, char *nucleotides, uint8_t
 BamChunkRead *bamChunkRead_construct3(char *readName, char *nucleotides, uint8_t *qualities, bool forwardStrand,
                                       int64_t fullReadLength, bool useRunLengthEncoding);
 BamChunkRead *bamChunkRead_constructWithVcfEntrySubstrings(char *readName, bool forwardStrand, int64_t fullReadLength,
-        BamChunkReadVcfEntrySubstrings *bcrves);
+                                                           int64_t hap, BamChunkReadVcfEntrySubstrings *bcrves);
 
 BamChunkRead *bamChunkRead_constructCopy(BamChunkRead *copy);
 
@@ -1455,8 +1456,12 @@ stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeq
         int64_t *refEndPosIncl, bool putRefPosInPOASpace, int64_t expansion, bool useRunLengthEncoding);
 stList *getAlleleSubstrings(VcfEntry *entry, RleString *referenceSeq, Params *params,
                             int64_t *refStartPos, int64_t *refEndPosIncl, bool refPosInPOASpace);
+stList *getAlleleSubstringByRleLength(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
+									  int64_t *refEndPosExcl, bool putRefPosInPOASpace, int64_t expansion);
 void updateVcfEntriesWithSubstringsAndPositions(stList *vcfEntries, char *referenceSeq, int64_t refSeqLen,
         bool refPosInPOASpace, Params *params);
+void updateVcfEntriesWithSubstringsAndPositionsByRleLength(stList *vcfEntries, char *referenceSeq, int64_t refSeqLen,
+														   bool refPosInPOASpace, Params *params);
 void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunkReads, stHash *readIdToIdx,
 		stGenomeFragment *gF, BubbleGraph *bg, stList *chunkVcfEntriesToBubbles, stSet *hap1Reads, stSet *hap2Reads,
 		char *logIdentifier);
@@ -1471,6 +1476,8 @@ BubbleGraph *bubbleGraph_constructFromPoaAndVCFOnlyVCFAllele(Poa *poa, stList *b
 															 RleString *referenceSeq, stList *vcfEntries, Params *params);
 BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stList *bamChunkReads, stList *vcfEntries,
                                                                            Params *params, stList **vcfEntriesToBubbleIdx);
+// helper
+stHash *buildVcfEntryToReadSubstringsMap(stList *bamChunkReads, Params *params);
 
 /*
  * Misc

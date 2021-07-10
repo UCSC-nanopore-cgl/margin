@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 project(margin VERSION 1.3.0)
 
 #set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt -rdynamic")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt -rdynamic")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt -rdynamic")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -std=gnu99 -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -D_POSIX_C_SOURCE=200809L -mpopcnt -rdynamic")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -rdynamic -UNDEBUG -fsanitize=address -static-libasan ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fno-inline -rdynamic -UNDEBUG")
 
@@ -373,6 +373,9 @@ target_link_libraries(runLengthMatrix marginLib)
 
 add_executable(calcLocalPhasingCorrectness tools/calcLocalPhasingCorrectness.c)
 target_link_libraries(calcLocalPhasingCorrectness marginLib)
+
+add_executable(indelCandidates tools/marginIndelCandidates.c)
+target_link_libraries(indelCandidates marginLib)
 
 enable_testing()
 
