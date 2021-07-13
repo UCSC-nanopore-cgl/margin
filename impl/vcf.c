@@ -30,6 +30,8 @@ VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t raw
     vcfEntry->genotypeProb = -1.0;
     vcfEntry->haplotype1Prob = -1.0;
     vcfEntry->haplotype2Prob = -1.0;
+    vcfEntry->referenceSuffix = NULL;
+    vcfEntry->referencePrefix = NULL;
     return vcfEntry;
 }
 
@@ -37,6 +39,8 @@ void vcfEntry_destruct(VcfEntry *vcfEntry) {
     stList_destruct(vcfEntry->alleles);
     if (vcfEntry->alleleSubstrings != NULL) stList_destruct(vcfEntry->alleleSubstrings);
     if (vcfEntry->alleleIdxToReads != NULL) stList_destruct(vcfEntry->alleleIdxToReads);
+    if (vcfEntry->referencePrefix != NULL) free(vcfEntry->referencePrefix);
+    if (vcfEntry->referenceSuffix != NULL) free(vcfEntry->referenceSuffix);
     free(vcfEntry->refSeqName);
     free(vcfEntry);
 }
@@ -426,9 +430,6 @@ void updateVcfEntriesWithSubstringsAndPositions(stList *vcfEntries, char *refere
 }
 
 
-
-
-
 stList *getAlleleSubstringByRleLength(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
         int64_t *refEndPosExcl, bool putRefPosInPOASpace, int64_t expansion) {
     stList *substrings = stList_construct3(0, (void (*)(void*)) rleString_destruct);
@@ -497,9 +498,9 @@ stList *getAlleleSubstringByRleLength(VcfEntry *entry, char *referenceSeq, int64
         free(fullAlleleSubstring);
     }
 
-    // cleanup
-    free(prefix);
-    free(suffix);
+    // save prefix and suffix
+    entry->referencePrefix = prefix;
+    entry->referenceSuffix = suffix;
 
     // put refStartPos and endPos back in poa-space
     if (putRefPosInPOASpace) {

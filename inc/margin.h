@@ -1439,6 +1439,9 @@ struct _vcfEntry {
     double genotypeProb;
     double haplotype1Prob;
     double haplotype2Prob;
+    // for deciding indel likelihoods
+    char *referencePrefix;
+    char *referenceSuffix;
 };
 
 // vcf functions

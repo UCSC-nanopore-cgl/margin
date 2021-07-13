@@ -47,6 +47,13 @@ void indel_candidates_usage() {
     fprintf(stderr, "\n");
 }
 
+int stIntTuple_compareIndexZero(const void *a, const void *b) {
+    stIntTuple *A = (stIntTuple*) a;
+    stIntTuple *B = (stIntTuple*) b;
+    if (stIntTuple_get(A, 0) == stIntTuple_get(B, 0)) return 0;
+    return stIntTuple_get(A, 0) < stIntTuple_get(B, 0) ? -1 : 1;
+}
+
 
 int main(int argc, char *argv[]) {
 
@@ -240,9 +247,9 @@ int main(int argc, char *argv[]) {
     int64_t lastReportedPercentage = 0;
     time_t polishStartTime = time(NULL);
 
-    # ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic,1)
-    # endif
+//    # ifdef _OPENMP
+//    #pragma omp parallel for schedule(dynamic,1)
+//    # endif
     for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
         int64_t chunkIdx = stIntTuple_get(stList_get(chunkOrder, i), 0);
         // Time all chunks
@@ -316,7 +323,7 @@ int main(int argc, char *argv[]) {
                 vcfEntry_destruct(vcfEntry);
             }
         }
-        st_logInfo(" %s Removed %"PRId64" SNP and kept %"PRId64" INDEL variants\n", snpVcfEntryCount, stList_length(chunkVcfEntries));
+        st_logInfo(" %s Removed %"PRId64" SNP and kept %"PRId64" INDEL variants\n", logIdentifier, snpVcfEntryCount, stList_length(chunkVcfEntries));
         stList_setDestructor(allChunkVcfEntries, NULL);
         stList_destruct(allChunkVcfEntries);
 
@@ -352,6 +359,7 @@ int main(int argc, char *argv[]) {
             RleString *reference = stList_get(alleles, 0);
             Poa *poaH1 = poa_getReferenceGraph(reference, params->polishParams->alphabet, maximumRepeatLength);
             Poa *poaH2 = poa_getReferenceGraph(reference, params->polishParams->alphabet, maximumRepeatLength);
+            stList *readSubstringsAsBCRs = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
 
             // For each read, update the POAs
             for (int64_t r = 0; r < stList_length(readSubstrings); r++) {
@@ -371,27 +379,187 @@ int main(int argc, char *argv[]) {
 
                 getAlignedPairsWithIndels(bcrs->read->forwardStrand ? params->polishParams->stateMachineForForwardStrandRead :
                                           params->polishParams->stateMachineForReverseStrandRead,
-                                          sX, sY, params->polishParams->p, &matches, &deletes, &inserts, 0, 0);
+                                          sX, sY, params->polishParams->p, &matches, &deletes, &inserts, FALSE, FALSE);
 
-                symbolString_destruct(sX);
-                symbolString_destruct(sY);
+                char *expandedRead = rleString_expand(bcrs->substring);
+                BamChunkRead *readSubstringAsBCR = bamChunkRead_construct3(stString_copy(bcrs->read->readName),
+                        expandedRead, NULL, bcrs->read->forwardStrand, 0, TRUE);
+                stList_append(readSubstringsAsBCRs, readSubstringAsBCR);
 
                 // Add weights, edges and nodes to the poa
                 if (bcrs->read->haplotype == 1) {
-                    poa_augment(poaH1, bcrs->substring, bcrs->read->forwardStrand, i, matches, inserts, deletes,
+                    poa_augment(poaH1, bcrs->substring, bcrs->read->forwardStrand, r, matches, inserts, deletes,
                                 params->polishParams);
                 } else if (bcrs->read->haplotype == 2) {
-                    poa_augment(poaH2, bcrs->substring, bcrs->read->forwardStrand, i, matches, inserts, deletes,
+                    poa_augment(poaH2, bcrs->substring, bcrs->read->forwardStrand, r, matches, inserts, deletes,
                                 params->polishParams);
                 } else {
-                    poa_augment(poaH1, bcrs->substring, bcrs->read->forwardStrand, i, matches, inserts, deletes,
+                    poa_augment(poaH1, bcrs->substring, bcrs->read->forwardStrand, r, matches, inserts, deletes,
                                 params->polishParams);
-                    poa_augment(poaH2, bcrs->substring, bcrs->read->forwardStrand, i, matches, inserts, deletes,
+                    poa_augment(poaH2, bcrs->substring, bcrs->read->forwardStrand, r, matches, inserts, deletes,
                                 params->polishParams);
                 }
 
+                // cleanup
+                stList_destruct(matches);
+                stList_destruct(inserts);
+                stList_destruct(deletes);
+                free(expandedRead);
+                symbolString_destruct(sX);
+                symbolString_destruct(sY);
             }
 
+            // sanity
+            assert(stList_length(readSubstrings) == stList_length(readSubstringsAsBCRs));
+            for (int64_t r = 0; r < stList_length(readSubstrings); r++) {
+                BamChunkRead *rs = ((BamChunkReadSubstring*)stList_get(readSubstrings,r))->read;
+                BamChunkRead *rsabcr = stList_get(readSubstringsAsBCRs, r);
+                assert(stString_eq(rs->readName, rsabcr->readName));
+            }
+
+            // debug logging
+            char *prevRefH1 = "";
+            char *prevRefH2 = "";
+            char *postRefH1 = "";
+            char *postRefH2 = "";
+            if (st_getLogLevel() == info) {
+                prevRefH1 = rleString_expand(poaH1->refString);
+                prevRefH2 = rleString_expand(poaH2->refString);
+            }
+
+            // estimate from observations
+            poa_estimateRepeatCountsUsingBayesianModel(poaH1, readSubstringsAsBCRs, params->polishParams->repeatSubMatrix);
+            poa_estimateRepeatCountsUsingBayesianModel(poaH2, readSubstringsAsBCRs, params->polishParams->repeatSubMatrix);
+
+            // finish logging
+            if (st_getLogLevel() == info) {
+                postRefH1 = rleString_expand(poaH1->refString);
+                postRefH2 = rleString_expand(poaH2->refString);
+
+                int64_t maxLen = strlen(prevRefH1);
+                maxLen = maxLen > strlen(prevRefH2) ? maxLen : strlen(prevRefH2);
+                maxLen = maxLen > strlen(postRefH1) ? maxLen : strlen(postRefH1);
+                maxLen = maxLen > strlen(postRefH2) ? maxLen : strlen(postRefH2);
+
+                char *logString = stString_print(" %%s   %%8s H1: %%%ds  H2: %%%ds \n", maxLen, maxLen);
+                st_logInfo(" %s Estimating run lengths for variant at %s:%"PRId64"\n", logIdentifier,
+                        vcfEntry->refSeqName, vcfEntry->refPos);
+                st_logInfo(logString, logIdentifier, "Prev:", prevRefH1, prevRefH2);
+                st_logInfo(logString, logIdentifier, "Post:", postRefH1, postRefH2);
+                free(logString);
+                free(prevRefH1);
+                free(prevRefH2);
+                free(postRefH1);
+                free(postRefH2);
+            }
+
+
+            // get best poa reference strings per hap
+            char *poaRefStringExpandedH1 = rleString_expand(poaH1->refString);
+            RleString *poaRefStringExpandedRawLEH1 = rleString_construct_no_rle(poaRefStringExpandedH1);
+            SymbolString sH1 = rleString_constructSymbolString(poaRefStringExpandedRawLEH1, 0, poaRefStringExpandedRawLEH1->length,
+                                                               params->polishParams->alphabet,
+                                                               params->polishParams->useRepeatCountsInAlignment,
+                                                               poaH1->maxRepeatCount - 1);
+            char *poaRefStringExpandedH2 = rleString_expand(poaH2->refString);
+            RleString *poaRefStringExpandedRawLEH2 = rleString_construct_no_rle(poaRefStringExpandedH2);
+            SymbolString sH2 = rleString_constructSymbolString(poaRefStringExpandedRawLEH2, 0, poaRefStringExpandedRawLEH2->length,
+                                                               params->polishParams->alphabet,
+                                                               params->polishParams->useRepeatCountsInAlignment,
+                                                               poaH2->maxRepeatCount - 1);
+            stList *alleleRankH1 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
+            stList *alleleRankH2 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
+
+            // rank alleles
+            for (int64_t a = 0; a < stList_length(vcfEntry->alleles); a++) {
+
+                // prep for alignment ranking
+                stList *matchesH1 = NULL, *insertsH1 = NULL, *deletesH1 = NULL;
+                stList *matchesH2 = NULL, *insertsH2 = NULL, *deletesH2 = NULL;
+                double scoreH1, scoreH2;
+                assert(vcfEntry->referenceSuffix != NULL);
+                assert(vcfEntry->referencePrefix != NULL);
+
+                // Construct allele string for alignment
+                RleString *allele = stList_get(vcfEntry->alleles, a);
+                char *alleleRaw = rleString_expand(allele);
+                char *alleleSubstringRaw = stString_print("%s%s%s", vcfEntry->referencePrefix, alleleRaw,
+                        vcfEntry->referenceSuffix);
+                RleString *fullAlleleSubstringRawLE = rleString_construct_no_rle(alleleSubstringRaw);
+
+                SymbolString sAllele = rleString_constructSymbolString(fullAlleleSubstringRawLE, 0, fullAlleleSubstringRawLE->length,
+                        params->polishParams->alphabet, params->polishParams->useRepeatCountsInAlignment,
+                        poaH1->maxRepeatCount - 1);
+
+                // align and score
+                getAlignedPairsWithIndels(params->polishParams->stateMachineForGenomeComparison, sH1, sAllele,
+                        params->polishParams->p, &matchesH1, &deletesH1, &insertsH1, FALSE, FALSE);
+                getAlignedPairsWithIndels(params->polishParams->stateMachineForGenomeComparison, sH2, sAllele,
+                        params->polishParams->p, &matchesH2, &deletesH2, &insertsH2, FALSE, FALSE);
+                stList *tmpH1 = getMaximalExpectedAccuracyPairwiseAlignment(matchesH1, deletesH1, insertsH1, sH1.length,
+                                                                            sAllele.length, &scoreH1,
+                                                                            params->polishParams->p);
+                stList *tmpH2 = getMaximalExpectedAccuracyPairwiseAlignment(matchesH2, deletesH2, insertsH2, sH2.length,
+                                                                            sAllele.length, &scoreH2,
+                                                                            params->polishParams->p);
+
+                // save
+                stList_append(alleleRankH1, stIntTuple_construct2((int64_t) (10*scoreH1), a));
+                stList_append(alleleRankH2, stIntTuple_construct2((int64_t) (10*scoreH2), a));
+
+                // cleanup
+                free(alleleRaw);
+                free(alleleSubstringRaw);
+                rleString_destruct(fullAlleleSubstringRawLE);
+                stList_destruct(matchesH1);
+                stList_destruct(matchesH2);
+                stList_destruct(insertsH1);
+                stList_destruct(insertsH2);
+                stList_destruct(deletesH1);
+                stList_destruct(deletesH2);
+                stList_destruct(tmpH1);
+                stList_destruct(tmpH2);
+                symbolString_destruct(sAllele);
+            }
+
+            // print ranked alleles
+            stList_sort(alleleRankH1, stIntTuple_compareIndexZero);
+            stList_sort(alleleRankH2, stIntTuple_compareIndexZero);
+
+            // loggit (for now)
+            st_logInfo(" %s Hap1 Allele Rank:\n", logIdentifier);
+            st_logInfo(" %s   H01: %s\n", logIdentifier, rleString_expand(poaH1->refString));
+            for (int64_t a = stList_length(alleleRankH1) - 1; a >= 0; a--) {
+                stIntTuple *it = stList_get(alleleRankH1, a);
+                int64_t score = stIntTuple_get(it, 0);
+                int64_t alleleIdx = stIntTuple_get(it, 1);
+                RleString *allele = stList_get(vcfEntry->alleles, alleleIdx);
+                char *alleleRaw = rleString_expand(allele);
+                char *alleleSubstringRaw = stString_print("%s%s%s", vcfEntry->referencePrefix, alleleRaw,
+                                                          vcfEntry->referenceSuffix);
+                st_logInfo(" %s   A%2"PRId64": %s (%"PRId64")\n", logIdentifier, alleleIdx, alleleSubstringRaw, score);
+                free(alleleRaw);
+                free(alleleSubstringRaw);
+            }
+            st_logInfo(" %s Hap2 Allele Rank:\n", logIdentifier);
+            st_logInfo(" %s   H02: %s\n", logIdentifier, rleString_expand(poaH2->refString));
+            for (int64_t a = stList_length(alleleRankH2) - 1; a >= 0; a--) {
+                stIntTuple *it = stList_get(alleleRankH2, a);
+                int64_t score = stIntTuple_get(it, 0);
+                int64_t alleleIdx = stIntTuple_get(it, 1);
+                RleString *allele = stList_get(vcfEntry->alleles, alleleIdx);
+                char *alleleRaw = rleString_expand(allele);
+                char *alleleSubstringRaw = stString_print("%s%s%s", vcfEntry->referencePrefix, alleleRaw,
+                                                          vcfEntry->referenceSuffix);
+                st_logInfo(" %s   A%2"PRId64": %s (%"PRId64")\n", logIdentifier, alleleIdx, alleleSubstringRaw, score);
+                free(alleleRaw);
+                free(alleleSubstringRaw);
+            }
+
+            // cleanup
+            symbolString_destruct(sH1);
+            symbolString_destruct(sH2);
+            stList_destruct(readSubstringsAsBCRs);
             poa_destruct(poaH1);
             poa_destruct(poaH2);
         }
