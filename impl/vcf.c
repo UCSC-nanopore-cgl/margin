@@ -32,6 +32,7 @@ VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t raw
     vcfEntry->haplotype2Prob = -1.0;
     vcfEntry->referenceSuffix = NULL;
     vcfEntry->referencePrefix = NULL;
+    vcfEntry->wasAnaylzed = FALSE;
     return vcfEntry;
 }
 
@@ -708,7 +709,7 @@ int cmpint64(const void *I, const void *J) {
 }
 
 void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, char *phaseSetBedFile,
-        stHash *vcfEntryMap, Params *params) {
+                    stHash *vcfEntryMap, Params *params) {
 
     //open files
     htsFile *fpIn = hts_open(inputVcfFile,"rb");
@@ -870,7 +871,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         // this is only error case where something unexpected has happened
         if (skippedVcfEntries > 0) {
             st_logCritical("  Skipped %"PRId64" considered VCF entries searching %ssuccessfully for entry at %s:%"PRId64"\n",
-                    skippedVcfEntries, nextVcfEntry == NULL ? "un":"", chrom, pos);
+                           skippedVcfEntries, nextVcfEntry == NULL ? "un":"", chrom, pos);
         }
 
         // handle case where we did not find this variant (bad)
@@ -880,9 +881,9 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
                 nextVcfEntry = stList_get(currChromVcfEntries, nextVcfEntryIdx);
             }
             st_logCritical("  When writing VCF entries at %s:%"PRId64", did not find existing entry (prev %s:%"PRId64", next %s:%"PRId64")\n",
-                       chrom, pos, prevHetVcfEntry != NULL ? prevHetVcfEntry->refSeqName : "NULL",
-                       prevHetVcfEntry != NULL ? prevHetVcfEntry->refPos : -1, nextVcfEntry->refSeqName,
-                       nextVcfEntry->refPos);
+                           chrom, pos, prevHetVcfEntry != NULL ? prevHetVcfEntry->refSeqName : "NULL",
+                           prevHetVcfEntry != NULL ? prevHetVcfEntry->refPos : -1, nextVcfEntry->refSeqName,
+                           nextVcfEntry->refPos);
             // write variant
             writeUnphasedVariant(fpOut, hdr, rec, origGt1, origGt2);
             continue;
@@ -950,19 +951,19 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
             if (hcpv1 == 0 && hcpv2 == 0) {
                 newPhaseSet = TRUE;
                 st_logInfo("  Calling new phase set at %s:%"PRId64" because missing concordancy (H1:%"PRId32", H2:%"PRId32")\n",
-                        chrom, pos, hcpv1, hcpv2);
+                           chrom, pos, hcpv1, hcpv2);
                 newPhaseSetReason = stString_print("MissingConcordancy\tH1-%"PRId32"_H2-%"PRId32, hcpv1, hcpv2);
             } else if (binomialPValue(hcpv1 + hcpv2, hcpv1) < params->phaseParams->phasesetMinBinomialReadSplitLikelihood) {
                 newPhaseSet = TRUE;
                 st_logInfo("  Calling new phase set at %s:%"PRId64" because unlikely concordancy (H1:%"PRId32", H2:%"PRId32", prob:%.8f)\n",
-                        chrom, pos, hcpv1, hcpv2, binomialPValue(hcpv1 + hcpv2, hcpv1));
+                           chrom, pos, hcpv1, hcpv2, binomialPValue(hcpv1 + hcpv2, hcpv1));
                 newPhaseSetReason = stString_print("UnlikelyConcordancy\tH1-%"PRId32"_H2-%"PRId32"_Prob-%.8f", hcpv1, hcpv2, binomialPValue(hcpv1 + hcpv2, hcpv1));
             } else if (1.0 * (hdpv1 + hdpv2) / (hcpv1 + hcpv2 + hdpv1 + hdpv2) > params->phaseParams->phasesetMaxDiscordantRatio) {
                 newPhaseSet = TRUE;
                 st_logInfo("  Calling new phase set at %s:%"PRId64" because of discordancy (H1D:%"PRId32"+H2D:%"PRId32" / H1C:%"PRId32"+H2C:%"PRId32"+H1D:%"PRId32"+H2D:%"PRId32" = %.4f)\n",
-                        chrom, pos, hdpv1, hdpv2, hcpv1, hcpv2, hdpv1, hdpv2, 1.0 * (hdpv1 + hdpv2) / (hcpv1 + hcpv2 + hdpv1 + hdpv2));
+                           chrom, pos, hdpv1, hdpv2, hcpv1, hcpv2, hdpv1, hdpv2, 1.0 * (hdpv1 + hdpv2) / (hcpv1 + hcpv2 + hdpv1 + hdpv2));
                 newPhaseSetReason = stString_print("Discordancy\tH1D-%"PRId32"_H2D-%"PRId32"_H1C-%"PRId32"_H2C-%"PRId32"_ratio-%.4f",
-                        hcpv1, hcpv2, hdpv1, hdpv2, 1.0 * (hdpv1 + hdpv2) / (hcpv1 + hcpv2 + hdpv1 + hdpv2));
+                                                   hcpv1, hcpv2, hdpv1, hdpv2, 1.0 * (hdpv1 + hdpv2) / (hcpv1 + hcpv2 + hdpv1 + hdpv2));
             }
         }
 
@@ -1050,7 +1051,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
     // loggit
     if (params->phaseParams->updateAllOutputVCFFormatFields) {
         st_logCritical("  Wrote %"PRId64" variants: %"PRId64" were phased; skipped %"PRId64" for not being analyzed, %"PRId64" for being homozygous\n",
-                totalEntries, totalPhasedWritten, skippedBecasueNotConsidered, notPhasedBecauseMarginCalledHomozygous);
+                       totalEntries, totalPhasedWritten, skippedBecasueNotConsidered, notPhasedBecauseMarginCalledHomozygous);
     } else {
         st_logCritical("  Wrote %"PRId64" variants: %"PRId64" were phased; skipped %"PRId64" for not being analyzed, %"PRId64" for being homozygous, %"PRId64" for disagreement with margin\n",
                        totalEntries, totalPhasedWritten, skippedBecasueNotConsidered,
@@ -1082,7 +1083,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         }
     }
     st_logCritical("  Identified %"PRId64" phase sets with lengths avg:%"PRId64", min:%"PRId64", max:%"PRId64", N50:%"PRId64"\n",
-            stList_length(phaseSetLengths), avgPhaseSetLen, minPhaseSetLen, maxPhaseSetLen, n50PhaseSetLen);
+                   stList_length(phaseSetLengths), avgPhaseSetLen, minPhaseSetLen, maxPhaseSetLen, n50PhaseSetLen);
 
 
     // cleanup
@@ -1099,5 +1100,190 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
     }
     if (phaseSetBedOut != NULL) {
         fclose(phaseSetBedOut);
+    }
+}
+
+
+
+
+
+void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
+                       stHash *vcfEntryMap, Params *params) {
+
+    //open files
+    htsFile *fpIn = hts_open(inputVcfFile,"rb");
+    if (fpIn == NULL) {
+        st_logCritical("Could not open input VCF for reading %s\n", inputVcfFile);
+        return;
+    }
+    htsFile *fpOut = hts_open(outputVcfFile, "w");
+    if (fpOut == NULL) {
+        st_logCritical("Could not open output VCF for writing %s\n", outputVcfFile);
+        return;
+    }
+
+    // region manage
+    char regionContig[128] = "";
+    int regionStart = 0;
+    int regionEnd = 0;
+    if (regionStr != NULL) {
+        int scanRet = sscanf(regionStr, "%[^:]:%d-%d", regionContig, &regionStart, &regionEnd);
+        if (scanRet != 3 && scanRet != 1) {
+            st_errAbort("Region in unexpected format (expected %%s:%%d-%%d or %%s)): %s", regionStr);
+        } else if (regionStart < 0 || regionEnd < 0 || regionEnd < regionStart) {
+            st_errAbort("Start and end locations in region must be positive, start must be less than end: %s", regionStr);
+        }
+        if (scanRet == 1) {
+            regionStart = -1;
+            regionEnd = -1;
+        }
+    }
+
+    //read header
+    bcf_hdr_t *hdr = bcf_hdr_read(fpIn);
+    int nsmpl = bcf_hdr_nsamples(hdr);
+    if (nsmpl > 1) {
+        st_logCritical("> Got %d samples reading %s, will only take VCF records for the first\n", nsmpl, inputVcfFile);
+    }
+
+    // ensure this is are present
+    if (params->phaseParams->updateAllOutputVCFFormatFields) {
+        bcf_hdr_append(hdr, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
+    }
+
+    // write header
+    bcf_hdr_write(fpOut, hdr);
+    bcf1_t *rec    = bcf_init();
+
+    // tracking total entries
+    int64_t totalEntries = 0;
+    int64_t writtenVcfEntries = 0;
+    int64_t skippedVcfEntries = 0;
+    int64_t skippedVcfEntriesForRegion = 0;
+
+    // tracking vcf entries
+    VcfEntry *prevVcfEntry = NULL;
+    VcfEntry *currVcfEntry = NULL;
+    int64_t nextVcfEntryIdx = 0;
+    char *currChrom = NULL;
+    stList *currChromVcfEntries = NULL;
+
+    // iterate
+    while ( bcf_read(fpIn, hdr, rec) >= 0 )
+    {
+        //unpack for read REF,ALT,INFO,etc
+        bcf_unpack(rec, BCF_UN_ALL);
+        totalEntries++;
+
+        // location data
+        const char *chrom = bcf_hdr_id2name(hdr, rec->rid);
+        int64_t pos = rec->pos;
+
+        if (regionStr != NULL && (!stString_eq(regionContig, chrom) || (regionStart >= 0 && !(regionStart <= pos && pos < regionEnd)))) {
+            skippedVcfEntriesForRegion++;
+            continue;
+        }
+
+        // ensure current chrom vcf entries
+        if (currChrom == NULL || !stString_eq(currChrom, chrom)) {
+            // free old value
+            if (currChrom != NULL) free(currChrom);
+            // init chrom and entries
+            currChromVcfEntries = stHash_search(vcfEntryMap, chrom);
+            // should not happen
+            if (currChromVcfEntries == NULL) {
+                skippedVcfEntries++;
+                continue;
+            }
+            // prepare data we need for this chrom
+            currChrom = stString_copy(chrom);
+            currVcfEntry = NULL;
+            nextVcfEntryIdx = 0;
+        }
+
+        // find new current vcf entry
+        VcfEntry *nextVcfEntry = NULL;
+        while (nextVcfEntryIdx < stList_length(currChromVcfEntries)) {
+            nextVcfEntry = stList_get(currChromVcfEntries, nextVcfEntryIdx);
+            if (nextVcfEntry->refPos == pos) {
+                // found it
+                nextVcfEntryIdx++;
+                break;
+            } else if (nextVcfEntry->refPos > pos) {
+                //we have missed our variant, should not happen
+                nextVcfEntry = NULL;
+                break;
+            } else if (nextVcfEntry->refPos < pos) {
+                // we aren't at our variant yet, this is ok (we may have skipped variants)
+                skippedVcfEntries++;
+            } else {
+                assert(FALSE);
+            }
+            nextVcfEntryIdx++;
+        }
+
+        // handle case where we did not find this variant (bad)
+        if (nextVcfEntry == NULL) {
+            //loggit
+            if (nextVcfEntryIdx < stList_length(currChromVcfEntries)) {
+                nextVcfEntry = stList_get(currChromVcfEntries, nextVcfEntryIdx);
+            }
+            st_logCritical("  When writing VCF entries at %s:%"PRId64", did not find existing entry (prev %s:%"PRId64", next %s:%"PRId64")\n",
+                           chrom, pos, prevVcfEntry != NULL ? prevVcfEntry->refSeqName : "NULL",
+                           prevVcfEntry != NULL ? prevVcfEntry->refPos : -1, nextVcfEntry == NULL ? "NULL" :
+                           nextVcfEntry->refSeqName, nextVcfEntry == NULL ? -1 : nextVcfEntry->refPos);
+            continue;
+        }
+
+        // iterate
+        prevVcfEntry = currVcfEntry;
+        currVcfEntry = nextVcfEntry;
+
+        // should we skip
+        if (!currVcfEntry->wasAnaylzed) {
+            skippedVcfEntries++;
+            continue;
+        }
+
+        // get variant data from margin analysis
+        // genotype
+        int gt1 = (int) currVcfEntry->gt1;
+        int gt2 = (int) currVcfEntry->gt2;
+
+        // write values
+        int32_t *tmpia = (int*)malloc(bcf_hdr_nsamples(hdr)*2*sizeof(int));
+        if (params->phaseParams->updateAllOutputVCFFormatFields) {
+            // write everything, it is ok to clobber existing data
+            // write genotype
+            tmpia[0] = gt1 < 0 ? bcf_gt_missing : bcf_gt_unphased(gt1);
+            tmpia[1] = gt1 < 0 ? bcf_gt_missing : bcf_gt_unphased(gt2);
+            bcf_update_genotypes(hdr, rec, tmpia, 2);
+        } else {
+            // only write gt and phase set, not ok to clobber existing data
+            // only update genotype (and phase set) if we match the called genotype
+            tmpia[0] = bcf_gt_unphased(gt1);
+            tmpia[1] = bcf_gt_unphased(gt2);
+            bcf_update_genotypes(hdr, rec, tmpia, 2);
+        }
+
+        // save it
+        bcf_write(fpOut, hdr, rec);
+        writtenVcfEntries++;
+        free(tmpia);
+    }
+
+    st_logCritical("  Found %"PRId64" variants, wrote %"PRId64", skipped %"PRId64" for being outside region, skipped %"PRId64" for not being analyzed\n",
+                   totalEntries, writtenVcfEntries, skippedVcfEntriesForRegion, skippedVcfEntries);
+
+    // cleanup
+    if (currChrom != NULL) free(currChrom);
+    bcf_destroy(rec);
+    bcf_hdr_destroy(hdr);
+    int ret;
+    if ( (ret=hts_close(fpIn)) ) {
+        st_logCritical("  Failed to close input VCF %s with code %d!\n", inputVcfFile, ret);
+    }
+    if ( (ret=hts_close(fpOut)) ) {
+        st_logCritical("  Failed to close output VCF %s with code %d!\n", outputVcfFile, ret);
     }
 }

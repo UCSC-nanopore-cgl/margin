@@ -247,9 +247,9 @@ int main(int argc, char *argv[]) {
     int64_t lastReportedPercentage = 0;
     time_t polishStartTime = time(NULL);
 
-//    # ifdef _OPENMP
-//    #pragma omp parallel for schedule(dynamic,1)
-//    # endif
+    # ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic,1)
+    # endif
     for (int64_t i = 0; i < bamChunker->chunkCount; i++) {
         int64_t chunkIdx = stIntTuple_get(stList_get(chunkOrder, i), 0);
         // Time all chunks
@@ -342,6 +342,12 @@ int main(int argc, char *argv[]) {
         // look at all candidate alleles around vcf entries and pick best alleles
         for (int64_t v = 0; v < stList_length(chunkVcfEntries); v++) {
             VcfEntry *vcfEntry = stList_get(chunkVcfEntries, v);
+
+            // the infrastructure gets these and we want that, but we don't do anything with them
+            if (vcfEntry->rawRefPosInformativeOnly < bamChunk->chunkStart || vcfEntry->rawRefPosInformativeOnly >= bamChunk->chunkEnd) {
+                continue;
+            }
+
             stList *alleles = vcfEntry->alleleSubstrings;
             assert(stList_length(alleles) >= 2);
 
@@ -556,6 +562,13 @@ int main(int argc, char *argv[]) {
                 free(alleleSubstringRaw);
             }
 
+            // update the alleles
+            stIntTuple *hap1AlleleTuple = stList_pop(alleleRankH1);
+            stIntTuple *hap2AlleleTuple = stList_pop(alleleRankH2);
+            vcfEntry->rootVcfEntry->gt1 = stIntTuple_get(hap1AlleleTuple, 1);
+            vcfEntry->rootVcfEntry->gt2 = stIntTuple_get(hap2AlleleTuple, 1);
+            vcfEntry->rootVcfEntry->wasAnaylzed = TRUE;
+
             // cleanup
             symbolString_destruct(sH1);
             symbolString_destruct(sH2);
@@ -563,9 +576,6 @@ int main(int argc, char *argv[]) {
             poa_destruct(poaH1);
             poa_destruct(poaH2);
         }
-
-        //TODO update original VCFs
-
 
         // Cleanup
         if (chunkVcfEntries != NULL) stList_destruct(chunkVcfEntries);
@@ -585,16 +595,15 @@ int main(int argc, char *argv[]) {
 
     // loggit
     time_t vcfWriteStart = time(NULL);
-    char *outputVcfFile = stString_print("%s.phased.vcf", outputBase);
+    char *outputVcfFile = stString_print("%s.candidates.vcf", outputBase);
     st_logCritical("> Writing VCF to %s\n", outputVcfFile);
 
     // write it
-    //TODO replace
-    // writePhasedVcf(vcfFile, regionStr, outputVcfFile, outputPhaseSetFile, vcfEntries, params);
+    writeCandidateVcf(vcfFile, regionStr, outputVcfFile, vcfEntries, params);
 
     // loggit
     char *phasedVcfTDS = getTimeDescriptorFromSeconds(time(NULL) - vcfWriteStart);
-    st_logCritical("> Wrote phased VCF in %s\n", phasedVcfTDS);
+    st_logCritical("> Wrote candidate VCF in %s\n", phasedVcfTDS);
 
     // cleanup
     free(phasedVcfTDS);

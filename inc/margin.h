@@ -1440,8 +1440,9 @@ struct _vcfEntry {
     double haplotype1Prob;
     double haplotype2Prob;
     // for deciding indel likelihoods
-    char *referencePrefix;
-    char *referenceSuffix;
+	char *referencePrefix;
+	char *referenceSuffix;
+	bool wasAnaylzed;
 };
 
 // vcf functions
@@ -1471,6 +1472,8 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
 void updateHaplotypeSwitchingInVcfEntries(BamChunker *chunker, bool *chunkWasSwitched, stHash *vcfEntryMap);
 void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, char *phaseSetBedFile,
         stHash *vcfEntryMap, Params *params);
+void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
+					   stHash *vcfEntryMap, Params *params);
 
 // bubble functions using vcfs
 BubbleGraph *bubbleGraph_constructFromPoaAndVCF(Poa *poa, stList *bamChunkReads, stList *vcfEntries,
