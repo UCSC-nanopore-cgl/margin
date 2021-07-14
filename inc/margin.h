@@ -1442,6 +1442,7 @@ struct _vcfEntry {
     // for deciding indel likelihoods
 	char *referencePrefix;
 	char *referenceSuffix;
+	stSet *bestAlleles;
 	bool wasAnaylzed;
 };
 
@@ -1595,6 +1596,8 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
                                                                              stList *inputReads,
                                                                              stList *maintainedReads,
                                                                              stList *discardedReads);
+bool downsampleViaReadCount(int64_t intendedDepth, stList *inputReads, stList *inputAlignments,
+                            stList *maintainedReads, stList *maintainedAlignments, stList *discardedReads, stList *discardedAlignments);
 
 void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *regionStr, stSet *readsInH1, stSet *readsInH2,
         BamChunk *bamChunk, Params *params, char *logIdentifier);

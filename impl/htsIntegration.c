@@ -1051,6 +1051,44 @@ bool downsampleViaHetSpanLikelihood(int64_t intendedDepth, BamChunk *bamChunk, s
     return TRUE;
 }
 
+bool downsampleViaReadCount(int64_t intendedDepth, stList *inputReads, stList *inputAlignments,
+        stList *maintainedReads, stList *maintainedAlignments, stList *discardedReads, stList *discardedAlignments) {
+
+    // calculate depth, generate bcrwhs list
+    int64_t currentDepth = stList_length(inputReads);
+
+    // do we need to downsample?
+    if (currentDepth < intendedDepth) {
+        return FALSE;
+    }
+
+    // we do need to downsample
+    char *logIdentifier = getLogIdentifier();
+    st_logInfo(" %s Downsampling chunk via read count with count %"PRId64" to %d\n",
+               logIdentifier, currentDepth, intendedDepth);
+
+    // get likelihood of keeping each read
+    double prob = 1.0 * intendedDepth / currentDepth;
+
+    // keep some ratio of reads
+    int64_t totalKeptNucleotides = 0;
+    for (int64_t i = 0; i < stList_length(inputReads); i++) {
+        BamChunkRead *bcr = stList_get(inputReads, i);
+        if (st_random() < prob) {
+            stList_append(maintainedReads, stList_get(inputReads, i));
+            stList_append(maintainedAlignments, stList_get(inputAlignments, i));
+        } else {
+            stList_append(discardedReads, stList_get(inputReads, i));
+            stList_append(discardedAlignments, stList_get(inputAlignments, i));
+        }
+    }
+    st_logInfo(" %s Downsampled chunk to read count %"PRId64" (expected %"PRId64")\n",
+               logIdentifier, stList_length(maintainedReads), intendedDepth);
+
+    free(logIdentifier);
+    return TRUE;
+}
+
 bool downsampleViaFullReadLengthLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *inputReads,
         stList *inputAlignments, stList *maintainedReads, stList *maintainedAlignments,
         stList *discardedReads, stList *discardedAlignments) {

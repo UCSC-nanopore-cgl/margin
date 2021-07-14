@@ -1885,6 +1885,7 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishP
 
     st_logInfo(" %s Starting realignment with score: %6.4f\n", logIdentifier, score / PAIR_ALIGNMENT_PROB_1);
 
+    bool greedilyConverged = FALSE;
     int64_t i = 0;
     while (i < maxIterations) {
         i++;
@@ -1901,6 +1902,7 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishP
 
         // Stop in case consensus string is same as old reference (i.e. greedy convergence)
         if (rleString_eq(reference, poa->refString)) {
+            greedilyConverged = TRUE;
             rleString_destruct(reference);
             free(poaToConsensusMap);
             break;
@@ -1940,6 +1942,11 @@ Poa *poa_realignIterative(Poa *poa, stList *bamChunkReads, PolishParams *polishP
         poa_destruct(poa);
         poa = poa2;
         score = score2;
+    }
+
+    // Get updated repeat counts
+    if (greedilyConverged && polishParams->useRunLengthEncoding) {
+        poa_estimateRepeatCountsUsingBayesianModel(poa, bamChunkReads, polishParams->repeatSubMatrix);
     }
 
     st_logInfo(

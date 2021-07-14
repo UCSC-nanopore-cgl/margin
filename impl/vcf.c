@@ -32,6 +32,7 @@ VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t raw
     vcfEntry->haplotype2Prob = -1.0;
     vcfEntry->referenceSuffix = NULL;
     vcfEntry->referencePrefix = NULL;
+    vcfEntry->bestAlleles = stSet_construct();
     vcfEntry->wasAnaylzed = FALSE;
     return vcfEntry;
 }
@@ -42,6 +43,7 @@ void vcfEntry_destruct(VcfEntry *vcfEntry) {
     if (vcfEntry->alleleIdxToReads != NULL) stList_destruct(vcfEntry->alleleIdxToReads);
     if (vcfEntry->referencePrefix != NULL) free(vcfEntry->referencePrefix);
     if (vcfEntry->referenceSuffix != NULL) free(vcfEntry->referenceSuffix);
+    if (vcfEntry->bestAlleles != NULL) stSet_destruct(vcfEntry->bestAlleles);
     free(vcfEntry->refSeqName);
     free(vcfEntry);
 }
@@ -447,7 +449,11 @@ stList *getAlleleSubstringByRleLength(VcfEntry *entry, char *referenceSeq, int64
     for (int64_t i = 0; i < refAlleleLen; i++) {
         // if we have an insert at the end of a chunk
         if (pos+i >= refSeqLen) {
-            assert(pos+1 == refSeqLen);
+            //TODO
+            if (pos+i != refSeqLen) {
+                st_logCritical("Error parsing allele at %s:%d\n", entry->refSeqName, entry->rawRefPosInformativeOnly);
+            }
+            assert(pos+i == refSeqLen);
             refAlleleLen = i;
             break;
         }
@@ -1246,23 +1252,46 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
         }
 
         // get variant data from margin analysis
-        // genotype
-        int gt1 = (int) currVcfEntry->gt1;
-        int gt2 = (int) currVcfEntry->gt2;
+        // genotype in original allele space picked by margin
+        int ogt1 = (int) currVcfEntry->gt1;
+        int ogt2 = (int) currVcfEntry->gt2;
+        // gt that we will write (in new allele space)
+        int gt1 = 0;
+        int gt2 = 0;
+
+        // update alleles
+        int nals = 1 + (int) stSet_size(currVcfEntry->bestAlleles);
+        char **alleles = st_calloc(nals, sizeof(char*));
+        alleles[0] = rleString_expand(stList_get(currVcfEntry->alleles, 0));
+        stSetIterator *itor = stSet_getIterator(currVcfEntry->bestAlleles);
+        int64_t baIdx;
+        int64_t naidx = 1;
+        while ((baIdx = (int64_t) stSet_getNext(itor)) != 0) {
+            assert(baIdx != 0);
+            alleles[naidx] = rleString_expand(stList_get(currVcfEntry->alleles, baIdx));
+            if (ogt1 == baIdx)
+                gt1 = (int)naidx;
+            if (ogt2 == baIdx)
+                gt2 = (int)naidx;
+            naidx++;
+        }
+        assert(ogt1 == 0 || gt1 != 0);
+        assert(ogt2 == 0 || gt2 != 0);
+        assert(gt1 < nals && gt2 < nals);
+        bcf_update_alleles(hdr, rec, alleles, nals);
 
         // write values
         int32_t *tmpia = (int*)malloc(bcf_hdr_nsamples(hdr)*2*sizeof(int));
         if (params->phaseParams->updateAllOutputVCFFormatFields) {
             // write everything, it is ok to clobber existing data
             // write genotype
-            tmpia[0] = gt1 < 0 ? bcf_gt_missing : bcf_gt_unphased(gt1);
-            tmpia[1] = gt1 < 0 ? bcf_gt_missing : bcf_gt_unphased(gt2);
-            bcf_update_genotypes(hdr, rec, tmpia, 2);
-        } else {
-            // only write gt and phase set, not ok to clobber existing data
-            // only update genotype (and phase set) if we match the called genotype
             tmpia[0] = bcf_gt_unphased(gt1);
             tmpia[1] = bcf_gt_unphased(gt2);
+            bcf_update_genotypes(hdr, rec, tmpia, 2);
+        } else {
+            // write as 0/0
+            tmpia[0] = bcf_gt_unphased(0);
+            tmpia[1] = bcf_gt_unphased(0);
             bcf_update_genotypes(hdr, rec, tmpia, 2);
         }
 
