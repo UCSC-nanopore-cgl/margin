@@ -1474,7 +1474,7 @@ void updateHaplotypeSwitchingInVcfEntries(BamChunker *chunker, bool *chunkWasSwi
 void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, char *phaseSetBedFile,
         stHash *vcfEntryMap, Params *params);
 void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
-					   stHash *vcfEntryMap, Params *params);
+					   stHash *vcfEntryMap, bool genotypeVariants, Params *params);
 
 // bubble functions using vcfs
 BubbleGraph *bubbleGraph_constructFromPoaAndVCF(Poa *poa, stList *bamChunkReads, stList *vcfEntries,

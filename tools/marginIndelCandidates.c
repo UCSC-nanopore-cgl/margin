@@ -46,6 +46,7 @@ void indel_candidates_usage() {
     fprintf(stderr, "                                 Format: chr:start_pos-end_pos (chr3:2000-3000)\n");
     fprintf(stderr, "    -c --alleleCount         : Maximum number of output alleles (default %d)\n",
             DEFAULT_DESIRED_ALLELE_COUNT);
+    fprintf(stderr, "    -g --genotype            : Attempt to genotype variants (longer runtime)\n");
 
     fprintf(stderr, "\n");
 }
@@ -69,7 +70,7 @@ int main(int argc, char *argv[]) {
     char *regionStr = NULL;
     char *vcfFile = NULL;
     int numThreads = 1;
-    //TODO parameterize this
+    bool genotypeVariants = FALSE;
     int64_t desiredAlleleCount = DEFAULT_DESIRED_ALLELE_COUNT;
 
     if (argc < 4) {
@@ -95,10 +96,11 @@ int main(int argc, char *argv[]) {
                 { "outputBase", required_argument, 0, 'o'},
                 { "region", required_argument, 0, 'r'},
                 { "alleleCount", required_argument, 0, 'c'},
+                { "genotype", no_argument, 0, 'g'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:t:r:c:", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:t:r:c:g", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -121,6 +123,9 @@ int main(int argc, char *argv[]) {
             break;
         case 'c':
             desiredAlleleCount = atoi(optarg);
+            break;
+        case 'g':
+            genotypeVariants = TRUE;
             break;
         case 't':
             numThreads = atoi(optarg);
@@ -340,7 +345,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            if (stList_length(vcfEntry->alleles) - 1 <= desiredAlleleCount) {
+            if (!genotypeVariants && stList_length(vcfEntry->alleles) - 1 <= desiredAlleleCount) {
                 st_logDebug(" %s Variant at %s:%"PRId64" has %"PRId64" alleles and does not need analysis\n",
                         logIdentifier, vcfEntry->refSeqName, vcfEntry->rawRefPosInformativeOnly,
                         stList_length(vcfEntry->alleles) - 1);
@@ -366,8 +371,7 @@ int main(int argc, char *argv[]) {
             }
 
             // get initial graph
-            RleString *referenceForH1 = rleString_copy(stList_get(alleles, 0));
-            RleString *referenceForH2 = rleString_copy(stList_get(alleles, 0));
+            RleString *reference = rleString_copy(stList_get(alleles, 0));
             stList *readSubstringsAsBCRsH1 = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
             stList *readSubstringsAsBCRsH2 = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
             stList *readSubstringsAsAlignmentsH1 = stList_construct3(0, (void(*)(void*))stList_destruct);
@@ -385,7 +389,7 @@ int main(int argc, char *argv[]) {
                 // Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
                 stList *matches = NULL, *inserts = NULL, *deletes = NULL;
 
-                SymbolString sX = rleString_constructSymbolString(referenceForH1, 0, referenceForH1->length,
+                SymbolString sX = rleString_constructSymbolString(reference, 0, reference->length,
                                                                   params->polishParams->alphabet,
                                                                   params->polishParams->useRepeatCountsInAlignment,
                                                                   maximumRepeatLength - 1);
@@ -477,7 +481,7 @@ int main(int argc, char *argv[]) {
                 }
                 stList_destruct(filteredReadsH1);
                 stList_destruct(filteredAlignmentsH1);
-                
+
                 // downsample H2
                 stList *maintainedReadsH2 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
                 stList *maintainedAlignmentsH2 = stList_construct3(0, (void (*)(void *)) stList_destruct);
@@ -506,8 +510,8 @@ int main(int argc, char *argv[]) {
             }
 
             // rebuild poa
-            Poa *poaH1 = poa_realignAll(readSubstringsAsBCRsH1, readSubstringsAsAlignmentsH1, referenceForH1, params->polishParams);
-            Poa *poaH2 = poa_realignAll(readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, referenceForH2, params->polishParams);
+            Poa *poaH1 = poa_realignAll(readSubstringsAsBCRsH1, readSubstringsAsAlignmentsH1, reference, params->polishParams);
+            Poa *poaH2 = poa_realignAll(readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, reference, params->polishParams);
 
             // get best poa reference strings per hap
             char *poaRefStringExpandedH1 = rleString_expand(poaH1->refString);
@@ -688,6 +692,7 @@ int main(int argc, char *argv[]) {
             }
 
             // cleanup
+            rleString_destruct(reference);
             rleString_destruct(poaRefStringExpandedRawLEH1);
             rleString_destruct(poaRefStringExpandedRawLEH2);
             stList_destruct(alleleRankH1);
@@ -727,7 +732,7 @@ int main(int argc, char *argv[]) {
     st_logCritical("> Writing VCF to %s\n", outputVcfFile);
 
     // write it
-    writeCandidateVcf(vcfFile, regionStr, outputVcfFile, vcfEntries, params);
+    writeCandidateVcf(vcfFile, regionStr, outputVcfFile, vcfEntries, genotypeVariants, params);
 
     // loggit
     char *phasedVcfTDS = getTimeDescriptorFromSeconds(time(NULL) - vcfWriteStart);
@@ -753,8 +758,6 @@ int main(int argc, char *argv[]) {
     char *timeDescriptor = getTimeDescriptorFromSeconds(time(NULL) - startTime);
     st_logCritical("> Finished phasing in %s.\n", timeDescriptor);
     free(timeDescriptor);
-
-//    while(1); // Use this for testing for memory leaks
 
     return 0;
 }

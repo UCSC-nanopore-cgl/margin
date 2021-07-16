@@ -1110,11 +1110,35 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
 }
 
 
+int64_t minStrLen(int strCount, char **strs) {
+    if (strCount == 0) return 0;
+    int64_t minStrLen = strlen(strs[0]);
+    for (int64_t i = 1; i < strCount; i++) {
+        int64_t l = strlen(strs[i]);
+        minStrLen = l < minStrLen ? l : minStrLen;
+    }
+    return minStrLen;
+}
+
+
+void normalizeAlleles(int nals, char **alleles) {
+    while (minStrLen(nals, alleles) > 1) {
+        char expectedSuffix = alleles[0][strlen(alleles[0]) - 1];
+        for (int64_t i = 0; i < nals; i++) {
+            assert(alleles[i][strlen(alleles[i]) - 1] == expectedSuffix);
+            alleles[i][strlen(alleles[i]) - 1] = '\0';
+        }
+    }
+}
+
 
 
 
 void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
-                       stHash *vcfEntryMap, Params *params) {
+                       stHash *vcfEntryMap, bool genotypeVariants, Params *params) {
+    // TODO make this hardcoding generic
+    int HEADERS_TO_CHECK_LEN = 2;
+    char *HEADERS_TO_CHECK[2] = {"AD", "VAF"};
 
     //open files
     htsFile *fpIn = hts_open(inputVcfFile,"rb");
@@ -1152,9 +1176,16 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
         st_logCritical("> Got %d samples reading %s, will only take VCF records for the first\n", nsmpl, inputVcfFile);
     }
 
-    // ensure this is are present
-    if (params->phaseParams->updateAllOutputVCFFormatFields) {
-        bcf_hdr_append(hdr, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
+
+    // find format records to update when updating alleles
+    int allelicUpdateTagTypes[HEADERS_TO_CHECK_LEN];
+    for (int64_t h = 0; h < HEADERS_TO_CHECK_LEN; h++) {
+        int id = bcf_hdr_id2int(hdr, BCF_DT_ID, HEADERS_TO_CHECK[h]);
+        if (id < 0 || bcf_hdr_id2coltype(hdr, BCF_HL_FMT, id) != BCF_VL_A) {
+            allelicUpdateTagTypes[h] = -1;
+        } else {
+            allelicUpdateTagTypes[h] = bcf_hdr_id2type(hdr,BCF_HL_FMT,id);
+        }
     }
 
     // write header
@@ -1246,8 +1277,9 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
         prevVcfEntry = currVcfEntry;
         currVcfEntry = nextVcfEntry;
 
-        // should we skip
+        // sometimes we just write through
         if (!currVcfEntry->wasAnaylzed) {
+            bcf_write(fpOut, hdr, rec);
             wroteUnmodifiedVcfEntries++;
             continue;
         }
@@ -1259,6 +1291,20 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
         // gt that we will write (in new allele space)
         int gt1 = 0;
         int gt2 = 0;
+
+        // format fields for allele updates
+        void **formatFields = st_calloc(HEADERS_TO_CHECK_LEN, sizeof(void **));
+        for (int64_t f = 0; f < HEADERS_TO_CHECK_LEN; f++) {
+            if (allelicUpdateTagTypes[f] >= 0) {
+                if (allelicUpdateTagTypes[f] == BCF_HT_INT) {
+                    formatFields[f] = st_calloc(stSet_size(currVcfEntry->bestAlleles), sizeof (int32_t));
+                } else if (allelicUpdateTagTypes[f] == BCF_HT_REAL) {
+                    formatFields[f] = st_calloc(stSet_size(currVcfEntry->bestAlleles), sizeof (float));
+                }
+            } else {
+                formatFields[f] = NULL;
+            }
+        }
 
         // update alleles
         int nals = 1 + (int) stSet_size(currVcfEntry->bestAlleles);
@@ -1274,17 +1320,58 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
                 gt1 = (int)naidx;
             if (ogt2 == baIdx)
                 gt2 = (int)naidx;
+
+            // update get data for format fields
+            for (int64_t f = 0; f < HEADERS_TO_CHECK_LEN; f++) {
+                if (allelicUpdateTagTypes[f] >= 0) {
+                    int ndst;
+                    if (allelicUpdateTagTypes[f] == BCF_HT_INT) {
+                        int32_t *oldAlleleValues = st_calloc(stList_length(currVcfEntry->alleles) - 1, sizeof(int32_t));
+                        int32_t *newAlleleValues = (int32_t*) formatFields[f];
+                        bcf_get_format_values(hdr,rec,HEADERS_TO_CHECK[f],&oldAlleleValues,&ndst,BCF_HT_INT);
+                        assert(ndst >= baIdx - 1);
+                        int32_t currAlleleVal = oldAlleleValues[baIdx - 1];
+                        newAlleleValues[naidx - 1] = currAlleleVal;
+                        free(oldAlleleValues);
+                    } else if (allelicUpdateTagTypes[f] == BCF_HT_REAL) {
+                        float *oldAlleleValues = st_calloc(stList_length(currVcfEntry->alleles) - 1, sizeof(float));
+                        float *newAlleleValues = (float*) formatFields[f];
+                        bcf_get_format_values(hdr,rec,HEADERS_TO_CHECK[f],&oldAlleleValues,&ndst,BCF_HT_REAL);
+                        assert(ndst >= baIdx - 1);
+                        float currAlleleVal = oldAlleleValues[baIdx - 1];
+                        newAlleleValues[naidx - 1] = currAlleleVal;
+                        free(oldAlleleValues);
+                    }
+                }
+            }
             naidx++;
         }
         stSet_destructIterator(itor);
         assert(ogt1 == 0 || gt1 != 0);
         assert(ogt2 == 0 || gt2 != 0);
         assert(gt1 < nals && gt2 < nals);
+        normalizeAlleles(nals, alleles);
         bcf_update_alleles(hdr, rec, alleles, nals);
+
+        // write data for format fields
+        for (int64_t f = 0; f < HEADERS_TO_CHECK_LEN; f++) {
+            if (allelicUpdateTagTypes[f] >= 0) {
+                if (allelicUpdateTagTypes[f] == BCF_HT_INT) {
+                    int32_t *newAlleleValues = (int32_t*) formatFields[f];
+                    bcf_update_format(hdr, rec, HEADERS_TO_CHECK[f], newAlleleValues, (int) stSet_size(currVcfEntry->bestAlleles),
+                                      allelicUpdateTagTypes[f]);
+                } else if (allelicUpdateTagTypes[f] == BCF_HT_REAL) {
+                    float *newAlleleValues = (float*) formatFields[f];
+                    bcf_update_format(hdr, rec, HEADERS_TO_CHECK[f], newAlleleValues, (int) stSet_size(currVcfEntry->bestAlleles),
+                                      allelicUpdateTagTypes[f]);
+                }
+
+            }
+        }
 
         // write values
         int32_t *tmpia = (int*)malloc(bcf_hdr_nsamples(hdr)*2*sizeof(int));
-        if (params->phaseParams->updateAllOutputVCFFormatFields) {
+        if (genotypeVariants) {
             // write everything, it is ok to clobber existing data
             // write genotype
             tmpia[0] = bcf_gt_unphased(gt1);
@@ -1305,6 +1392,8 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
             free(alleles[i]);
         }
         free(alleles);
+        for (int64_t f = 0; f < HEADERS_TO_CHECK_LEN; f++) { if (allelicUpdateTagTypes[f] >= 0) free(formatFields[f]); }
+        free(formatFields);
     }
 
     st_logCritical("  Found %"PRId64" variants, updated %"PRId64", wrote %"PRId64" without modification, skipped %"PRId64" for being outside region, skipped %"PRId64" for not being analyzed\n",
