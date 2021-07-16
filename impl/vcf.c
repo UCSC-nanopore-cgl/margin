@@ -1164,6 +1164,7 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
     // tracking total entries
     int64_t totalEntries = 0;
     int64_t writtenVcfEntries = 0;
+    int64_t wroteUnmodifiedVcfEntries = 0;
     int64_t skippedVcfEntries = 0;
     int64_t skippedVcfEntriesForRegion = 0;
 
@@ -1247,7 +1248,7 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
 
         // should we skip
         if (!currVcfEntry->wasAnaylzed) {
-            skippedVcfEntries++;
+            wroteUnmodifiedVcfEntries++;
             continue;
         }
 
@@ -1275,6 +1276,7 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
                 gt2 = (int)naidx;
             naidx++;
         }
+        stSet_destructIterator(itor);
         assert(ogt1 == 0 || gt1 != 0);
         assert(ogt2 == 0 || gt2 != 0);
         assert(gt1 < nals && gt2 < nals);
@@ -1299,10 +1301,14 @@ void writeCandidateVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile,
         bcf_write(fpOut, hdr, rec);
         writtenVcfEntries++;
         free(tmpia);
+        for (int64_t i = 0; i < nals; i++) {
+            free(alleles[i]);
+        }
+        free(alleles);
     }
 
-    st_logCritical("  Found %"PRId64" variants, wrote %"PRId64", skipped %"PRId64" for being outside region, skipped %"PRId64" for not being analyzed\n",
-                   totalEntries, writtenVcfEntries, skippedVcfEntriesForRegion, skippedVcfEntries);
+    st_logCritical("  Found %"PRId64" variants, updated %"PRId64", wrote %"PRId64" without modification, skipped %"PRId64" for being outside region, skipped %"PRId64" for not being analyzed\n",
+                   totalEntries, writtenVcfEntries, wroteUnmodifiedVcfEntries, skippedVcfEntriesForRegion, skippedVcfEntries);
 
     // cleanup
     if (currChrom != NULL) free(currChrom);

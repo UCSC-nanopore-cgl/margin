@@ -311,33 +311,8 @@ int main(int argc, char *argv[]) {
                    logIdentifier, bamChunk->refSeqName, (int) bamChunk->chunkOverlapStart, bamChunk->chunkOverlapEnd);
 
         // get all VCF entries
-        stList *allChunkVcfEntries = getVcfEntriesForRegion(vcfEntries, NULL, bamChunk->refSeqName,
+        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, NULL, bamChunk->refSeqName,
                                                  bamChunk->chunkOverlapStart,  bamChunk->chunkOverlapEnd, params);
-
-        // filter for only INDEL
-        int64_t snpVcfEntryCount = 0;
-        stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
-        for (int64_t v = 0; v < stList_length(allChunkVcfEntries); v++) {
-            VcfEntry *vcfEntry = stList_get(allChunkVcfEntries, v);
-            RleString *refAllele = stList_get(vcfEntry->alleles, 0);
-            bool isIndel = FALSE;
-            for (int64_t a = 1; a < stList_length(vcfEntry->alleles); a++) {
-                // is this an indel?
-                if (refAllele->nonRleLength != ((RleString*) stList_get(vcfEntry->alleles, a))->nonRleLength) {
-                    isIndel = TRUE;
-                    break;
-                }
-            }
-            if (isIndel) {
-                stList_append(chunkVcfEntries, vcfEntry);
-            } else {
-                snpVcfEntryCount++;
-                vcfEntry_destruct(vcfEntry);
-            }
-        }
-        st_logInfo(" %s Removed %"PRId64" SNP and kept %"PRId64" INDEL variants\n", logIdentifier, snpVcfEntryCount, stList_length(chunkVcfEntries));
-        stList_setDestructor(allChunkVcfEntries, NULL);
-        stList_destruct(allChunkVcfEntries);
 
         // get substrings and alignment positions
         updateVcfEntriesWithSubstringsAndPositionsByRleLength(chunkVcfEntries, chunkReference, strlen(chunkReference),
@@ -351,7 +326,8 @@ int main(int argc, char *argv[]) {
         // prep for work
         stHash *vcfEntriesToReadSubstrings = buildVcfEntryToReadSubstringsMap(reads, params);
         int64_t vcfEntriesWithoutSubstrings = 0;
-        int64_t vcfEntryInChunkBoundary = 0;
+        int64_t vcfEntriesInChunkBoundary = 0;
+        int64_t vcfEntriesThatDoNotNeedCandidateFinding = 0;
         int64_t vcfEntriesHandled = 0;
 
         // look at all candidate alleles around vcf entries and pick best alleles
@@ -360,11 +336,20 @@ int main(int argc, char *argv[]) {
 
             // the infrastructure gets these and we want that, but we don't do anything with them
             if (vcfEntry->rawRefPosInformativeOnly < bamChunk->chunkStart || vcfEntry->rawRefPosInformativeOnly >= bamChunk->chunkEnd) {
-                vcfEntryInChunkBoundary++;
+                vcfEntriesInChunkBoundary++;
                 continue;
             }
 
-            st_logInfo(" %s Analyzing variant at %s:%"PRId64"\n", logIdentifier, vcfEntry->refSeqName, vcfEntry->rawRefPosInformativeOnly);
+            if (stList_length(vcfEntry->alleles) - 1 <= desiredAlleleCount) {
+                st_logDebug(" %s Variant at %s:%"PRId64" has %"PRId64" alleles and does not need analysis\n",
+                        logIdentifier, vcfEntry->refSeqName, vcfEntry->rawRefPosInformativeOnly,
+                        stList_length(vcfEntry->alleles) - 1);
+                vcfEntriesThatDoNotNeedCandidateFinding++;
+                continue;
+            }
+
+            st_logInfo(" %s Analyzing variant at %s:%"PRId64" with %"PRId64" alleles\n", logIdentifier,
+                    vcfEntry->refSeqName, vcfEntry->rawRefPosInformativeOnly, stList_length(vcfEntry->alleles) - 1);
             vcfEntriesHandled++;
 
             stList *alleles = vcfEntry->alleleSubstrings;
@@ -381,7 +366,8 @@ int main(int argc, char *argv[]) {
             }
 
             // get initial graph
-            RleString *reference = stList_get(alleles, 0);
+            RleString *referenceForH1 = rleString_copy(stList_get(alleles, 0));
+            RleString *referenceForH2 = rleString_copy(stList_get(alleles, 0));
             stList *readSubstringsAsBCRsH1 = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
             stList *readSubstringsAsBCRsH2 = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
             stList *readSubstringsAsAlignmentsH1 = stList_construct3(0, (void(*)(void*))stList_destruct);
@@ -399,7 +385,7 @@ int main(int argc, char *argv[]) {
                 // Generate set of posterior probabilities for matches, deletes and inserts with respect to reference.
                 stList *matches = NULL, *inserts = NULL, *deletes = NULL;
 
-                SymbolString sX = rleString_constructSymbolString(reference, 0, reference->length,
+                SymbolString sX = rleString_constructSymbolString(referenceForH1, 0, referenceForH1->length,
                                                                   params->polishParams->alphabet,
                                                                   params->polishParams->useRepeatCountsInAlignment,
                                                                   maximumRepeatLength - 1);
@@ -425,8 +411,8 @@ int main(int argc, char *argv[]) {
 
                 // make read
                 char *expandedRead = rleString_expand(bcrs->substring);
-                BamChunkRead *readSubstringAsBCR = bamChunkRead_construct3(stString_copy(bcrs->read->readName),
-                                                                           expandedRead, NULL, bcrs->read->forwardStrand, 0, TRUE);
+                BamChunkRead *readSubstringAsBCR = bamChunkRead_construct3(bcrs->read->readName,
+                        expandedRead, NULL, bcrs->read->forwardStrand, 0, TRUE);
 
                 // Add to per-hap bcrs
                 if (bcrs->read->haplotype == 1) {
@@ -442,7 +428,7 @@ int main(int argc, char *argv[]) {
                     stList_append(readSubstringsAsAlignmentsH1, alignment);
 
                     // need to make another one, saving it twice
-                    readSubstringAsBCR = bamChunkRead_construct3(stString_copy(bcrs->read->readName),
+                    readSubstringAsBCR = bamChunkRead_construct3(bcrs->read->readName,
                             expandedRead, NULL, bcrs->read->forwardStrand, 0, TRUE);
                     stList_append(readSubstringsAsBCRsH2, readSubstringAsBCR);
                     alignment = copyListOfIntTuples(alignment);
@@ -451,6 +437,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 // cleanup
+                stList_destruct(bestAlignment);
                 stList_destruct(matches);
                 stList_destruct(inserts);
                 stList_destruct(deletes);
@@ -465,57 +452,62 @@ int main(int argc, char *argv[]) {
 
             // do downsampling if appropriate
             if (params->polishParams->maxDepth > 0) {
-                // get downsampling structures
+                // downsample h1
                 stList *maintainedReadsH1 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-                stList *maintainedReadsH2 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
                 stList *maintainedAlignmentsH1 = stList_construct3(0, (void (*)(void *)) stList_destruct);
-                stList *maintainedAlignmentsH2 = stList_construct3(0, (void (*)(void *)) stList_destruct);
                 stList *filteredReadsH1 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-                stList *filteredReadsH2 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
                 stList *filteredAlignmentsH1 = stList_construct3(0, (void (*)(void *)) stList_destruct);
-                stList *filteredAlignmentsH2 = stList_construct3(0, (void (*)(void *)) stList_destruct);
-
-                bool didDownsample = downsampleViaReadCount(params->polishParams->maxDepth, readSubstringsAsBCRsH1,
-                        readSubstringsAsAlignmentsH1, maintainedReadsH1, maintainedAlignmentsH1, filteredReadsH1,
-                        filteredAlignmentsH1);
-                didDownsample = didDownsample || downsampleViaReadCount(params->polishParams->maxDepth,
-                        readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, maintainedReadsH2, maintainedAlignmentsH2,
-                        filteredReadsH2, filteredAlignmentsH2);
-
-                // we need to destroy the discarded reads and structures
-                if (didDownsample) {
-                    st_logInfo(" %s Downsampled from %"PRId64" to %"PRId64" reads (%"PRId64" H1 / %"PRId64" H2)\n", logIdentifier,
-                               stList_length(reads), stList_length(maintainedReadsH1) + stList_length(maintainedReadsH2),
-                               stList_length(maintainedReadsH1), stList_length(maintainedReadsH2));
+                bool didDownsampleH1 = downsampleViaReadCount(params->polishParams->maxDepth, readSubstringsAsBCRsH1,
+                                                              readSubstringsAsAlignmentsH1, maintainedReadsH1, maintainedAlignmentsH1, filteredReadsH1,
+                                                              filteredAlignmentsH1);
+                if (didDownsampleH1) {
+                    st_logInfo(" %s Downsampled H1 from %"PRId64" to %"PRId64" reads\n", logIdentifier,
+                               stList_length(reads), stList_length(maintainedReadsH1));
                     // still has all the old reads, need to not free these
                     stList_setDestructor(readSubstringsAsBCRsH1, NULL);
-                    stList_setDestructor(readSubstringsAsBCRsH2, NULL);
                     stList_setDestructor(readSubstringsAsAlignmentsH1, NULL);
-                    stList_setDestructor(readSubstringsAsAlignmentsH2, NULL);
                     stList_destruct(readSubstringsAsBCRsH1);
-                    stList_destruct(readSubstringsAsBCRsH2);
                     stList_destruct(readSubstringsAsAlignmentsH1);
-                    stList_destruct(readSubstringsAsAlignmentsH2);
                     // and keep the filtered reads
                     readSubstringsAsBCRsH1 = maintainedReadsH1;
-                    readSubstringsAsBCRsH2 = maintainedReadsH2;
                     readSubstringsAsAlignmentsH1 = maintainedAlignmentsH1;
-                    readSubstringsAsAlignmentsH2 = maintainedAlignmentsH2;
                 } else {
                     stList_destruct(maintainedReadsH1);
-                    stList_destruct(maintainedReadsH2);
                     stList_destruct(maintainedAlignmentsH1);
-                    stList_destruct(maintainedAlignmentsH2);
                 }
                 stList_destruct(filteredReadsH1);
-                stList_destruct(filteredReadsH2);
                 stList_destruct(filteredAlignmentsH1);
+                
+                // downsample H2
+                stList *maintainedReadsH2 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+                stList *maintainedAlignmentsH2 = stList_construct3(0, (void (*)(void *)) stList_destruct);
+                stList *filteredReadsH2 = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+                stList *filteredAlignmentsH2 = stList_construct3(0, (void (*)(void *)) stList_destruct);
+                bool didDownsampleH2 = downsampleViaReadCount(params->polishParams->maxDepth,
+                        readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, maintainedReadsH2, maintainedAlignmentsH2,
+                        filteredReadsH2, filteredAlignmentsH2);
+                if (didDownsampleH2) {
+                    st_logInfo(" %s Downsampled H2 from %"PRId64" to %"PRId64" reads\n", logIdentifier,
+                               stList_length(reads), stList_length(maintainedReadsH2));
+                    // still has all the old reads, need to not free these
+                    stList_setDestructor(readSubstringsAsBCRsH2, NULL);
+                    stList_setDestructor(readSubstringsAsAlignmentsH2, NULL);
+                    stList_destruct(readSubstringsAsBCRsH2);
+                    stList_destruct(readSubstringsAsAlignmentsH2);
+                    // and keep the filtered reads
+                    readSubstringsAsBCRsH2 = maintainedReadsH2;
+                    readSubstringsAsAlignmentsH2 = maintainedAlignmentsH2;
+                } else {
+                    stList_destruct(maintainedReadsH2);
+                    stList_destruct(maintainedAlignmentsH2);
+                }
+                stList_destruct(filteredReadsH2);
                 stList_destruct(filteredAlignmentsH2);
             }
 
             // rebuild poa
-            Poa *poaH1 = poa_realignAll(readSubstringsAsBCRsH1, readSubstringsAsAlignmentsH1, reference, params->polishParams);
-            Poa *poaH2 = poa_realignAll(readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, reference, params->polishParams);
+            Poa *poaH1 = poa_realignAll(readSubstringsAsBCRsH1, readSubstringsAsAlignmentsH1, referenceForH1, params->polishParams);
+            Poa *poaH2 = poa_realignAll(readSubstringsAsBCRsH2, readSubstringsAsAlignmentsH2, referenceForH2, params->polishParams);
 
             // get best poa reference strings per hap
             char *poaRefStringExpandedH1 = rleString_expand(poaH1->refString);
@@ -524,16 +516,18 @@ int main(int argc, char *argv[]) {
                                                                params->polishParams->alphabet,
                                                                params->polishParams->useRepeatCountsInAlignment,
                                                                maximumRepeatLength - 1);
+            free(poaRefStringExpandedH1);
             char *poaRefStringExpandedH2 = rleString_expand(poaH2->refString);
             RleString *poaRefStringExpandedRawLEH2 = rleString_construct_no_rle(poaRefStringExpandedH2);
             SymbolString sH2 = rleString_constructSymbolString(poaRefStringExpandedRawLEH2, 0, poaRefStringExpandedRawLEH2->length,
                                                                params->polishParams->alphabet,
                                                                params->polishParams->useRepeatCountsInAlignment,
                                                                maximumRepeatLength - 1);
-            stList *alleleRankH1 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
-            stList *alleleRankH2 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
+            free(poaRefStringExpandedH2);
 
             // rank alleles
+            stList *alleleRankH1 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
+            stList *alleleRankH2 = stList_construct3(0, (void(*)(void*)) stIntTuple_destruct);
             for (int64_t a = 0; a < stList_length(vcfEntry->alleles); a++) {
 
                 // prep for alignment ranking
@@ -567,8 +561,8 @@ int main(int argc, char *argv[]) {
                                                                             params->polishParams->p);
 
                 // save
-                stList_append(alleleRankH1, stIntTuple_construct2((int64_t) (10*scoreH1), a));
-                stList_append(alleleRankH2, stIntTuple_construct2((int64_t) (10*scoreH2), a));
+                stList_append(alleleRankH1, stIntTuple_construct2((int64_t) scoreH1, a));
+                stList_append(alleleRankH2, stIntTuple_construct2((int64_t) scoreH2, a));
 
                 // cleanup
                 free(alleleRaw);
@@ -583,6 +577,7 @@ int main(int argc, char *argv[]) {
                 stList_destruct(tmpH1);
                 stList_destruct(tmpH2);
                 symbolString_destruct(sAllele);
+
             }
 
             // ranked alleles by score
@@ -592,7 +587,9 @@ int main(int argc, char *argv[]) {
             // loggit
             if (st_getLogLevel() >= info) {
                 st_logInfo(" %s Hap1 Allele Rank:\n", logIdentifier);
-                st_logInfo(" %s   H01: %s\n", logIdentifier, rleString_expand(poaH1->refString));
+                char *h1Allele = rleString_expand(poaH1->refString);
+                st_logInfo(" %s   H 1: %s\n", logIdentifier, h1Allele);
+                free(h1Allele);
                 for (int64_t a = stList_length(alleleRankH1) - 1; a >= 0; a--) {
                     stIntTuple *it = stList_get(alleleRankH1, a);
                     int64_t score = stIntTuple_get(it, 0);
@@ -616,7 +613,9 @@ int main(int argc, char *argv[]) {
                 }
 
                 st_logInfo(" %s Hap2 Allele Rank:\n", logIdentifier);
-                st_logInfo(" %s   H02: %s\n", logIdentifier, rleString_expand(poaH2->refString));
+                char *h2Allele = rleString_expand(poaH2->refString);
+                st_logInfo(" %s   H 2: %s\n", logIdentifier, h2Allele);
+                free(h2Allele);
                 for (int64_t a = stList_length(alleleRankH2) - 1; a >= 0; a--) {
                     stIntTuple *it = stList_get(alleleRankH2, a);
                     int64_t score = stIntTuple_get(it, 0);
@@ -670,11 +669,15 @@ int main(int argc, char *argv[]) {
                     assert(stList_length(sourceHapAlleles) != 0);
                     stIntTuple *nextBestAllele = stList_pop(sourceHapAlleles);
                     int64_t alleleIdx = stIntTuple_get(nextBestAllele, 1);
-                    if (alleleIdx == 0 || stSet_search(vcfEntry->rootVcfEntry->bestAlleles, (void*)alleleIdx) != 0) continue;
+                    if (alleleIdx == 0 || stSet_search(vcfEntry->rootVcfEntry->bestAlleles, (void*)alleleIdx) != 0) {
+                        stIntTuple_destruct(nextBestAllele);
+                        continue;
+                    }
                     char *alleleStr = rleString_expand(stList_get(vcfEntry->rootVcfEntry->alleles, alleleIdx));
                     st_logInfo(" %s Saving allele %"PRId64" %s\n", logIdentifier, alleleIdx, alleleStr);
-                    free(alleleStr);
                     stSet_insert(vcfEntry->rootVcfEntry->bestAlleles, (void*) alleleIdx);
+                    free(alleleStr);
+                    stIntTuple_destruct(nextBestAllele);
                 }
             } else {
                 // just save all the alleles
@@ -685,6 +688,10 @@ int main(int argc, char *argv[]) {
             }
 
             // cleanup
+            rleString_destruct(poaRefStringExpandedRawLEH1);
+            rleString_destruct(poaRefStringExpandedRawLEH2);
+            stList_destruct(alleleRankH1);
+            stList_destruct(alleleRankH2);
             symbolString_destruct(sH1);
             symbolString_destruct(sH2);
             stList_destruct(readSubstringsAsBCRsH1);
@@ -701,12 +708,15 @@ int main(int argc, char *argv[]) {
 
         // report timing
         if (st_getLogLevel() >= info) {
-            st_logInfo(">%s Chunk with ~%"PRId64" reads and %"PRId64" handled variants processed in %d sec\n",
-                       logIdentifier, stList_length(reads), vcfEntriesHandled, (int) (time(NULL) - chunkStartTime));
+            st_logInfo(">%s Chunk with ~%"PRId64" reads and %"PRId64" handled variants (skipped %"PRId64"+%"PRId64"+%"PRId64") processed in %d sec\n",
+                       logIdentifier, stList_length(reads), vcfEntriesHandled, vcfEntriesInChunkBoundary,
+                       vcfEntriesThatDoNotNeedCandidateFinding, vcfEntriesWithoutSubstrings,
+                       (int) (time(NULL) - chunkStartTime));
         }
 
         // final post-completion logging cleanup
         stList_destruct(reads);
+        stHash_destruct(vcfEntriesToReadSubstrings);
         free(logIdentifier);
     }
 
