@@ -1343,6 +1343,7 @@ getMaxWeight(const double *weights, uint64_t weightNo, uint64_t referenceIndex, 
         }
     }
     assert(maxIndex != -1);
+    assert(referenceIndex < weightNo);
 
     return weights[referenceIndex] * referenceWeightPenalty >= maxWeight ? referenceIndex : maxIndex;
 }
@@ -1487,10 +1488,10 @@ RleString *poa_getConsensus(Poa *poa, int64_t **poaToConsensusMap, PolishParams 
 
                 // Similarly picks a repeat count
                 int64_t maxWeightRepeatCount = getMaxWeight(node->repeatCountWeights, poa->maxRepeatCount,
-                                                            node->repeatCount, pp->referenceBasePenalty);
-                maxWeightRepeatCount = maxWeightRepeatCount == 0 ? 1
-                                                                 : maxWeightRepeatCount; // Avoid making a repeat count of zero (could
-                // happen if coverage was 0 through region).
+                        (node->repeatCount >= poa->maxRepeatCount ? poa->maxRepeatCount - 1 : node->repeatCount),
+                        pp->referenceBasePenalty);
+                // Avoid making a repeat count of zero (could happen if coverage was 0 through region).
+                maxWeightRepeatCount = maxWeightRepeatCount == 0 ? 1 : maxWeightRepeatCount;
 
                 // Add base * repeat count to list of consensus strings
                 stList_append(consensusStrings, expandChar(base, maxWeightRepeatCount));
