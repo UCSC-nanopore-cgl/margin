@@ -1596,7 +1596,7 @@ int64_t getAlignedReadLength3(bam1_t *aln, int64_t *start_softclip, int64_t *end
 
 void countIndels(uint32_t *cigar, uint32_t ncigar, int64_t *numInsertions, int64_t *numDeletions);
 
-bool isSupplementalAlignment(bam1_t *aln);
+bool isSupplementaryAlignment(bam1_t *aln);
 
 char *getReadName(bam_hdr_t *bamHdr, bam1_t *aln);
 
