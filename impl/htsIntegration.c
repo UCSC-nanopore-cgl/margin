@@ -301,8 +301,8 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
             continue; //unaligned
         if (!params->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!params->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
-            continue; //supplementary
+        if (!params->includeSupplementaryAlignments && isSupplementalAlignment(aln))
+            continue; //supplemental
         if (aln->core.qual < params->filterAlignmentsWithMapQBelowThisThreshold) { //low mapping quality
             if (!recordFilteredReads) continue;
         }
@@ -356,7 +356,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
         }
         
         // save to readEnumerator
-        char *readName = stString_copy(bam_get_qname(aln));
+        char *readName = getReadName(bamHdr, aln);
         if (stHash_search(chunker->readEnumerator, readName) == NULL) {
             stHash_insert(chunker->readEnumerator, readName, (void*) readIdx++);
         } else {
@@ -516,6 +516,19 @@ void bamChunk_destruct(BamChunk *bamChunk) {
     free(bamChunk);
 }
 
+bool isSupplementalAlignment(bam1_t *aln) {
+    return (aln->core.flag & (uint16_t) 0x800) != 0;
+}
+
+char *getReadName(bam_hdr_t *bamHdr, bam1_t *aln) {
+    if (isSupplementalAlignment(aln)) {
+        return stString_print("%s@@%s:%"PRId32"%c", bam_get_qname(aln), bamHdr->target_name[aln->core.tid], aln->core.pos,
+                              bam_is_rev(aln) ? 'r' : 'f');
+    } else {
+        return stString_copy(bam_get_qname(aln));
+    }
+}
+
 int compareBamChunkDepthByIndexInList(const void *a, const void *b, const void *chunkList) {
     const BamChunk *chunk1 = stList_get((stList*)chunkList, stIntTuple_get((stIntTuple*) a, 0));
     const BamChunk *chunk2 = stList_get((stList*)chunkList, stIntTuple_get((stIntTuple*) b, 0));
@@ -603,8 +616,8 @@ uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *
             continue; //unaligned
         if (!polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
-            continue; //supplementary
+        if (!polishParams->includeSupplementaryAlignments && isSupplementalAlignment(aln))
+            continue; //supplemental
         // see above, taking this out as removal in filtering step is working
         /*if (st_random() > randomDiscardChance)
             continue; // chunk is too deep*/
@@ -789,7 +802,7 @@ uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *
         seq[seqLen] = '\0';
 
         // get sequence qualities (if exists)
-        char *readName = stString_copy(bam_get_qname(aln));
+        char *readName = getReadName(bamHdr, aln);
         uint8_t *qualBits = bam_get_qual(aln);
         uint8_t *qual = NULL;
         if (qualBits[0] != 0xff) { //inital score of 255 means qual scores are unavailable
@@ -1297,10 +1310,10 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
             continue; //unaligned
         if (!params->polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!params->polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
-            continue; //supplementary
+        if (!params->polishParams->includeSupplementaryAlignments && isSupplementalAlignment(aln))
+            continue; //supplemental
 
-        char *readName = bam_get_qname(aln);
+        char *readName = getReadName(bamHdr, aln);
         bool has_tag = bam_aux_get(aln, "HP") != NULL;
         bool inH1 = stSet_search(readsInH1, readName);
         bool inH2 = stSet_search(readsInH2, readName);
@@ -1581,8 +1594,8 @@ uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcf
             continue; //unaligned
         if (!polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
-            continue; //supplementary
+        if (!polishParams->includeSupplementaryAlignments && isSupplementalAlignment(aln))
+            continue; //supplemental
         if (aln->core.qual < polishParams->filterAlignmentsWithMapQBelowThisThreshold) { //low mapping quality
             if (filteredReads == NULL) continue;
             filtered = TRUE;
@@ -1605,7 +1618,7 @@ uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcf
 
         // get read data
         uint8_t *seqBits = bam_get_seq(aln);
-        char *readName = bam_get_qname(aln);
+        char *readName = getReadName(bamHdr, aln);
         uint8_t *qualBits = bam_get_qual(aln);
         bool forwardStrand = !bam_is_rev(aln);
 
@@ -1726,11 +1739,13 @@ uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcf
 
         // save
         stList_append(filtered ? filteredReads: reads, bcr);
+        fprintf(stderr, "%s %c\n", bcr->readName, isSupplementalAlignment(aln) ? 's' : ' ');
 
         savedAlignments++;
 
         // cleanup
         stHash_destruct(currentVcfEntries);
+        free(readName);
     }
     // the status from "get reads from iterator"
     if (result < -1) {
