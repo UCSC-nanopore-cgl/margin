@@ -522,8 +522,20 @@ bool isSupplementaryAlignment(bam1_t *aln) {
 
 char *getReadName(bam_hdr_t *bamHdr, bam1_t *aln) {
     if (isSupplementaryAlignment(aln)) {
-        return stString_print("%s@@%s:%"PRId32"%c", bam_get_qname(aln), bamHdr->target_name[aln->core.tid], aln->core.pos,
-                              bam_is_rev(aln) ? 'r' : 'f');
+
+        // generate hash over cigar string
+        uint32_t *cigar = bam_get_cigar(aln);
+        int64_t cig_idx = 0;
+        uint64_t hash = 37;
+        while (cig_idx < aln->core.n_cigar) {
+            int cigarOp = cigar[cig_idx] & BAM_CIGAR_MASK;
+            int cigarNum = cigar[cig_idx] >> BAM_CIGAR_SHIFT;
+            hash = (97 * hash + abs(cigarOp)) % UINT64_MAX;
+            hash = (193 * hash + abs(cigarNum)) % UINT64_MAX;
+            cig_idx++;
+        }
+        return stString_print("%s@@%s:%"PRId32"%c#%"PRId64, bam_get_qname(aln), bamHdr->target_name[aln->core.tid], aln->core.pos,
+                              bam_is_rev(aln) ? 'r' : 'f', hash);
     } else {
         return stString_copy(bam_get_qname(aln));
     }
