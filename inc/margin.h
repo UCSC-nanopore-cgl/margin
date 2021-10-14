@@ -1328,6 +1328,12 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
                                                               stSet *hap2Reads, Params *params, char *logIdentifier);
 
 /*
+ * Phases reads from phased vcfEntries
+ */
+BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamChunkReads, BubbleGraph *bg,
+		stList *vcfEntriesToBubbles, stSet *hap1Reads, stSet *hap2Reads, Params *params, char *logIdentifier);
+
+/*
  * For tracking Bubble Graph stuff
  */
 void bubbleGraph_saveBubblePhasingInfo(BamChunk *bamChunk, BubbleGraph *bg, stHash *readsToPSeqs, stGenomeFragment *gF,

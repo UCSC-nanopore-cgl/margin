@@ -365,8 +365,11 @@ endif ()
 add_executable(margin margin.c polish.c phase.c)
 target_link_libraries(margin marginLib)
 
-add_executable(tagBam tools/marginBamTag.c)
-target_link_libraries(tagBam marginLib)
+add_executable(tagFromPhasedVcf tools/tagFromPhasedVcf.c)
+target_link_libraries(tagFromPhasedVcf marginLib)
+
+add_executable(tagFromIds tools/tagFromIds.c)
+target_link_libraries(tagFromIds marginLib)
 
 add_executable(runLengthMatrix tools/runLengthMatrix.c)
 target_link_libraries(runLengthMatrix marginLib)
