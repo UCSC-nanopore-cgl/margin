@@ -274,6 +274,15 @@ struct _stRPHmmParameters {
     // should we include all vcf entries, or just SNPs
     bool onlyUseSNPVCFEntries;
 
+    // the size of an indel to trigger special SV handling.  0 means no special handling
+	int64_t indelSizeForSVHandling;
+
+	// boundary around a small variant to include for allele/read alignment
+	int64_t referenceExpansionForSmallVariants;
+
+	// boundary around a small variant to include for allele/read alignment
+	int64_t referenceExpansionForStructuralVariants;
+
 	// should we stitch with primary reads or all reads (including filtering via downsampling or other means)
 	bool stitchWithPrimaryReadsOnly;
 
@@ -1219,6 +1228,7 @@ typedef struct _bubble {
 	RleString **alleles; // Array of allele strings, each an RLE string
 	uint64_t readNo; // Number of reads overlapping bubble
 	BamChunkReadSubstring **reads; // Array of read substrings aligned to the bubble
+	VcfEntry *rootVcfEntry;
 	float *alleleReadSupports; // An array of log-likelihoods giving the support of
 	// each allele for each read, stored as [i * readNo + j], where i is the allele index
 	// and j is the index of the read
@@ -1430,6 +1440,8 @@ struct _vcfEntry {
     int64_t refPos;
     int64_t rawRefPosInformativeOnly;
     double quality;
+    bool isIndel;
+    bool isStructuralVariant;
     stList *alleles; //refAllele is alleles[0]
     // used by margin, include expansion around alele
     stList *alleleSubstrings;
@@ -1448,7 +1460,7 @@ struct _vcfEntry {
 
 // vcf functions
 VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
-        stList *alleles, int64_t gt1, int64_t gt2);
+                             bool isIndel, bool isStructuralVariant, stList *alleles, int64_t gt1, int64_t gt2);
 void vcfEntry_destruct(VcfEntry *vcfEntry);
 RleString *getVcfEntryAlleleH1(VcfEntry *vcfEntry);
 RleString *getVcfEntryAlleleH2(VcfEntry *vcfEntry);
@@ -1458,7 +1470,7 @@ int64_t binarySearchVcfListForFirstIndexAtOrAfterRefPos(stList *vcfEntries, int6
 stList *getVcfEntriesForRegion(stHash *vcfEntries, uint64_t *rleMap, char *refSeqName, int64_t startPos,
         int64_t endPos, Params *params);
 stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
-        int64_t *refEndPosIncl, bool putRefPosInPOASpace, int64_t expansion, bool useRunLengthEncoding);
+                             int64_t *refEndPosIncl, bool putRefPosInPOASpace, Params *params, int64_t expansionOverride);
 stList *getAlleleSubstrings(VcfEntry *entry, RleString *referenceSeq, Params *params,
                             int64_t *refStartPos, int64_t *refEndPosIncl, bool refPosInPOASpace);
 void updateVcfEntriesWithSubstringsAndPositions(stList *vcfEntries, char *referenceSeq, int64_t refSeqLen,
@@ -1572,7 +1584,9 @@ uint32_t convertToReadsAndAlignmentsWithFiltered(BamChunk *bamChunk, RleString *
                                                  stList *alignments, stList *filteredReads, stList *filteredAlignments,
                                                  PolishParams *polishParams);
 uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcfEntries, stList *reads,
-                                                 stList *filteredReads, PolishParams *polishParams);
+                                                 stList *filteredReads, Params *params);
+uint32_t extractReadSubstringsAtVariantPositions2(BamChunk *bamChunk, stList *vcfEntries, stList *reads,
+                                                  stList *filteredReads, Params *params);
 
 bool downsampleViaReadLikelihood(int64_t intendedDepth, BamChunk *bamChunk, stList *inputReads, stList *inputAlignments,
                                  stList *maintainedReads, stList *maintainedAlignments, stList *discardedReads,

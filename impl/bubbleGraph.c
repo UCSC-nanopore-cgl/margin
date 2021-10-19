@@ -5,6 +5,7 @@
  */
 
 #include <lzma.h>
+#include <sys/time.h>
 #include "margin.h"
 
 /*
@@ -994,6 +995,9 @@ BubbleGraph *bubbleGraph_constructFromPoaAndVCF(Poa *poa, stList *bamChunkReads,
                         b->refStart = pAnchor + 1;
                         b->bubbleLength = i - 1 - pAnchor;
 
+                        // Root VCF
+                        b->rootVcfEntry = NULL;
+
                         // get variant positions
                         b->variantPositionOffsets = stList_construct();
                         for (int64_t vp = 0; vp < i - 1 - pAnchor; vp++) {
@@ -1131,7 +1135,7 @@ BubbleGraph *bubbleGraph_constructFromPoaAndVCFOnlyVCFAllele(Poa *poa, stList *b
         VcfEntry *vcf = stList_get(vcfEntries, v);
         int64_t refStartPos, refEndPosIncl;
         stList *alleles = getAlleleSubstrings2(vcf, referenceSeq, referenceSeqRLE->nonRleLength, &refStartPos,
-                                               &refEndPosIncl, TRUE, params->polishParams->columnAnchorTrim, params->polishParams->useRunLengthEncoding);
+                                               &refEndPosIncl, TRUE, params, params->polishParams->columnAnchorTrim);
         assert(stList_length(alleles) >= 2);
         //TODO now we enforce no fasta write, so this is not an issue anymore
         /*if (refStartPos < lastRefEndPos) {
@@ -1165,6 +1169,9 @@ BubbleGraph *bubbleGraph_constructFromPoaAndVCFOnlyVCFAllele(Poa *poa, stList *b
         // get variant positions
         b->variantPositionOffsets = stList_construct();
         stList_append(b->variantPositionOffsets, (void*) vcf->refPos);
+
+        // Root VCF
+        b->rootVcfEntry = vcf;
 
         // The reference allele
         b->refAllele = rleString_copy(existingRefSubstring);
@@ -1374,6 +1381,9 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
         b->variantPositionOffsets = stList_construct();
         stList_append(b->variantPositionOffsets, (void*) vcfEntry->refPos);
 
+        // root VCF
+        b->rootVcfEntry = vcfEntry;
+
         // The reference allele
         b->refAllele = params->polishParams->useRunLengthEncoding ? rleString_construct(expandedExistingRefSubstring) :
                 rleString_construct_no_rle(expandedExistingRefSubstring);
@@ -1394,8 +1404,49 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
 
         // Get allele supports
         b->alleleReadSupports = st_calloc(b->readNo * b->alleleNo, sizeof(float));
-
+//TODO we need to do the exact match finding first I think
         stList *anchorPairs = stList_construct(); // Currently empty
+
+
+
+
+
+
+
+
+
+
+
+        // Run the alignment
+        /*stList *alignedPairs = NULL;
+        stList *gapXPairs = NULL;
+        stList *gapYPairs = NULL;
+        stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, (uint64_t) polishParams->p->diagonalExpansion);
+
+        // quick fail
+        int64_t minLength = (consensusStr->length < truthStr->length ? consensusStr : truthStr)->length;
+        double apRatio = 1.0 * stList_length(anchorPairs) / minLength;
+        if (apRatio < .2) {
+            char *logIdentifer = getLogIdentifier();
+            st_logInfo(" %s got %"PRId64" anchor pairs for min seq len %"PRId64" (%f), not attempting alignment.\n",
+                       logIdentifer, stList_length(anchorPairs), minLength, apRatio);
+            free(logIdentifer);
+            stList_destruct(anchorPairs);
+            return stList_construct();
+        }
+
+        time_t apTime = time(NULL);
+        getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
+                                              polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, FALSE, FALSE);*/
+
+
+
+
+
+
+
+
+
 
         SymbolString alleleSymbolStrings[b->alleleNo];
         for (int64_t j = 0; j < b->alleleNo; j++) {
@@ -1431,8 +1482,15 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
                 *index = k;
                 stHash_insert(cachedScores, readSubstring, index);
                 for (int64_t j = 0; j < b->alleleNo; j++) {
+                    struct timeval start, stop;
+                    double secs = 0;
+                    gettimeofday(&start, NULL);
                     b->alleleReadSupports[j * b->readNo + k] = (float) computeForwardProbability(
                             alleleSymbolStrings[j], rS, anchorPairs, params->polishParams->p, sM, 0, 0);
+                    gettimeofday(&stop, NULL);
+                    secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 + (double)(stop.tv_sec - start.tv_sec);
+                    st_logDebug("\t\tCalculated forward prob for strings of length %"PRId64",%"PRId64" in %.3f sec\n",
+                               alleleSymbolStrings[j].length, rS.length, secs);
                 }
             }
 
@@ -1548,6 +1606,9 @@ BubbleGraph *bubbleGraph_partitionFilteredReads(Poa *poa, stList *bamChunkReads,
 
         // Set the coordinates
         b->refStart = (uint64_t) refStart;
+
+        // root VCF
+        b->rootVcfEntry = NULL;
 
         // The reference allele
         b->refAllele = existingRefSubstring;
@@ -1786,6 +1847,9 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
         // Set the coordinates
         b->refStart = (uint64_t) refStart;
 
+        // root VCF
+        b->rootVcfEntry = vcfEntry;
+
         // The reference allele
         b->refAllele = params->polishParams->useRunLengthEncoding ?
                        rleString_construct(stList_get(vcfEntry->alleles, 0)) :
@@ -1977,6 +2041,9 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamC
 
         // Set the coordinates
         b->refStart = (uint64_t) refStart;
+
+        // root VCF
+        b->rootVcfEntry = vcfEntry;
 
         // The reference allele
         b->refAllele = params->polishParams->useRunLengthEncoding ?
@@ -2273,10 +2340,11 @@ void bubbleGraph_logPhasedBubbleGraph(BubbleGraph *bg, stRPHmm *hmm, stList *pat
                 stRPCell *cell = stList_get(path, colIndex);
 
                 double strandSkew = bubble_phasedStrandSkew(b, readsToPSeqs, gF);
-
+                char *indel = b->rootVcfEntry == NULL ? "Unknown" : b->rootVcfEntry->isIndel ? "True": "False";
+                char *sv = b->rootVcfEntry == NULL ? "Unknown" : b->rootVcfEntry->isStructuralVariant ? "True": "False";
                 st_logDebug(
-                        ">>Phasing Bubble Graph: (Het: %s) At site: %i / %i (pos %i) with %i potential alleles got %s (%i) (log-prob: %f) for hap1 with %i reads and %s (%i) (log-prob: %f) for hap2 with %i reads (total depth %i), and ancestral allele %s (%i), genotype prob: %f, strand-skew p-value: %f\n",
-                        gF->haplotypeString1[i] != gF->haplotypeString2[i] ? "True" : "False", (int) i,
+                        ">>Phasing Bubble Graph: (Het: %s, INDEL: %s, SV: %s) At site: %i / %i (pos %i) with %i potential alleles got %s (%i) (log-prob: %f) for hap1 with %i reads and %s (%i) (log-prob: %f) for hap2 with %i reads (total depth %i), and ancestral allele %s (%i), genotype prob: %f, strand-skew p-value: %f\n",
+                        gF->haplotypeString1[i] != gF->haplotypeString2[i] ? "True" : "False", indel, sv, (int) i,
                         (int) gF->length, (int) b->refStart, (int) b->alleleNo,
                         b->alleles[gF->haplotypeString1[i]]->rleString, (int) gF->haplotypeString1[i],
                         gF->haplotypeProbs1[i], popcount64(cell->partition),
@@ -2316,11 +2384,11 @@ void bubbleGraph_logPhasedBubbleGraph(BubbleGraph *bg, stRPHmm *hmm, stList *pat
                         stProfileSeq *pSeq = stHash_search(readsToPSeqs, s->read);
                         assert(pSeq != NULL);
                         if (stSet_search(k == 0 ? gF->reads1 : gF->reads2, pSeq) != NULL) {
-                            st_logDebug("\t\t>>Partition %i, read %3i:\t strand %i\t ", (int) k + 1, (int) l++,
-                                        (int) s->read->forwardStrand);
+                            st_logDebug("\t\t>>Partition %i, read %3i (%36s):\t strand %i\t ", (int) k + 1, (int) l++,
+                                        pSeq->readId, (int) s->read->forwardStrand);
 
                             for (uint64_t m = 0; m < b->alleleNo; m++) {
-                                st_logDebug("%+8.5f\t", b->alleleReadSupports[m * b->readNo + j]);
+                                st_logDebug("SA%"PRIu64" %+8.5f\t", m, b->alleleReadSupports[m * b->readNo + j]);
                                 supports[m] += b->alleleReadSupports[m * b->readNo + j];
                             }
 

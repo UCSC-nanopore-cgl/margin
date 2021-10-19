@@ -981,6 +981,7 @@ static void test_readAlignmentsWithSoftclippingChunkEnd(CuTest *testCase) {
 static void test_readSubstringsFromVcf(CuTest *testCase) {
     Params *params = params_readParams(INPUT_PARAMS);
     params->polishParams->columnAnchorTrim = 4;
+    params->phaseParams->referenceExpansionForSmallVariants = 4;
     BamChunker *chunker = bamChunker_construct2(INPUT_MVVP_BAM, "contig_1:0-100000", NULL, params->polishParams, TRUE);
     stHash *vcfEntries = parseVcf(INPUT_MVVP_VCF, params);
     CuAssertTrue(testCase, chunker->chunkCount == 1);
@@ -994,7 +995,7 @@ static void test_readSubstringsFromVcf(CuTest *testCase) {
 
     stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
     stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-    extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params->polishParams);
+    extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
 
     for (int64_t i = 0; i < stList_length(reads); i++) {
         BamChunkRead *bcr = stList_get(reads, i);

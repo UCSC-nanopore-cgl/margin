@@ -334,7 +334,7 @@ int phase_main(int argc, char *argv[]) {
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params->polishParams);
+        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
 
         // do downsampling if appropriate
         if (params->polishParams->maxDepth > 0) {

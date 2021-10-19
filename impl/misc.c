@@ -330,7 +330,7 @@ stList *produceVcfEntriesFromBubbleGraph(BamChunk *bamChunk, BubbleGraph *bg, st
                 }
                 stList_append(vcfEntries, vcfEntry_construct(bamChunk->refSeqName,
                         b->refStart + (int64_t) stList_get(b->variantPositionOffsets, cvp), -1, -1,
-                        alleles, hap1Allele, hap2Allele));
+                        hap1->nonRleLength != hap2->nonRleLength, FALSE, alleles, hap1Allele, hap2Allele));
             }
             passes++;
         }

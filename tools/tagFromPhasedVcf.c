@@ -289,7 +289,7 @@ int main(int argc, char *argv[]) {
         // Convert bam lines into corresponding reads and alignments
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, NULL, params->polishParams);
+        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, NULL, params);
 
         time_t primaryPhasingStart = time(NULL);
 

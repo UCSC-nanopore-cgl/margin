@@ -3,7 +3,6 @@
 	"polish": {
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
-		"columnAnchorTrim": 12,
 		"maxDepth": 32
 	},
 	"phase" : {

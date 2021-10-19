@@ -35,6 +35,9 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->includeHomozygousVCFEntries = FALSE;
     params->onlyUsePassVCFEntries = TRUE;
     params->onlyUseSNPVCFEntries = FALSE;
+    params->indelSizeForSVHandling = 0;
+    params->referenceExpansionForSmallVariants = 12;
+    params->referenceExpansionForStructuralVariants = 1024;
     params->useVariantSelectionAdaptiveSampling = TRUE;
     params->variantSelectionAdaptiveSamplingPrimaryThreshold = 0.9;
     params->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
@@ -73,6 +76,9 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->includeHomozygousVCFEntries = toCopy->includeHomozygousVCFEntries;
     params->onlyUsePassVCFEntries = toCopy->onlyUsePassVCFEntries;
     params->onlyUseSNPVCFEntries = toCopy->onlyUseSNPVCFEntries;
+    params->indelSizeForSVHandling = toCopy->indelSizeForSVHandling;
+    params->referenceExpansionForSmallVariants = toCopy->referenceExpansionForSmallVariants;
+    params->referenceExpansionForStructuralVariants = toCopy->referenceExpansionForStructuralVariants;
     params->useVariantSelectionAdaptiveSampling = toCopy->useVariantSelectionAdaptiveSampling;
     params->variantSelectionAdaptiveSamplingPrimaryThreshold = toCopy->variantSelectionAdaptiveSamplingPrimaryThreshold;
     params->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = toCopy->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant;
@@ -125,6 +131,12 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->onlyUsePassVCFEntries = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "onlyUseSNPVCFEntries") == 0) {
             params->onlyUseSNPVCFEntries = stJson_parseBool(js, tokens, ++i);
+        } else if (strcmp(keyString, "indelSizeForSVHandling") == 0) {
+            params->indelSizeForSVHandling = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "referenceExpansionForSmallVariants") == 0) {
+            params->referenceExpansionForSmallVariants = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "referenceExpansionForStructuralVariants") == 0) {
+            params->referenceExpansionForStructuralVariants = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "useVariantSelectionAdaptiveSampling") == 0) {
             params->useVariantSelectionAdaptiveSampling = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "variantSelectionAdaptiveSamplingPrimaryThreshold") == 0) {

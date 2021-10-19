@@ -10,12 +10,14 @@
 
 
 VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
-        stList *alleles, int64_t gt1, int64_t gt2) {
+        bool isIndel, bool isStructuralVariant, stList *alleles, int64_t gt1, int64_t gt2) {
     VcfEntry *vcfEntry = st_calloc(1, sizeof(VcfEntry));
     vcfEntry->refSeqName = stString_copy(refSeqName);
     vcfEntry->refPos = refPos;
     vcfEntry->rawRefPosInformativeOnly = rawRefPos;
     vcfEntry->quality = phredQuality;
+    vcfEntry->isIndel = isIndel;
+    vcfEntry->isStructuralVariant = isStructuralVariant;
     vcfEntry->alleles = alleles == NULL ? stList_construct3(0, (void(*)(void*))rleString_destruct) : alleles;
     vcfEntry->gt1 = gt1;
     vcfEntry->gt2 = gt2;
@@ -169,16 +171,22 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         double quality = rec->qual;
 
         // get alleles
+        bool isSV = FALSE;
         stList *alleles = stList_construct3(0, (void (*)(void*)) rleString_destruct);
         for (int i=0; i<rec->n_allele; ++i) {
             stList_append(alleles,
                     params->polishParams->useRunLengthEncoding ?
                     rleString_construct(rec->d.allele[i]) :
                     rleString_construct_no_rle(rec->d.allele[i]));
+
+            //TODO maybe this should be a "if ref" or "if all alt alleles" are above threshold?
+            if (params->phaseParams->indelSizeForSVHandling > 0 && strlen(rec->d.allele[i]) > params->phaseParams->indelSizeForSVHandling) {
+                isSV = TRUE;
+            }
         }
 
         // save it
-        VcfEntry *entry = vcfEntry_construct(chrom, pos, pos, quality, alleles, gt1, gt2);
+        VcfEntry *entry = vcfEntry_construct(chrom, pos, pos, quality, !bcf_is_snp(rec), isSV, alleles, gt1, gt2);
         stList *contigList = stHash_search(entries, entry->refSeqName);
         if (contigList == NULL) {
             contigList = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
@@ -289,7 +297,7 @@ stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refS
 
         // make variant
         VcfEntry *copy = vcfEntry_construct(e->refSeqName, refPos, e->rawRefPosInformativeOnly, e->quality,
-                copyListOfRleStrings(e->alleles), e->gt1, e->gt2);
+                e->isIndel, e->isStructuralVariant, copyListOfRleStrings(e->alleles), e->gt1, e->gt2);
         copy->rootVcfEntry = e;
 
         // where to save it?
@@ -340,7 +348,7 @@ stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refS
 
 
 stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
-        int64_t *refEndPosIncl, bool putRefPosInPOASpace, int64_t expansion, bool useRunLengthEncoding) {
+        int64_t *refEndPosIncl, bool putRefPosInPOASpace, Params *params, int64_t expansionOverride) {
     stList *substrings = stList_construct3(0, (void (*)(void*)) rleString_destruct);
     assert(stList_length(entry->alleles) >= 1);
 
@@ -348,6 +356,14 @@ stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeq
     int64_t pos = entry->refPos;
     // at this point, reference positions are in poa-space (1-based), need to convert to ref-space (0-based)
     pos--;
+
+    // unless override, if any allele is above the "SV" size threshold, use SV ref expansion instead of small variant
+    int64_t expansion = params->phaseParams->referenceExpansionForSmallVariants;
+    if (expansionOverride >= 0) {
+        expansion = expansionOverride;
+    } else if (entry->isStructuralVariant) {
+        expansion = params->phaseParams->referenceExpansionForStructuralVariants;
+    }
 
     //get ref info
     char *refAllele = rleString_expand(stList_get(entry->alleles, 0));
@@ -385,7 +401,7 @@ stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeq
         char *expandedAllele = rleString_expand(stList_get(entry->alleles, i));
         char *fullAlleleSubstring = stString_print("%s%s%s", prefix, expandedAllele, suffix);
         stList_append(substrings,
-                useRunLengthEncoding ?
+                params->polishParams->useRunLengthEncoding ?
                 rleString_construct(fullAlleleSubstring) :
                 rleString_construct_no_rle(fullAlleleSubstring));
         free(expandedAllele);
@@ -408,8 +424,7 @@ stList *getAlleleSubstrings(VcfEntry *entry, RleString *referenceSeq, Params *pa
         int64_t *refStartPos, int64_t *refEndPosIncl, bool refPosInPOASpace) {
     char *rawRefSeq = rleString_expand(referenceSeq);
     stList *alleleSubstrings = getAlleleSubstrings2(entry, rawRefSeq, referenceSeq->nonRleLength, refStartPos, refEndPosIncl,
-                                                    refPosInPOASpace, params->polishParams->columnAnchorTrim,
-                                                    params->polishParams->useRunLengthEncoding);
+                                                    refPosInPOASpace, params, -1);
     free(rawRefSeq);
     return alleleSubstrings;
 
@@ -421,8 +436,7 @@ void updateVcfEntriesWithSubstringsAndPositions(stList *vcfEntries, char *refere
         VcfEntry *vcfEntry = stList_get(vcfEntries, i);
         assert(vcfEntry->alleleSubstrings == NULL);
         vcfEntry->alleleSubstrings = getAlleleSubstrings2(vcfEntry, referenceSeq, refSeqLen, &vcfEntry->refAlnStart,
-                &vcfEntry->refAlnStopIncl, refPosInPOASpace, params->polishParams->columnAnchorTrim,
-                params->polishParams->useRunLengthEncoding);
+                &vcfEntry->refAlnStopIncl, refPosInPOASpace, params, -1);
 
     }
 }

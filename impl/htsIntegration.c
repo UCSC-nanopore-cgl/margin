@@ -1520,9 +1520,95 @@ void saveFinishedVcfEntries(stHash *currentVcfEntries, int64_t currentAlnRefPos,
 }
 
 
+void mergeVariantTypeSeparatedReadLists(stList *readsDest, stList *readsSource1, stList *readsSource2) {
+    // associate bcrs
+    stHash *readNamesToBCRs = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, stList_destruct);
+    for (int64_t i = 0; i < stList_length(readsSource1); i++) {
+        BamChunkRead *bcr = stList_get(readsSource1, i);
+        stList *bcrList = stList_construct3(0, bamChunkRead_destruct);
+        stList_append(bcrList, bcr);
+        stHash_insert(readNamesToBCRs, stString_copy(bcr->readName), bcrList);
+    }
+    for (int64_t i = 0; i < stList_length(readsSource2); i++) {
+        BamChunkRead *bcr = stList_get(readsSource2, i);
+        stList *bcrList = stHash_search(readNamesToBCRs, bcr->readName);
+        if (bcrList == NULL) {
+            bcrList = stList_construct3(0, bamChunkRead_destruct);
+            stHash_insert(readNamesToBCRs, stString_copy(bcr->readName), bcrList);
+        }
+        stList_append(bcrList, bcr);
+    }
+
+    // merge BCRs
+    stHashIterator *itor = stHash_getIterator(readNamesToBCRs);
+    char *readName = NULL;
+    while ((readName = stHash_getNext(itor)) != NULL) {
+        // keep first bcr
+        stList *bcrs = stHash_search(readNamesToBCRs, readName);
+        BamChunkRead *bcr = stList_pop(bcrs);
+        stList_append(readsDest, bcr);
+        // we're done if there's no more
+        if (stList_length(bcrs) == 0) continue;
+        // save the important bcrves
+        BamChunkRead *bcrToGetVcfDataFrom = stList_pop(bcrs);
+        assert(stList_length(bcrs) == 0);
+        while (stList_length(bcrToGetVcfDataFrom->bamChunkReadVcfEntrySubstrings->vcfEntries) > 0) {
+            stList_append(bcr->bamChunkReadVcfEntrySubstrings->vcfEntries, stList_pop(bcrToGetVcfDataFrom->bamChunkReadVcfEntrySubstrings->vcfEntries));
+            stList_append(bcr->bamChunkReadVcfEntrySubstrings->readSubstrings, stList_pop(bcrToGetVcfDataFrom->bamChunkReadVcfEntrySubstrings->readSubstrings));
+            stList_append(bcr->bamChunkReadVcfEntrySubstrings->readSubstringQualities, stList_pop(bcrToGetVcfDataFrom->bamChunkReadVcfEntrySubstrings->readSubstringQualities));
+        }
+        // cleanup
+        bamChunkRead_destruct(bcrToGetVcfDataFrom);
+    }
+
+    // cleanup
+    stHash_destructIterator(itor);
+    stHash_destruct(readNamesToBCRs);
+}
+
 
 uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcfEntries, stList *reads,
-        stList *filteredReads, PolishParams *polishParams) {
+                                                 stList *filteredReads, Params *params) {
+    // we need special handling for SVs as they have different boundaries
+    if (params->phaseParams->indelSizeForSVHandling > 0) {
+        // divide into small and SVs
+        stList *small = stList_construct();
+        stList *sv = stList_construct();
+        for (int64_t i = 0; i < stList_length(vcfEntries); i++) {
+            VcfEntry *vcfEntry = stList_get(vcfEntries, i);
+            stList_append(vcfEntry->isStructuralVariant ? sv : small, vcfEntry);
+        }
+
+        // prep for separate reads/filtered reads for each class
+        stList *svReads = stList_construct();
+        stList *svFilteredReads = stList_construct();
+        stList *smallReads = stList_construct();
+        stList *smallFilteredReads = stList_construct();
+
+        // get reads and substrings
+        uint32_t savedElements = extractReadSubstringsAtVariantPositions2(bamChunk, small, smallReads, smallFilteredReads, params);
+        savedElements += extractReadSubstringsAtVariantPositions2(bamChunk, sv, svReads, svFilteredReads, params);
+
+        // merge
+        mergeVariantTypeSeparatedReadLists(reads, svReads, smallReads);
+        mergeVariantTypeSeparatedReadLists(filteredReads, svFilteredReads, smallFilteredReads);
+
+        // cleanup
+        stList_destruct(small);
+        stList_destruct(sv);
+        stList_destruct(svReads);
+        stList_destruct(svFilteredReads);
+        stList_destruct(smallReads);
+        stList_destruct(smallFilteredReads);
+        return savedElements;
+    } else {
+        return extractReadSubstringsAtVariantPositions2(bamChunk, vcfEntries, reads, filteredReads, params);
+    }
+}
+
+
+uint32_t extractReadSubstringsAtVariantPositions2(BamChunk *bamChunk, stList *vcfEntries, stList *reads,
+                                                 stList *filteredReads, Params *params) {
 
     // sanity check
     assert(stList_length(reads) == 0);
@@ -1579,11 +1665,11 @@ uint32_t extractReadSubstringsAtVariantPositions(BamChunk *bamChunk, stList *vcf
         if (aln->core.n_cigar == 0) continue;
         if ((aln->core.flag & (uint16_t) 0x4) != 0)
             continue; //unaligned
-        if (!polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
+        if (!params->polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
             continue; //secondary
-        if (!polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
+        if (!params->polishParams->includeSupplementaryAlignments && (aln->core.flag & (uint16_t) 0x800) != 0)
             continue; //supplementary
-        if (aln->core.qual < polishParams->filterAlignmentsWithMapQBelowThisThreshold) { //low mapping quality
+        if (aln->core.qual < params->polishParams->filterAlignmentsWithMapQBelowThisThreshold) { //low mapping quality
             if (filteredReads == NULL) continue;
             filtered = TRUE;
         }

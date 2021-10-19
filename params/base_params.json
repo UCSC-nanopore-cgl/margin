@@ -73,7 +73,6 @@
 	"phase" : {
 		  "maxNotSumTransitions" : true,
 		  "minPartitionsInAColumn" : 100,
-		  "maxPartitionsInAColumn" : 100,
 		  "minPosteriorProbabilityForPartition" : 0.0,
 		  "maxCoverageDepth" : 64,
 		  "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 2,
@@ -83,6 +82,9 @@
           "includeHomozygousVCFEntries": false,
           "onlyUsePassVCFEntries": true,
           "onlyUseSNPVCFEntries": false,
+          "indelSizeForSVHandling": 32,
+          "referenceExpansionForSmallVariants": 12,
+          "referenceExpansionForStructuralVariants": 1024,
           "stitchWithPrimaryReadsOnly": false,
           "useVariantSelectionAdaptiveSampling": true,
           "variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
