@@ -311,11 +311,13 @@ int phase_main(int argc, char *argv[]) {
             // log progress
             int64_t timeTaken = (int64_t) (time(NULL) - polishStartTime);
             int64_t secondsRemaining = (int64_t) floor(1.0 * timeTaken / currentPercentage * (100 - currentPercentage));
-            char *timeDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
+            char *timeElapsedDescriptor = getTimeDescriptorFromSeconds(timeTaken);
+            char *timeLeftDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
                                     stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-            st_logCritical("> Polishing %2"PRId64"%% complete (%"PRId64"/%"PRId64").  Estimated time remaining: %s\n",
-                           currentPercentage, i, bamChunker->chunkCount, timeDescriptor);
-            free(timeDescriptor);
+            st_logCritical("> Polishing %2"PRId64"%% complete (%"PRId64"/%"PRId64", %s).  Estimated time remaining: %s\n",
+                           currentPercentage, i, bamChunker->chunkCount, timeElapsedDescriptor, timeLeftDescriptor);
+            free(timeLeftDescriptor);
+            free(timeElapsedDescriptor);
         }
 
         // Get reference string for chunk of alignment

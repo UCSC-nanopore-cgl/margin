@@ -189,7 +189,7 @@ void test_vcfAlleleSubstrings(CuTest *testCase) {
     params->polishParams->useRunLengthEncoding = RLE;
     params->phaseParams->includeHomozygousVCFEntries = TRUE;
     params->phaseParams->onlyUseSNPVCFEntries = FALSE;
-    params->polishParams->columnAnchorTrim = 2;
+    params->phaseParams->referenceExpansionForSmallVariants = 2;
 
     stHash *vcfEntryMap = parseVcf(VCF2, params);
     stList *vcfEntries = stHash_search(vcfEntryMap, "vcfTest2");
@@ -305,7 +305,7 @@ void test_vcfBinarySearchForVcfEntryStartIdx(CuTest *testCase) {
         int64_t refPos = 0;
         for (int64_t entryIdx = 0; entryIdx < st_randomInt64(32, 512); entryIdx++) {
             refPos += st_randomInt64(0, 16);
-            stList_append(vcfEntries, vcfEntry_construct("", refPos, refPos, -1, NULL, -1, -1));
+            stList_append(vcfEntries, vcfEntry_construct("", refPos, refPos, -1, NULL, FALSE, FALSE, -1, -1));
         }
 
         // ensure we test pos 0, posOutsideRange, and the rest

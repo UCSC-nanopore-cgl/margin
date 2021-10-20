@@ -8,7 +8,7 @@
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
-		"onlyUseSNPVCFEntries": true,
+		"onlyUseSNPVCFEntries": false,
 		"useVariantSelectionAdaptiveSampling": false,
 		"minVariantQuality": 20,
 		"updateAllOutputVCFFormatFields": true

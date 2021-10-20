@@ -1404,48 +1404,6 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
 
         // Get allele supports
         b->alleleReadSupports = st_calloc(b->readNo * b->alleleNo, sizeof(float));
-//TODO we need to do the exact match finding first I think
-        stList *anchorPairs = stList_construct(); // Currently empty
-
-
-
-
-
-
-
-
-
-
-
-        // Run the alignment
-        /*stList *alignedPairs = NULL;
-        stList *gapXPairs = NULL;
-        stList *gapYPairs = NULL;
-        stList *anchorPairs = getKmerAlignmentAnchors(sX, sY, (uint64_t) polishParams->p->diagonalExpansion);
-
-        // quick fail
-        int64_t minLength = (consensusStr->length < truthStr->length ? consensusStr : truthStr)->length;
-        double apRatio = 1.0 * stList_length(anchorPairs) / minLength;
-        if (apRatio < .2) {
-            char *logIdentifer = getLogIdentifier();
-            st_logInfo(" %s got %"PRId64" anchor pairs for min seq len %"PRId64" (%f), not attempting alignment.\n",
-                       logIdentifer, stList_length(anchorPairs), minLength, apRatio);
-            free(logIdentifer);
-            stList_destruct(anchorPairs);
-            return stList_construct();
-        }
-
-        time_t apTime = time(NULL);
-        getAlignedPairsWithIndelsUsingAnchors(polishParams->stateMachineForForwardStrandRead, sX, sY, anchorPairs,
-                                              polishParams->p, &alignedPairs, &gapXPairs, &gapYPairs, FALSE, FALSE);*/
-
-
-
-
-
-
-
-
 
 
         SymbolString alleleSymbolStrings[b->alleleNo];
@@ -1485,12 +1443,20 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
                     struct timeval start, stop;
                     double secs = 0;
                     gettimeofday(&start, NULL);
+
+                    // get kmer alignment anchors if we're an SV
+                    stList *anchorPairs = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
+                            alleleSymbolStrings[j].length > params->phaseParams->referenceExpansionForStructuralVariants ?
+                            getKmerAlignmentAnchors(alleleSymbolStrings[j], rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
+                            stList_construct();
+
                     b->alleleReadSupports[j * b->readNo + k] = (float) computeForwardProbability(
                             alleleSymbolStrings[j], rS, anchorPairs, params->polishParams->p, sM, 0, 0);
                     gettimeofday(&stop, NULL);
                     secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 + (double)(stop.tv_sec - start.tv_sec);
                     st_logDebug("\t\tCalculated forward prob for strings of length %"PRId64",%"PRId64" in %.3f sec\n",
                                alleleSymbolStrings[j].length, rS.length, secs);
+                    stList_destruct(anchorPairs);
                 }
             }
 
@@ -1501,7 +1467,6 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
         for (int64_t j = 0; j < b->alleleNo; j++) {
             symbolString_destruct(alleleSymbolStrings[j]);
         }
-        stList_destruct(anchorPairs);
     }
 
     // Build the the graph

@@ -369,9 +369,8 @@ stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeq
     char *refAllele = rleString_expand(stList_get(entry->alleles, 0));
     int64_t refAlleleLen = strlen(refAllele);
     for (int64_t i = 0; i < refAlleleLen; i++) {
-        // if we have an insert at the end of a chunk
+        // if we have a delete past the end of a chunk (ref allele goes past end of chunk) we stop at chunk boundary
         if (pos+i >= refSeqLen) {
-            assert(pos+1 == refSeqLen);
             refAlleleLen = i;
             break;
         }

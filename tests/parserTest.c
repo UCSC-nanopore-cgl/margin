@@ -18,7 +18,7 @@ void test_jsmnParsing(CuTest *testCase) {
     // Check stRPHmmParameters
     // Check a few phase parameters parsed correctly
     CuAssertTrue(testCase, params->maxNotSumTransitions);
-    CuAssertIntEquals(testCase, params->maxPartitionsInAColumn, 100);
+    CuAssertIntEquals(testCase, params->maxPartitionsInAColumn, 200);
     CuAssertIntEquals(testCase, params->maxCoverageDepth, 64);
     CuAssertIntEquals(testCase, params->minReadCoverageToSupportPhasingBetweenHeterozygousSites, 2);
 
