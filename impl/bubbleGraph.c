@@ -2147,7 +2147,21 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamC
 
 
 void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stList *vcfEntries,
-        stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stHash *readIdToIdx, Params *params) {
+        stSet *bamChunkReadsBelongingToHap1, stSet *bamChunkReadsBelongingToHap2, stHash *readIdToIdx, Params *params) {
+
+    stSet *readNamesBelongingToHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    stSet *readNamesBelongingToHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
+    stSetIterator *itor = stSet_getIterator(bamChunkReadsBelongingToHap1);
+    BamChunkRead *elem = NULL;
+    while ((elem = stSet_getNext(itor)) != NULL) {
+        stSet_insert(readNamesBelongingToHap1, stString_copy(elem->readName));
+    }
+    stSet_destructIterator(itor);
+    itor = stSet_getIterator(bamChunkReadsBelongingToHap2);
+    while ((elem = stSet_getNext(itor)) != NULL) {
+        stSet_insert(readNamesBelongingToHap2, stString_copy(elem->readName));
+    }
+    stSet_destructIterator(itor);
 
     // prep
     uint64_t maximumRepeatLengthExcl = getMaximumRepeatLength(params);
@@ -2203,9 +2217,9 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
             BamChunkReadSubstring *bcrSubstring = stList_get(readSubstrings, k);
             RleString *substring = bamChunkReadSubstring_getRleString(bcrSubstring);
             bool readIsHap1;
-            if (stSet_search(readsBelongingToHap1, bcrSubstring->read) != NULL) {
+            if (stSet_search(readNamesBelongingToHap1, bcrSubstring->read->readName) != NULL) {
                 readIsHap1 = TRUE;
-            } else if (stSet_search(readsBelongingToHap2, bcrSubstring->read) != NULL) {
+            } else if (stSet_search(readNamesBelongingToHap2, bcrSubstring->read->readName) != NULL) {
                 readIsHap1 = FALSE;
             } else {
                 //read is untagged
@@ -2293,9 +2307,9 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
             BamChunkRead *bcr = bcrs->read;
             int64_t readIdx = (int64_t) stHash_search(readIdToIdx, bcr->readName);
             assert(readIdx != 0);
-            if (stSet_search(readsBelongingToHap1, bcr) != NULL) {
+            if (stSet_search(readNamesBelongingToHap1, bcr->readName) != NULL) {
                 stSet_insert(hap1RootVcfEntryReadIndices, (void*) readIdx);
-            } else if (stSet_search(readsBelongingToHap2, bcr) != NULL) {
+            } else if (stSet_search(readNamesBelongingToHap2, bcr->readName) != NULL) {
                 stSet_insert(hap2RootVcfEntryReadIndices, (void*) readIdx);
             } else {
                 unMatchedReads++;
