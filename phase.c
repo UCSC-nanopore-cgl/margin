@@ -328,8 +328,8 @@ int phase_main(int argc, char *argv[]) {
 
         // get VCF string
         stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
-        stList *filteredChunkVcfEntriesEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
-        getVcfEntriesForRegion(vcfEntries, chunkVcfEntries, filteredChunkVcfEntriesEntries, NULL,
+        stList *filteredChunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+        getVcfEntriesForRegion(vcfEntries, chunkVcfEntries, filteredChunkVcfEntries, NULL,
                 bamChunk->refSeqName, bamChunk->chunkOverlapStart,  bamChunk->chunkOverlapEnd, params);
 
         // get alleles and read substrings for all vcf entries and a unified set of bcrs:
@@ -338,26 +338,27 @@ int phase_main(int argc, char *argv[]) {
         for (int64_t c = 0; c < stList_length(chunkVcfEntries); c++) {
             stList_append(allVcfEntries, stList_get(chunkVcfEntries, c));
         }
-        for (int64_t c = 0; c < stList_length(filteredChunkVcfEntriesEntries); c++) {
-            stList_append(allVcfEntries, stList_get(filteredChunkVcfEntriesEntries, c));
+        for (int64_t c = 0; c < stList_length(filteredChunkVcfEntries); c++) {
+            stList_append(allVcfEntries, stList_get(filteredChunkVcfEntries, c));
         }
         stList_sort(allVcfEntries, vcfEntry_positionCmp);
 
         // update vcf alleles
         updateVcfEntriesWithSubstringsAndPositions(allVcfEntries, chunkReference, strlen(chunkReference),
                 FALSE, params);
-        //TODO
-//        updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReference, strlen(chunkReference),
-//                                                   FALSE, params);
 
         // Convert bam lines into corresponding reads and alignments
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *readsForFilteredVcfEntries = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
+        stList *filteredReadsForFilteredVcfEntries = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
 
         //TODO
 //        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
         extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
+        extractReadSubstringsAtVariantPositions(bamChunk, filteredChunkVcfEntries, readsForFilteredVcfEntries,
+                                                filteredReadsForFilteredVcfEntries, params);
 
         // just destruct this list, all the varaints are stored in chunkVcfEntries and filteredChunkVcfEntries
         stList_destruct(allVcfEntries);
@@ -415,8 +416,8 @@ int phase_main(int argc, char *argv[]) {
 
         // phase filtered variants
         //TODO
-//        bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(reads, filteredChunkVcfEntriesEntries,
-//                readsBelongingToHap1, readsBelongingToHap2, bamChunker->readEnumerator, params);
+        bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
+                readsBelongingToHap1, readsBelongingToHap2, bamChunker->readEnumerator, params);
 
         // should included filtered reads in output
         // get reads
@@ -446,7 +447,7 @@ int phase_main(int argc, char *argv[]) {
 
         // Cleanup
         stList_destruct(chunkVcfEntries);
-        stList_destruct(filteredChunkVcfEntriesEntries);
+        stList_destruct(filteredChunkVcfEntries);
         stSet_destruct(readsBelongingToHap1);
         stSet_destruct(readsBelongingToHap2);
         bubbleGraph_destruct(bg);
@@ -465,6 +466,8 @@ int phase_main(int argc, char *argv[]) {
         // final post-completion logging cleanup
         stList_destruct(reads);
         stList_destruct(filteredReads);
+        stList_destruct(readsForFilteredVcfEntries);
+        stList_destruct(filteredReadsForFilteredVcfEntries);
         free(logIdentifier);
     }
 
