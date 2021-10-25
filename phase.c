@@ -344,14 +344,20 @@ int phase_main(int argc, char *argv[]) {
         stList_sort(allVcfEntries, vcfEntry_positionCmp);
 
         // update vcf alleles
-        updateVcfEntriesWithSubstringsAndPositions(allVcfEntries, chunkReference, strlen(chunkReference),
-                FALSE, params);
+        //TODO
+//        updateVcfEntriesWithSubstringsAndPositions(allVcfEntries, chunkReference, strlen(chunkReference),
+//                FALSE, params);
+        updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReference, strlen(chunkReference),
+                                                   FALSE, params);
 
         // Convert bam lines into corresponding reads and alignments
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
-        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
+
+        //TODO
+//        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
+        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
 
         // just destruct this list, all the varaints are stored in chunkVcfEntries and filteredChunkVcfEntries
         stList_destruct(allVcfEntries);
@@ -408,8 +414,9 @@ int phase_main(int argc, char *argv[]) {
         st_logInfo(" %s Phased primary reads in %d sec\n", logIdentifier, time(NULL) - primaryPhasingStart);
 
         // phase filtered variants
-        bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(reads, filteredChunkVcfEntriesEntries,
-                readsBelongingToHap1, readsBelongingToHap2, bamChunker->readEnumerator, params);
+        //TODO
+//        bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(reads, filteredChunkVcfEntriesEntries,
+//                readsBelongingToHap1, readsBelongingToHap2, bamChunker->readEnumerator, params);
 
         // should included filtered reads in output
         // get reads
