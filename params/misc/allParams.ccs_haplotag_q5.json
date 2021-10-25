@@ -11,7 +11,7 @@
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,
 		"useVariantSelectionAdaptiveSampling": false,
-		"minVariantQuality": 20,
+		"minVariantQuality": 5,
 		"updateAllOutputVCFFormatFields": true
 	}
 }
