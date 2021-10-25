@@ -29,6 +29,7 @@ VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t raw
         stList_append(vcfEntry->alleleIdxToReads, stSet_construct());
     }
     vcfEntry->rootVcfEntry = NULL;
+    vcfEntry->wasUpdated = FALSE;
     vcfEntry->genotypeProb = -1.0;
     vcfEntry->haplotype1Prob = -1.0;
     vcfEntry->haplotype2Prob = -1.0;
@@ -147,11 +148,6 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
             skippedForNotPass++;
             continue;
         }
-        if (params->phaseParams->onlyUseSNPVCFEntries && !bcf_is_snp(rec)) {
-            skippedForIndel++;
-            continue;
-        }
-
 
         // genotype
         int gt1 = -1;
@@ -257,42 +253,51 @@ int64_t binarySearchVcfListForFirstIndexAtOrAfterRefPos(stList *vcfEntries, int6
     return binarySearchVcfListForFirstIndexAtOrAfterRefPos2(vcfEntries, refPos, 0, stList_length(vcfEntries) - 1);
 }
 
-stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refSeqName, int64_t startPos,
-        int64_t endPos, Params *params) {
+void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *filteredRegionEntries,
+                               uint64_t *rleMap, char *refSeqName, int64_t startPos, int64_t endPos, Params *params) {
     // get entries and sanity check
     stList *vcfEntries = stHash_search(vcfEntryMap, refSeqName);
     if (vcfEntries == NULL) {
         char *logIdentifier = getLogIdentifier();
         st_logInfo(" %s Reference Sequence %s not found in VCF entries\n", logIdentifier, refSeqName);
         free(logIdentifier);
-        return NULL;
+        return;
     }
-
-    // the entries for this region we want
-    stList *regionEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
-    stList *filteredEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    assert(stList_length(regionEntries) == 0);
+    assert(stList_length(filteredRegionEntries) == 0);
 
     // binary search through list for start pos
     int64_t startIdx = binarySearchVcfListForFirstIndexAtOrAfterRefPos(vcfEntries, startPos);
     if (startIdx == -1) {
-        stList_destruct(filteredEntries);
-        return regionEntries;
+        return;
     }
 
+    // so we can attempt to phase everything
+    stList *unusableFilteredVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+
     // get all entries from start until we're out
-    int64_t qualityFilteredCount = 0;
+    int64_t qualityUnusableCount = 0;
+    int64_t indelUnusableCount = 0;
     for (int64_t i = startIdx; i < stList_length(vcfEntries); i++) {
         VcfEntry *e = stList_get(vcfEntries, i);
         assert(stString_eq(refSeqName, e->refSeqName));
         assert(startPos <= e->refPos);
         if (endPos <= e->refPos) break;
-        if (params->phaseParams->minVariantQuality > e->quality) {
-            qualityFilteredCount++;
-            continue;
-        }
+
         int64_t refPos = e->refPos - startPos + 1; // e->refPos is in 0-based space, poa is 1-based. convert here
         if (rleMap != NULL) {
             refPos = rleMap[refPos];
+        }
+
+        // unusable but may still try to phase
+        bool unusable = FALSE;
+        if (params->phaseParams->minVariantQuality > e->quality) {
+            qualityUnusableCount++;
+            unusable = TRUE;
+        }
+        if (params->phaseParams->onlyUseSNPVCFEntries && e->isIndel) {
+            indelUnusableCount++;
+            unusable = TRUE;
         }
 
         // make variant
@@ -300,30 +305,36 @@ stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refS
                 e->isIndel, e->isStructuralVariant, copyListOfRleStrings(e->alleles), e->gt1, e->gt2);
         copy->rootVcfEntry = e;
 
+        // keep unusable so we can try to phase them afterwords
+        if (unusable) {
+            stList_append(unusableFilteredVcfEntries, copy);
+            continue;
+        }
+
         // where to save it?
         if (params->phaseParams->useVariantSelectionAdaptiveSampling &&
             e->quality < params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold) {
-            stList_append(filteredEntries, copy);
+            stList_append(filteredRegionEntries, copy);
         } else {
             stList_append(regionEntries, copy);
         }
     }
 
     // do we need to keep some filtered variants?
-    int64_t initiallyFilteredCount = stList_length(filteredEntries);
+    int64_t initiallyFilteredCount = stList_length(filteredRegionEntries);
     int64_t currentVariantCount = stList_length(regionEntries);
     int64_t desiredVariantCount = (endPos - startPos) /
                                   params->phaseParams->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant;
     if (params->phaseParams->useVariantSelectionAdaptiveSampling && currentVariantCount < desiredVariantCount) {
         // shuffle so that ties are not broken by position
-        stList_shuffle(filteredEntries);
+        stList_shuffle(filteredRegionEntries);
         // sort by quality descending
-        stList_sort(filteredEntries, vcfEntry_qualityCmp);
+        stList_sort(filteredRegionEntries, vcfEntry_qualityCmp);
 
         // take from top until we have desired amount or are empty
         int64_t currentFilteredCount = initiallyFilteredCount;
         while (currentFilteredCount > 0 && currentVariantCount < desiredVariantCount) {
-            VcfEntry *entry = stList_pop(filteredEntries);
+            VcfEntry *entry = stList_pop(filteredRegionEntries);
             stList_append(regionEntries, entry);
             currentFilteredCount--;
             currentVariantCount++;
@@ -333,17 +344,22 @@ stList *getVcfEntriesForRegion(stHash *vcfEntryMap, uint64_t *rleMap, char *refS
         stList_sort(regionEntries, vcfEntry_positionCmp);
     }
 
+    // loggit
     int64_t totalKeptEntries = stList_length(regionEntries);
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s Filtered %"PRIu64" VCF records for quality < %.2f, kept %"PRId64" variants with quality < %.2f, totalling %"PRIu64" (every %"PRId64"bp).\n",
-               logIdentifier, qualityFilteredCount, params->phaseParams->minVariantQuality,
-               initiallyFilteredCount - stList_length(filteredEntries),
+    st_logInfo(" %s Found %"PRIu64" unusable VCF records for quality < %.2f (%"PRId64") and for indel (%"PRId64").  Kept %"PRId64" variants with quality < %.2f, totalling %"PRIu64" (every %"PRId64"bp).\n",
+               logIdentifier, qualityUnusableCount, indelUnusableCount, params->phaseParams->minVariantQuality,
+               initiallyFilteredCount - stList_length(filteredRegionEntries),
                params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold,  stList_length(regionEntries),
                (int64_t) ((endPos - startPos) / (totalKeptEntries == 0 ? -1 : totalKeptEntries)));
-
-    stList_destruct(filteredEntries);
     free(logIdentifier);
-    return regionEntries;
+
+    // now save all the unusable entries
+    while (stList_length(unusableFilteredVcfEntries) > 0) {
+        stList_append(filteredRegionEntries, stList_pop(unusableFilteredVcfEntries));
+    }
+    assert(stList_length(unusableFilteredVcfEntries) == 0);
+    stList_sort(filteredRegionEntries, vcfEntry_positionCmp);
 }
 
 
@@ -505,6 +521,8 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
             rootVcfEntry->genotypeProb = 0;
             rootVcfEntry->haplotype1Prob = 0;
             rootVcfEntry->haplotype2Prob = 0;
+            st_logDebug(" %s Not updating VCFEntry at %s:%"PRId64" (%"PRId64") because it has no reads\n", logIdentifier,
+                    rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly, chunkVcfEntry->refPos);
             continue;
         }
 
@@ -514,6 +532,10 @@ void updateOriginalVcfEntriesWithBubbleData(BamChunk *bamChunk, stList *bamChunk
         rootVcfEntry->genotypeProb = fromLog(genotypeProb);
         rootVcfEntry->haplotype1Prob = fromLog(haplotype1Prob);
         rootVcfEntry->haplotype2Prob = fromLog(haplotype2Prob);
+        rootVcfEntry->wasUpdated = TRUE;
+        st_logDebug(" %s Updating VCFEntry at %s:%"PRId64" (%"PRId64") with genotype %"PRId64"|%"PRId64" and prob %.5f\n",
+                logIdentifier, rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly, chunkVcfEntry->refPos,
+                rootVcfEntry->gt1, rootVcfEntry->gt2, log10(rootVcfEntry->genotypeProb));
 
         // update vcf read indices
         int64_t unMatchedReads = 0;
@@ -688,7 +710,9 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
 
     // tracking total entries
     int64_t totalEntries = 0;
+    int64_t totalWritten = 0;
     int64_t totalPhasedWritten = 0;
+    int64_t skippedBecauseRegion= 0;
     int64_t skippedBecasueNotConsidered = 0;
     int64_t notPhasedBecauseMarginCalledHomozygous = 0;
     int64_t notPhasedBecauseMarginCalledHetDifferentFromInputVCF = 0;
@@ -711,20 +735,19 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         bcf_unpack(rec, BCF_UN_ALL);
         totalEntries++;
 
-        // location data
+        // location data + skipped for region
         const char *chrom = bcf_hdr_id2name(hdr, rec->rid);
         int64_t pos = rec->pos;
-
-        // skipped cases
-        bool skipVariantAnalysis = FALSE;
+        bool skippedVariantAnalysis = FALSE;
         if (regionStr != NULL && (!stString_eq(regionContig, chrom) || (regionStart >= 0 && !(regionStart <= pos && pos < regionEnd)))) {
-            skipVariantAnalysis = TRUE;
+            skippedBecauseRegion++;
+            continue;
         }
+        totalWritten++;
+
+        // other reasons to not update
         if (params->phaseParams->onlyUsePassVCFEntries && !bcf_has_filter(hdr, rec, "PASS")) {
-            skipVariantAnalysis = TRUE;
-        }
-        if (params->phaseParams->onlyUseSNPVCFEntries && !bcf_is_snp(rec)) {
-            skipVariantAnalysis = TRUE;
+            skippedVariantAnalysis = TRUE;
         }
 
         // genotype
@@ -738,12 +761,13 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         }
         free(gt_arr);
         if (!params->phaseParams->includeHomozygousVCFEntries && origGt1 == origGt2) {
-            skipVariantAnalysis = TRUE;
+            skippedVariantAnalysis = TRUE;
         }
 
         // all skipped variants are written this way
-        if (skipVariantAnalysis) {
+        if (skippedVariantAnalysis) {
             skippedBecasueNotConsidered++;
+            st_logDebug("  Not phasing variant at %s:%"PRId64", writing unmodified\n", chrom, pos);
             writeUnphasedVariant(fpOut, hdr, rec, origGt1, origGt2);
             continue;
         }
@@ -807,9 +831,10 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
             continue;
         }
 
-        // handle case where we found this variant, but it was for some reason filtered out (ok)
-        if (nextVcfEntry->genotypeProb == -1.0) {
+        // handle case where we found this variant, but it was for some reason unphased (ok)
+        if (!nextVcfEntry->wasUpdated) {
             skippedBecasueNotConsidered++;
+            st_logDebug("  Not phasing variant at %s:%"PRId64" because it wasn't updated by margin, writing unmodified\n", chrom, pos);
             writeUnphasedVariant(fpOut, hdr, rec, origGt1, origGt2);
             continue;
         }
@@ -896,6 +921,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
         } else {
             writePhaseSet = FALSE;
             notPhasedBecauseMarginCalledHomozygous++;
+            st_logDebug("  Not phasing variant at %s:%"PRId64" because called genotype is homozygous\n", chrom, pos);
         }
 
         // write values
@@ -940,6 +966,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
                 writePhaseSet = FALSE;
                 if (gt1 != gt2) {
                     notPhasedBecauseMarginCalledHetDifferentFromInputVCF++;
+                    st_logDebug("  Not phasing variant at %s:%"PRId64" because called genotype is different from original\n", chrom, pos);
                 }
             }
 
@@ -959,6 +986,7 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
             tmpia[0] = phaseSet;
             bcf_update_format_int32(hdr, rec, "PS", tmpia, 1);
             totalPhasedWritten++;
+            st_logDebug("  Phasing variant at %s:%"PRId64"\n", chrom, pos);
         }
 
         // save it
@@ -968,12 +996,13 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
 
     // loggit
     if (params->phaseParams->updateAllOutputVCFFormatFields) {
-        st_logCritical("  Wrote %"PRId64" variants: %"PRId64" were phased; skipped %"PRId64" for not being analyzed, %"PRId64" for being homozygous\n",
-                totalEntries, totalPhasedWritten, skippedBecasueNotConsidered, notPhasedBecauseMarginCalledHomozygous);
+        st_logCritical("  Of %"PRId64" variants: wrote %"PRId64" with %"PRId64" phased; skipped %"PRId64" for region, %"PRId64" for not being analyzed, %"PRId64" for being homozygous\n",
+                totalEntries, totalWritten, totalPhasedWritten, skippedBecauseRegion, skippedBecasueNotConsidered,
+                notPhasedBecauseMarginCalledHomozygous);
     } else {
-        st_logCritical("  Wrote %"PRId64" variants: %"PRId64" were phased; skipped %"PRId64" for not being analyzed, %"PRId64" for being homozygous, %"PRId64" for disagreement with margin\n",
-                       totalEntries, totalPhasedWritten, skippedBecasueNotConsidered,
-                       notPhasedBecauseMarginCalledHomozygous, notPhasedBecauseMarginCalledHetDifferentFromInputVCF);
+        st_logCritical("  Of %"PRId64" variants: wrote %"PRId64" with %"PRId64" phased; skipped %"PRId64" for region, %"PRId64" for not being analyzed, %"PRId64" for being homozygous, %"PRId64" for disagreement with margin\n",
+                totalEntries, totalWritten, totalPhasedWritten, skippedBecauseRegion, skippedBecasueNotConsidered,
+                notPhasedBecauseMarginCalledHomozygous, notPhasedBecauseMarginCalledHetDifferentFromInputVCF);
     }
 
     // finish phase sets

@@ -207,10 +207,14 @@ void test_vcfAlleleSubstrings(CuTest *testCase) {
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 8), "vcfTest2", 96, "CCC", "A", RLE);
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 9), "vcfTest2", 126, "A", "G", RLE);
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 10), "vcfTest2", 127, "C", "A", RLE);
+    stList_destruct(vcfEntries);
 
     // get substrings
     // this conversion is to put things in poa-space, which should be countered by allele substrings
-    vcfEntries = getVcfEntriesForRegion(vcfEntryMap, NULL, "vcfTest2", 0, 128, params);
+    vcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    stList *filteredVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    getVcfEntriesForRegion(vcfEntryMap, vcfEntries, filteredVcfEntries, NULL, "vcfTest2", 0, 128, params);
+    stList_destruct(filteredVcfEntries);
     char *refSeq = getSequenceFromReference(VCF2_REF,"vcfTest2", 0, 128);
     RleString *refRleString = RLE ? rleString_construct(refSeq) : rleString_construct_no_rle(refSeq);
     stList *allAlleleSubstringsPoaSpace = stList_construct3(0, (void (*)(void*)) stList_destruct);
@@ -260,7 +264,10 @@ void test_vcfAlleleSubstrings(CuTest *testCase) {
 
 
     // same for alleles in specific region
-    stList *regionVcfEntries = getVcfEntriesForRegion(vcfEntryMap, NULL, "vcfTest2", 64, 128, params);
+    stList *regionVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    stList *filteredRegionVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    getVcfEntriesForRegion(vcfEntryMap, regionVcfEntries, filteredRegionVcfEntries, NULL, "vcfTest2", 64, 128, params);
+    stList_destruct(filteredRegionVcfEntries);
     char *regionRefSubstring = stString_getSubString(refSeq, 64, 64);
     refRleString = RLE ? rleString_construct(regionRefSubstring) : rleString_construct_no_rle(regionRefSubstring);
     stList *allRegionAlleleSubstrings = stList_construct3(0, (void (*)(void*)) stList_destruct);
@@ -339,7 +346,10 @@ void test_vcfAdaptiveSampling1(CuTest *testCase) {
     params->phaseParams->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
 
     stHash *vcfEntryMap = parseVcf(VCF3, params);
-    stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntryMap, NULL, "vcfTest3", 0, 8000, params);
+    stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    stList *filteredCunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    getVcfEntriesForRegion(vcfEntryMap, chunkVcfEntries, filteredCunkVcfEntries, NULL, "vcfTest3", 0, 8000, params);
+    stList_destruct(filteredCunkVcfEntries);
 
     CuAssertTrue(testCase, stList_length(chunkVcfEntries) == 8);
     for (int64_t i = 0; i < stList_length(chunkVcfEntries); i++) {
@@ -378,7 +388,10 @@ void test_vcfAdaptiveSampling2(CuTest *testCase) {
     params->phaseParams->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
 
     stHash *vcfEntryMap = parseVcf(VCF3, params);
-    stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntryMap, NULL, "vcfTest3", 0, 8000, params);
+    stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    stList *filteredChunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    getVcfEntriesForRegion(vcfEntryMap, chunkVcfEntries, filteredChunkVcfEntries, NULL, "vcfTest3", 0, 8000, params);
+    stList_destruct(filteredChunkVcfEntries);
 
     CuAssertTrue(testCase, stList_length(chunkVcfEntries) == 4);
     for (int64_t i = 0; i < stList_length(chunkVcfEntries); i++) {

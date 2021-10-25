@@ -989,8 +989,11 @@ static void test_readSubstringsFromVcf(CuTest *testCase) {
     BamChunk *bamChunk = stList_get(chunker->chunks, 0);
     RleString *chunkReferenceRLE = bamChunk_getReferenceSubstring(bamChunk, INPUT_MVVP_REF, params);
     char *chunkReferenceRAW = rleString_expand(chunkReferenceRLE);
-    stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, NULL, bamChunk->refSeqName,
+    stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    stList *filteredChunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+    getVcfEntriesForRegion(vcfEntries, chunkVcfEntries, filteredChunkVcfEntries, NULL, bamChunk->refSeqName,
                                                      bamChunk->chunkOverlapStart,  bamChunk->chunkOverlapEnd, params);
+    stList_destruct(filteredChunkVcfEntries);
     updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReferenceRAW, strlen(chunkReferenceRAW), FALSE, params);
 
     stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);

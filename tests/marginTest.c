@@ -13,8 +13,8 @@
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
 
-static char *POLISH_PARAMS_FILE = "../params/ont/r9.4/allParams.np.human.r94-g360.json";
-static char *PHASE_PARAMS_FILE = "../params/misc/allParams.phase_vcf.json";
+static char *POLISH_PARAMS_FILE = "../params/polish/ont/r9.4/allParams.np.human.r94-g360.json";
+static char *PHASE_PARAMS_FILE = "../params/phase/misc/allParams.phase_vcf.json";
 static char *REF_FILE = "../tests/data/realData/hg38.chr20_59M_100k.fa";
 static char *BAM_FILE = "../tests/data/realData/HG002.r94g360.chr20_59M_100k.bam";
 static char *VCF_FILE = "../tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf";

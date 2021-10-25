@@ -281,7 +281,9 @@ int main(int argc, char *argv[]) {
                    logIdentifier, bamChunk->refSeqName, (int) bamChunk->chunkOverlapStart, bamChunk->chunkOverlapEnd);
 
         // get VCF string
-        stList *chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, NULL, bamChunk->refSeqName,
+        stList *chunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+        stList *filteredChunkVcfEntries = stList_construct3(0, (void(*)(void*))vcfEntry_destruct);
+        getVcfEntriesForRegion(vcfEntries, chunkVcfEntries, filteredChunkVcfEntries, NULL, bamChunk->refSeqName,
                                                  bamChunk->chunkOverlapStart,  bamChunk->chunkOverlapEnd, params);
         updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReference, strlen(chunkReference),
                 FALSE, params);
@@ -315,7 +317,8 @@ int main(int argc, char *argv[]) {
                                                   params);
 
         // Cleanup
-        if (chunkVcfEntries != NULL) stList_destruct(chunkVcfEntries);
+        stList_destruct(chunkVcfEntries);
+        stList_destruct(filteredChunkVcfEntries);
         stSet_destruct(readsBelongingToHap1);
         stSet_destruct(readsBelongingToHap2);
         bubbleGraph_destruct(bg);

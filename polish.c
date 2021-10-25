@@ -633,9 +633,12 @@ int polish_main(int argc, char *argv[]) {
             if (vcfEntries != NULL) {
                 uint64_t *rleMap = params->polishParams->useRunLengthEncoding ?
                                    rleString_getNonRleToRleCoordinateMap(rleReference) : NULL;
-                chunkVcfEntries = getVcfEntriesForRegion(vcfEntries, rleMap, bamChunk->refSeqName,
+                chunkVcfEntries = stList_construct3(0, (void (*)(void *))vcfEntry_destruct);
+                stList *filteredChunkVcfEntries = stList_construct3(0, (void (*)(void *))vcfEntry_destruct);
+                getVcfEntriesForRegion(vcfEntries, chunkVcfEntries, filteredChunkVcfEntries, rleMap, bamChunk->refSeqName,
                         bamChunk->chunkOverlapStart,  bamChunk->chunkOverlapEnd, params);
                 st_logInfo(" %s Got %"PRId64" VCF entries for region\n", logIdentifier, stList_length(chunkVcfEntries));
+                stList_destruct(filteredChunkVcfEntries); //unused
                 if (rleMap != NULL) free(rleMap);
             }
             do {

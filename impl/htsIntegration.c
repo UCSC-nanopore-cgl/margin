@@ -1522,10 +1522,10 @@ void saveFinishedVcfEntries(stHash *currentVcfEntries, int64_t currentAlnRefPos,
 
 void mergeVariantTypeSeparatedReadLists(stList *readsDest, stList *readsSource1, stList *readsSource2) {
     // associate bcrs
-    stHash *readNamesToBCRs = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, stList_destruct);
+    stHash *readNamesToBCRs = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, (void(*)(void*))stList_destruct);
     for (int64_t i = 0; i < stList_length(readsSource1); i++) {
         BamChunkRead *bcr = stList_get(readsSource1, i);
-        stList *bcrList = stList_construct3(0, bamChunkRead_destruct);
+        stList *bcrList = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
         stList_append(bcrList, bcr);
         stHash_insert(readNamesToBCRs, stString_copy(bcr->readName), bcrList);
     }
@@ -1533,7 +1533,7 @@ void mergeVariantTypeSeparatedReadLists(stList *readsDest, stList *readsSource1,
         BamChunkRead *bcr = stList_get(readsSource2, i);
         stList *bcrList = stHash_search(readNamesToBCRs, bcr->readName);
         if (bcrList == NULL) {
-            bcrList = stList_construct3(0, bamChunkRead_destruct);
+            bcrList = stList_construct3(0, (void(*)(void*))bamChunkRead_destruct);
             stHash_insert(readNamesToBCRs, stString_copy(bcr->readName), bcrList);
         }
         stList_append(bcrList, bcr);

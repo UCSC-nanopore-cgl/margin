@@ -2146,6 +2146,175 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamC
 
 
 
+void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stList *vcfEntries,
+        stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stHash *readIdToIdx, Params *params) {
+
+    // prep
+    uint64_t maximumRepeatLengthExcl = getMaximumRepeatLength(params);
+    char *logIdentifier = getLogIdentifier();
+
+    // get map of vcfEntries
+    stHash *vcfEntriesToReadSubstrings = buildVcfEntryToReadSubstringsMap(bamChunkReads, params);
+
+    // Make a list of bubbles
+    int64_t lastRefEndPos = -1;
+    int64_t vcfEntriesWithoutSubstrings = 0;
+    for (int64_t v = 0; v < stList_length(vcfEntries); v++) {
+        VcfEntry *vcfEntry = stList_get(vcfEntries, v);
+
+        // no homozygous
+        if (vcfEntry->gt1 == vcfEntry->gt2) {
+            continue;
+        }
+
+        // Get read substrings
+        stList *readSubstrings = stHash_search(vcfEntriesToReadSubstrings, vcfEntry);
+        uint64_t readNo = (uint64_t ) stList_length(readSubstrings);
+
+        // nothing to phase with
+        if(stList_length(readSubstrings) == 0) {
+            stList_destruct(readSubstrings);
+            vcfEntriesWithoutSubstrings++;
+            st_logDebug(" %s Not updating VCFEntry at %s:%"PRId64" (%"PRId64") because it has no reads\n", logIdentifier,
+                        vcfEntry->refSeqName, vcfEntry->rawRefPosInformativeOnly, vcfEntry->refPos);
+            continue;
+        }
+
+        // Get alleles
+        stList *alleles = vcfEntry->alleleSubstrings;
+        assert(stList_length(alleles) >= 2);
+        RleString *alleleA = stList_get(vcfEntry->alleleSubstrings, vcfEntry->gt1);
+        RleString *alleleB = stList_get(vcfEntry->alleleSubstrings, vcfEntry->gt2);
+        SymbolString alleleSymbolStringA = rleString_constructSymbolString(alleleA, 0, alleleA->length,
+                                                                           params->polishParams->alphabet,
+                                                                           params->polishParams->useRepeatCountsInAlignment,
+                                                                           maximumRepeatLengthExcl);
+        SymbolString alleleSymbolStringB = rleString_constructSymbolString(alleleB, 0, alleleB->length,
+                                                                           params->polishParams->alphabet,
+                                                                           params->polishParams->useRepeatCountsInAlignment,
+                                                                           maximumRepeatLengthExcl);
+
+        // for tracking per-haplotype
+        double totalCisH1A1H2A2Support = 0;
+        double totalTransH1A2H2A1Support = 0;
+
+        // get allele supports
+        for (int64_t k = 0; k < readNo; k++) {
+            BamChunkReadSubstring *bcrSubstring = stList_get(readSubstrings, k);
+            RleString *substring = bamChunkReadSubstring_getRleString(bcrSubstring);
+            bool readIsHap1;
+            if (stSet_search(readsBelongingToHap1, bcrSubstring->read) != NULL) {
+                readIsHap1 = TRUE;
+            } else if (stSet_search(readsBelongingToHap2, bcrSubstring->read) != NULL) {
+                readIsHap1 = FALSE;
+            } else {
+                //read is untagged
+                continue;
+            }
+
+            SymbolString rS = rleString_constructSymbolString(substring, 0, substring->length,
+                                                              params->polishParams->alphabet,
+                                                              params->polishParams->useRepeatCountsInAlignment,
+                                                              maximumRepeatLengthExcl);
+            StateMachine *sM = bcrSubstring->read->forwardStrand
+                               ? params->polishParams->stateMachineForForwardStrandRead
+                               : params->polishParams->stateMachineForReverseStrandRead;
+
+            // align A
+            stList *anchorPairsA = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
+                                   alleleSymbolStringA.length > params->phaseParams->referenceExpansionForStructuralVariants ?
+                                   getKmerAlignmentAnchors(alleleSymbolStringA, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
+                                   stList_construct();
+            double readSupportA = computeForwardProbability(alleleSymbolStringA, rS, anchorPairsA, params->polishParams->p, sM, 0, 0);
+            stList_destruct(anchorPairsA);
+
+            // align B
+            stList *anchorPairsB = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
+                                   alleleSymbolStringB.length > params->phaseParams->referenceExpansionForStructuralVariants ?
+                                   getKmerAlignmentAnchors(alleleSymbolStringB, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
+                                   stList_construct();
+            double readSupportB = computeForwardProbability(alleleSymbolStringB, rS, anchorPairsB, params->polishParams->p, sM, 0, 0);
+            stList_destruct(anchorPairsB);
+
+
+            // save to cis and trans
+            double cisH1A1H2A2Support = readIsHap1 ?
+                    readSupportA - stMath_logAddExact(readSupportA, readSupportB) :
+                    readSupportB - stMath_logAddExact(readSupportA, readSupportB);
+            double transH1A2H2A1Support = readIsHap1 ?
+                    readSupportB - stMath_logAddExact(readSupportA, readSupportB) :
+                    readSupportA - stMath_logAddExact(readSupportA, readSupportB);
+            totalCisH1A1H2A2Support += cisH1A1H2A2Support;
+            totalTransH1A2H2A1Support += transH1A2H2A1Support;
+
+            // cleanup
+            symbolString_destruct(rS);
+        }
+
+        // calculate gt
+        int64_t computedGt1 = -1;
+        int64_t computedGt2 = -1;
+        double genotypeProb = 0;
+        double haplotype1Prob = 0;
+        double haplotype2Prob = 0;
+        if (totalCisH1A1H2A2Support > totalTransH1A2H2A1Support) {
+            computedGt1 = vcfEntry->gt1;
+            computedGt2 = vcfEntry->gt2;
+        } else if (totalTransH1A2H2A1Support > totalCisH1A1H2A2Support) {
+            computedGt1 = vcfEntry->gt2;
+            computedGt2 = vcfEntry->gt1;
+        }
+
+        // update root vcf entry with data that it needs
+        VcfEntry *rootVcfEntry = vcfEntry->rootVcfEntry;
+        rootVcfEntry->gt1 = computedGt1;
+        rootVcfEntry->gt2 = computedGt2;
+        rootVcfEntry->genotypeProb = genotypeProb;
+        rootVcfEntry->haplotype1Prob = haplotype1Prob;
+        rootVcfEntry->haplotype2Prob = haplotype2Prob;
+        if (computedGt1 == -1) {
+            st_logDebug(" %s Not updating filtered VCFEntry at %s:%"PRId64" (%"PRId64") with equal cis/trans support of %.5f\n",
+                    logIdentifier, rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly, vcfEntry->refPos, totalCisH1A1H2A2Support);
+            continue;
+        } else {
+            st_logDebug(" %s Updating filtered VCFEntry at %s:%"PRId64" (%"PRId64") with genotype %"PRId64"|%"PRId64" and prob %.5f\n",
+                        logIdentifier, rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly, vcfEntry->refPos,
+                        rootVcfEntry->gt1, rootVcfEntry->gt2);
+
+            rootVcfEntry->wasUpdated = TRUE;
+        }
+
+        // update vcf read indices
+        int64_t unMatchedReads = 0;
+        stSet *hap1RootVcfEntryReadIndices = stList_get(rootVcfEntry->alleleIdxToReads, computedGt1);
+        stSet *hap2RootVcfEntryReadIndices = stList_get(rootVcfEntry->alleleIdxToReads, computedGt2);
+        for (int64_t i = 0; i < stList_length(readSubstrings); i++) {
+            BamChunkReadSubstring *bcrs = stList_get(readSubstrings, i);
+            BamChunkRead *bcr = bcrs->read;
+            int64_t readIdx = (int64_t) stHash_search(readIdToIdx, bcr->readName);
+            assert(readIdx != 0);
+            if (stSet_search(readsBelongingToHap1, bcr) != NULL) {
+                stSet_insert(hap1RootVcfEntryReadIndices, (void*) readIdx);
+            } else if (stSet_search(readsBelongingToHap2, bcr) != NULL) {
+                stSet_insert(hap2RootVcfEntryReadIndices, (void*) readIdx);
+            } else {
+                unMatchedReads++;
+            }
+        }
+        if (unMatchedReads == stList_length(readSubstrings)) {
+            st_logInfo(" %s No reads (out of %"PRId64") were aligned to filtered VCF entry at pos %s:%"PRId64"\n",
+                       logIdentifier, unMatchedReads, rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly);
+        }
+
+    }
+
+    free(logIdentifier);
+    stHash_destruct(vcfEntriesToReadSubstrings);
+}
+
+
+
+
 stHash *bubbleGraph_getProfileSeqs(BubbleGraph *bg, stReference *ref) {
     // First calculate the length of all the profile sequences
 
@@ -2570,22 +2739,6 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
         stSet_insert(i < j ? gF->reads2 : gF->reads1, pSeq);
     }
     stSet_destructIterator(it);
-
-    // Set any homozygous alts back to being homozygous reference
-    // This is really a hack because sometimes the phasing algorithm picks a non-reference allele for a homozygous
-    // position
-    /*for (uint64_t i = 0; i < gF->length; i++) {
-        Bubble *b = &bg->bubbles[gF->refStart + i];
-
-        if (gF->haplotypeString1[i] == gF->haplotypeString2[i]) {
-            //|| binomialPValue(gF->readsSupportingHaplotype1[i] + gF->readsSupportingHaplotype2[i], gF->readsSupportingHaplotype1[i]) < 0.05) { // gF->readsSupportingHaplotype1[i] < 5 || gF->readsSupportingHaplotype2[i] < 5) { // is homozygous
-            int64_t refAlleleIndex = bubble_getReferenceAlleleIndex(b);
-            if (refAlleleIndex != -1) { // is homozygous alt
-                gF->haplotypeString1[i] = refAlleleIndex; // set to reference allele
-                gF->haplotypeString2[i] = refAlleleIndex;
-            }
-        }
-    }*/
 
     // Check / log the result
     bubbleGraph_logPhasedBubbleGraph(bg, hmm, path, *readsToPSeqs, profileSeqs, gF);

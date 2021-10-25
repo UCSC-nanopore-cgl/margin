@@ -5,11 +5,11 @@
 #include "CuTest.h"
 #include "margin.h"
 
-static char *paramsFile = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
+static char *paramsFile = "../params/polish/ont/r9.4/allParams.np.human.r94-g344.json";
 static char *outputSequenceFile = "./testStitchingSequenceFile.fa";
 static char *outputPoaFile = "./testStitchingPoaFile.csv";
 static char *outputRepeatCountFile = "./testStitchingRepeatCountFile.csv";
-static char *noRleParamsFile = "../params/misc/allParams.no_rle.json";
+static char *noRleParamsFile = "../params/polish/misc/allParams.no_rle.json";
 
 
 void checkCSV(CuTest *testCase, char *csvFile, char *sequence) {

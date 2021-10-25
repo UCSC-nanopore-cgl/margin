@@ -1343,6 +1343,13 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromVcfEntries(stList *bamChunkRe
 BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamChunkReads, BubbleGraph *bg,
 		stList *vcfEntriesToBubbles, stSet *hap1Reads, stSet *hap2Reads, Params *params, char *logIdentifier);
 
+
+/*
+ * Phase (generally filtered or low quality) VCF entries using already-phased reads
+ */
+void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stList *vcfEntries,
+        stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stHash *readIdToIdx, Params *params);
+
 /*
  * For tracking Bubble Graph stuff
  */
@@ -1452,6 +1459,7 @@ struct _vcfEntry {
     int64_t gt1;
     int64_t gt2;
     // margin calculations
+    bool wasUpdated;
     stList *alleleIdxToReads;
     double genotypeProb;
     double haplotype1Prob;
@@ -1462,13 +1470,15 @@ struct _vcfEntry {
 VcfEntry *vcfEntry_construct(const char *refSeqName, int64_t refPos, int64_t rawRefPos, double phredQuality,
                              bool isIndel, bool isStructuralVariant, stList *alleles, int64_t gt1, int64_t gt2);
 void vcfEntry_destruct(VcfEntry *vcfEntry);
+int vcfEntry_positionCmp(const void *a, const void *b);
+int vcfEntry_qualityCmp(const void *a, const void *b);
 RleString *getVcfEntryAlleleH1(VcfEntry *vcfEntry);
 RleString *getVcfEntryAlleleH2(VcfEntry *vcfEntry);
 stHash *parseVcf(char *vcfFile, Params *params);
 stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params);
 int64_t binarySearchVcfListForFirstIndexAtOrAfterRefPos(stList *vcfEntries, int64_t refPos); // just exposed for testing
-stList *getVcfEntriesForRegion(stHash *vcfEntries, uint64_t *rleMap, char *refSeqName, int64_t startPos,
-        int64_t endPos, Params *params);
+void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *filteredRegionEntries,
+		uint64_t *rleMap, char *refSeqName, int64_t startPos, int64_t endPos, Params *params);
 stList *getAlleleSubstrings2(VcfEntry *entry, char *referenceSeq, int64_t refSeqLen, int64_t *refStartPos,
                              int64_t *refEndPosIncl, bool putRefPosInPOASpace, Params *params, int64_t expansionOverride);
 stList *getAlleleSubstrings(VcfEntry *entry, RleString *referenceSeq, Params *params,
