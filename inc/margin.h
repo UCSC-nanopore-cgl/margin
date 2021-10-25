@@ -1348,7 +1348,8 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamC
  * Phase (generally filtered or low quality) VCF entries using already-phased reads
  */
 void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stList *vcfEntries,
-        stSet *readsBelongingToHap1, stSet *readsBelongingToHap2, stHash *readIdToIdx, Params *params);
+		stSet *bamChunkReadsBelongingToHap1, stSet *bamChunkReadsBelongingToHap2, BamChunk *bamChunk,
+		stHash *readIdToIdx, Params *params);
 
 /*
  * For tracking Bubble Graph stuff

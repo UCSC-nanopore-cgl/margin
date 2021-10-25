@@ -2147,7 +2147,8 @@ BubbleGraph *bubbleGraph_partitionFilteredReadsFromPhasedVcfEntries(stList *bamC
 
 
 void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stList *vcfEntries,
-        stSet *bamChunkReadsBelongingToHap1, stSet *bamChunkReadsBelongingToHap2, stHash *readIdToIdx, Params *params) {
+        stSet *bamChunkReadsBelongingToHap1, stSet *bamChunkReadsBelongingToHap2, BamChunk *bamChunk,
+        stHash *readIdToIdx, Params *params) {
 
     stSet *readNamesBelongingToHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
     stSet *readNamesBelongingToHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
@@ -2175,9 +2176,15 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
     int64_t vcfEntriesWithoutSubstrings = 0;
     for (int64_t v = 0; v < stList_length(vcfEntries); v++) {
         VcfEntry *vcfEntry = stList_get(vcfEntries, v);
+        VcfEntry *rootVcfEntry = vcfEntry->rootVcfEntry;
 
         // no homozygous
         if (vcfEntry->gt1 == vcfEntry->gt2) {
+            continue;
+        }
+
+        // only vcf entries in the chunk should be updated
+        if (vcfEntry->refPos < bamChunk->chunkStart || vcfEntry->refPos >= bamChunk->chunkEnd) {
             continue;
         }
 
@@ -2280,7 +2287,6 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
         }
 
         // update root vcf entry with data that it needs
-        VcfEntry *rootVcfEntry = vcfEntry->rootVcfEntry;
         rootVcfEntry->gt1 = computedGt1;
         rootVcfEntry->gt2 = computedGt2;
         rootVcfEntry->genotypeProb = genotypeProb;

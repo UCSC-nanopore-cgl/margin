@@ -417,7 +417,7 @@ int phase_main(int argc, char *argv[]) {
         // phase filtered variants
         //TODO
         bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
-                readsBelongingToHap1, readsBelongingToHap2, bamChunker->readEnumerator, params);
+                readsBelongingToHap1, readsBelongingToHap2, bamChunk, bamChunker->readEnumerator, params);
 
         // should included filtered reads in output
         // get reads
