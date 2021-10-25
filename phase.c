@@ -355,9 +355,9 @@ int phase_main(int argc, char *argv[]) {
         stList *reads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *filteredReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
 
-        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
         //TODO
-//        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
+//        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
+        extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
 
         // just destruct this list, all the varaints are stored in chunkVcfEntries and filteredChunkVcfEntries
         stList_destruct(allVcfEntries);
