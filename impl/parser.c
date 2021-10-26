@@ -41,7 +41,9 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->useVariantSelectionAdaptiveSampling = TRUE;
     params->variantSelectionAdaptiveSamplingPrimaryThreshold = 0.9;
     params->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
-    params->minVariantQuality = 0.15;
+    params->minSnpVariantQuality = 0;
+    params->minIndelVariantQuality = 0;
+    params->minSvVariantQuality = 0;
     params->updateAllOutputVCFFormatFields = TRUE;
     params->phasesetMinBinomialReadSplitLikelihood = .0001;
     params->phasesetMaxDiscordantRatio = .1;
@@ -82,7 +84,9 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->useVariantSelectionAdaptiveSampling = toCopy->useVariantSelectionAdaptiveSampling;
     params->variantSelectionAdaptiveSamplingPrimaryThreshold = toCopy->variantSelectionAdaptiveSamplingPrimaryThreshold;
     params->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = toCopy->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant;
-    params->minVariantQuality = toCopy->minVariantQuality;
+    params->minSnpVariantQuality = toCopy->minSnpVariantQuality;
+    params->minIndelVariantQuality = toCopy->minIndelVariantQuality;
+    params->minSvVariantQuality = toCopy->minSvVariantQuality;
     params->updateAllOutputVCFFormatFields = toCopy->updateAllOutputVCFFormatFields;
     params->phasesetMinBinomialReadSplitLikelihood = toCopy->phasesetMinBinomialReadSplitLikelihood;
     params->phasesetMaxDiscordantRatio = toCopy->phasesetMaxDiscordantRatio;
@@ -143,8 +147,12 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->variantSelectionAdaptiveSamplingPrimaryThreshold = stJson_parseFloat(js, tokens, ++i);
         } else if (strcmp(keyString, "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant") == 0) {
             params->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = stJson_parseInt(js, tokens, ++i);
-        } else if (strcmp(keyString, "minVariantQuality") == 0) {
-            params->minVariantQuality = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "minSnpVariantQuality") == 0) {
+            params->minSnpVariantQuality = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "minIndelVariantQuality") == 0) {
+            params->minIndelVariantQuality = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "minSvVariantQuality") == 0) {
+            params->minSvVariantQuality = stJson_parseFloat(js, tokens, ++i);
         } else if (strcmp(keyString, "updateAllOutputVCFFormatFields") == 0) {
             params->updateAllOutputVCFFormatFields = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "phasesetMinBinomialReadSplitLikelihood") == 0) {

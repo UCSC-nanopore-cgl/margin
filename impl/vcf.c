@@ -203,7 +203,7 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
     // logging
     st_logCritical("> Parsed %"PRId64" total VCF entries from %s; kept %"PRId64"%s, skipped %"PRId64" for region, %"PRId64" for not being "
                    "PASS, %"PRId64" for being homozygous, %"PRId64" for being INDEL\n",
-                   totalEntries, vcfFile, keptEntries, params->phaseParams->includeHomozygousVCFEntries ? "" : "HETs",
+                   totalEntries, vcfFile, keptEntries, params->phaseParams->includeHomozygousVCFEntries ? "" : " HETs",
                    skippedForRegion, skippedForNotPass, skippedForHomozygous, skippedForIndel);
     if (keptEntries == 0) {
         st_errAbort("No valid VCF entries found!");
@@ -291,9 +291,21 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
 
         // unusable but may still try to phase
         bool unusable = FALSE;
-        if (params->phaseParams->minVariantQuality > e->quality) {
-            qualityUnusableCount++;
-            unusable = TRUE;
+        if (e->isStructuralVariant) {
+            if (params->phaseParams->minSvVariantQuality > e->quality) {
+                qualityUnusableCount++;
+                unusable = TRUE;
+            }
+        } else if (e->isIndel) {
+            if (params->phaseParams->minIndelVariantQuality > e->quality) {
+                qualityUnusableCount++;
+                unusable = TRUE;
+            }
+        } else {
+            if (params->phaseParams->minSnpVariantQuality > e->quality) {
+                qualityUnusableCount++;
+                unusable = TRUE;
+            }
         }
         if (params->phaseParams->onlyUseSNPVCFEntries && e->isIndel) {
             indelUnusableCount++;
@@ -347,8 +359,9 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
     // loggit
     int64_t totalKeptEntries = stList_length(regionEntries);
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s Found %"PRIu64" unusable VCF records for quality < %.2f (%"PRId64") and for indel (%"PRId64").  Kept %"PRId64" variants with quality < %.2f, totalling %"PRIu64" (every %"PRId64"bp).\n",
-               logIdentifier, qualityUnusableCount, indelUnusableCount, params->phaseParams->minVariantQuality,
+    st_logInfo(" %s Found %"PRIu64" unusable VCF records for quality < %.2f (%"PRId64") and for indel (%"PRId64").  Kept %"PRId64" variants with quality < {SNP:%.2f, INDEL:%.2f, SV:%.2f}, totalling %"PRIu64" (every %"PRId64"bp).\n",
+               logIdentifier, qualityUnusableCount, indelUnusableCount, params->phaseParams->minSnpVariantQuality,
+               params->phaseParams->minIndelVariantQuality, params->phaseParams->minSvVariantQuality,
                initiallyFilteredCount - stList_length(filteredRegionEntries),
                params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold,  stList_length(regionEntries),
                (int64_t) ((endPos - startPos) / (totalKeptEntries == 0 ? -1 : totalKeptEntries)));

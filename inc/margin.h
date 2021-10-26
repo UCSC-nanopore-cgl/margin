@@ -295,8 +295,10 @@ struct _stRPHmmParameters {
 	// ..and if we don't have (on average) a variant every this many bp
 	int64_t variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant;
 
-	// ..then take variants sorted by qual until we hit that threshold. but not any variant below this threshold:
-    double minVariantQuality;
+	// ..then take variants sorted by qual until we hit that threshold. but not any variant below these thresholds:
+    double minSnpVariantQuality;
+    double minIndelVariantQuality;
+    double minSvVariantQuality;
 
     // for output vcf
     bool updateAllOutputVCFFormatFields;
