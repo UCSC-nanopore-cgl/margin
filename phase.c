@@ -334,18 +334,14 @@ int phase_main(int argc, char *argv[]) {
 
         // get alleles and read substrings for all vcf entries and a unified set of bcrs:
         // we do main phasing with some and then phase the filtered var with same reads
-        stList *allVcfEntries = stList_construct();
-        for (int64_t c = 0; c < stList_length(chunkVcfEntries); c++) {
-            stList_append(allVcfEntries, stList_get(chunkVcfEntries, c));
-        }
-        for (int64_t c = 0; c < stList_length(filteredChunkVcfEntries); c++) {
-            stList_append(allVcfEntries, stList_get(filteredChunkVcfEntries, c));
-        }
-        stList_sort(allVcfEntries, vcfEntry_positionCmp);
 
         // update vcf alleles
-        updateVcfEntriesWithSubstringsAndPositions(allVcfEntries, chunkReference, strlen(chunkReference),
-                FALSE, params);
+        updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReference, strlen(chunkReference),
+                                                   FALSE, params);
+        if (shouldOutputPhasedVcf) {
+            updateVcfEntriesWithSubstringsAndPositions(filteredChunkVcfEntries, chunkReference, strlen(chunkReference),
+                                                       FALSE, params);
+        }
 
         // Convert bam lines into corresponding reads and alignments
         st_logInfo(" %s Parsing input reads from file: %s\n", logIdentifier, bamInFile);
@@ -354,14 +350,11 @@ int phase_main(int argc, char *argv[]) {
         stList *readsForFilteredVcfEntries = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
         stList *filteredReadsForFilteredVcfEntries = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
 
-        //TODO
-//        extractReadSubstringsAtVariantPositions(bamChunk, allVcfEntries, reads, filteredReads, params);
         extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
-        extractReadSubstringsAtVariantPositions(bamChunk, filteredChunkVcfEntries, readsForFilteredVcfEntries,
-                                                filteredReadsForFilteredVcfEntries, params);
-
-        // just destruct this list, all the varaints are stored in chunkVcfEntries and filteredChunkVcfEntries
-        stList_destruct(allVcfEntries);
+        if (shouldOutputPhasedVcf) {
+            extractReadSubstringsAtVariantPositions(bamChunk, filteredChunkVcfEntries, readsForFilteredVcfEntries,
+                                                    filteredReadsForFilteredVcfEntries, params);
+        }
 
         // do downsampling if appropriate
         if (params->polishParams->maxDepth > 0) {
@@ -414,13 +407,14 @@ int phase_main(int argc, char *argv[]) {
                           stSet_size(readsBelongingToHap2)));
         st_logInfo(" %s Phased primary reads in %d sec\n", logIdentifier, time(NULL) - primaryPhasingStart);
 
-        // phase filtered variants
-        //TODO
-        bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
-                readsBelongingToHap1, readsBelongingToHap2, bamChunk, bamChunker->readEnumerator, params);
+        // phase filtered variants (if we're generating a VCF)
+        if (shouldOutputPhasedVcf) {
+            bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
+                                                            readsBelongingToHap1, readsBelongingToHap2, bamChunk,
+                                                            bamChunker->readEnumerator, params);
+        }
 
-        // should included filtered reads in output
-        // get reads
+        // assign filtered reads to haplotypes 
         for (int64_t bcrIdx = 0; bcrIdx < stList_length(reads); bcrIdx++) {
             BamChunkRead *bcr = stList_get(reads, bcrIdx);
             if (!stSet_search(readsBelongingToHap1, bcr) && !stSet_search(readsBelongingToHap2, bcr)) {
@@ -428,10 +422,12 @@ int phase_main(int argc, char *argv[]) {
                 stList_append(filteredReads, bamChunkRead_constructCopy(bcr));
             }
         }
-        st_logInfo(" %s Assigning %"PRId64" filtered reads to haplotypes\n", logIdentifier, stList_length(filteredReads));
+        st_logInfo(" %s Assigning %"PRId64" filtered reads to haplotypes\n", logIdentifier,
+                   stList_length(filteredReads));
         time_t filteredPhasingStart = time(NULL);
-        bubbleGraph_partitionFilteredReadsFromVcfEntries(filteredReads, gf, bg, vcfEntriesToBubbles, readsBelongingToHap1,
-                readsBelongingToHap2, params, logIdentifier);
+        bubbleGraph_partitionFilteredReadsFromVcfEntries(filteredReads, gf, bg, vcfEntriesToBubbles,
+                                                         readsBelongingToHap1,
+                                                         readsBelongingToHap2, params, logIdentifier);
         st_logInfo(" %s Partitioned filtered reads in %d sec.\n", logIdentifier, time(NULL) - filteredPhasingStart);
 
 
