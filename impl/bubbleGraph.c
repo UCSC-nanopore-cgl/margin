@@ -2150,6 +2150,7 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
         stSet *bamChunkReadsBelongingToHap1, stSet *bamChunkReadsBelongingToHap2, BamChunk *bamChunk,
         stHash *readIdToIdx, Params *params) {
 
+    // need to convert from sets of BamChunkRead instances to strings, as the elements in bamChunkReads arg are different instances
     stSet *readNamesBelongingToHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
     stSet *readNamesBelongingToHap2 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, free);
     stSetIterator *itor = stSet_getIterator(bamChunkReadsBelongingToHap1);
@@ -2184,7 +2185,7 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
         }
 
         // only vcf entries in the chunk should be updated
-        if (vcfEntry->refPos < bamChunk->chunkStart || vcfEntry->refPos >= bamChunk->chunkEnd) {
+        if (rootVcfEntry->refPos < bamChunk->chunkStart || rootVcfEntry->refPos >= bamChunk->chunkEnd) {
             continue;
         }
 
