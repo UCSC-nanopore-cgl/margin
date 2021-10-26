@@ -8,11 +8,12 @@
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
-		"onlyUseSNPVCFEntries": true,
+		"onlyUseSNPVCFEntries": false,
 		"useVariantSelectionAdaptiveSampling": false,
 		"phasesetMinBinomialReadSplitLikelihood": 0.0000001,
 		"phasesetMaxDiscordantRatio": 0.5,
 		"minSnpVariantQuality": 0,
+		"minIndelVariantQuality": 5,
 		"updateAllOutputVCFFormatFields": false
 	}
 }

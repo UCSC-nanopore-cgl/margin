@@ -9,14 +9,11 @@
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,
-		"indelSizeForSVHandling": 32,
-		"referenceExpansionForStructuralVariants": 512,
 		"useVariantSelectionAdaptiveSampling": false,
 		"phasesetMinBinomialReadSplitLikelihood": 0.0000001,
 		"phasesetMaxDiscordantRatio": 0.5,
-		"minSnpVariantQuality": 10,
-		"minIndelVariantQuality": 10,
-		"minSvVariantQuality": 10,
+		"minSnpVariantQuality": 3,
+		"minIndelVariantQuality": 5,
 		"updateAllOutputVCFFormatFields": false
 	}
 }

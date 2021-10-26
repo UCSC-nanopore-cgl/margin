@@ -47,7 +47,7 @@
           "useReadAlleles": true,
           "useReadAllelesInPhasing": true,
           "minAvgBaseQuality": 10,
-          "filterAlignmentsWithMapQBelowThisThreshold": 10,
+          "filterAlignmentsWithMapQBelowThisThreshold": 5,
           "includeSecondaryAlignments": false,
           "includeSupplementaryAlignments": false,
           "pairwiseAlignmentParameters": {
@@ -86,7 +86,7 @@
           "referenceExpansionForSmallVariants": 12,
           "referenceExpansionForStructuralVariants": 512,
           "stitchWithPrimaryReadsOnly": false,
-          "useVariantSelectionAdaptiveSampling": true,
+          "useVariantSelectionAdaptiveSampling": false,
           "variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
           "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
           "minSnpVariantQuality": 0,

@@ -9,12 +9,9 @@
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
-		"onlyUseSNPVCFEntries": false,
-		"indelSizeForSVHandling": 0,
+		"onlyUseSNPVCFEntries": true,
 		"useVariantSelectionAdaptiveSampling": false,
-		"minSnpVariantQuality": 3,
-		"minIndelVariantQuality": 5,
-		"minSvVariantQuality": 10,
+		"minSnpVariantQuality": 0,
 		"updateAllOutputVCFFormatFields": true
 	}
 }
