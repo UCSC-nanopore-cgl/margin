@@ -2211,6 +2211,12 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
         double totalCisH1A1H2A2Support = 0;
         double totalTransH1A2H2A1Support = 0;
 
+
+
+        // get alignment likelihoods
+        stHash *cachedScores = stHash_construct3(rleString_stringKey, rleString_expandedStringEqualKey,
+                                                 (void (*)(void *)) rleString_destruct, free);
+
         // get allele supports
         for (int64_t k = 0; k < readNo; k++) {
             BamChunkReadSubstring *bcrSubstring = stList_get(readSubstrings, k);
@@ -2226,29 +2232,48 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
                 continue;
             }
 
-            SymbolString rS = rleString_constructSymbolString(substring, 0, substring->length,
-                                                              params->polishParams->alphabet,
-                                                              params->polishParams->useRepeatCountsInAlignment,
-                                                              maximumRepeatLengthExcl);
-            StateMachine *sM = bcrSubstring->read->forwardStrand
-                               ? params->polishParams->stateMachineForForwardStrandRead
-                               : params->polishParams->stateMachineForReverseStrandRead;
+            // check cache
+            double *cachedScore;
+            double readSupportA;
+            double readSupportB;
+            if ((cachedScore = stHash_search(cachedScores, substring)) != NULL) {
+                readSupportA = cachedScore[0];
+                readSupportB = cachedScore[1];
+            } else {
+                // otherwise generate scores and save
+                SymbolString rS = rleString_constructSymbolString(substring, 0, substring->length,
+                                                                  params->polishParams->alphabet,
+                                                                  params->polishParams->useRepeatCountsInAlignment,
+                                                                  maximumRepeatLengthExcl);
+                StateMachine *sM = bcrSubstring->read->forwardStrand
+                                   ? params->polishParams->stateMachineForForwardStrandRead
+                                   : params->polishParams->stateMachineForReverseStrandRead;
 
-            // align A
-            stList *anchorPairsA = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
-                                   alleleSymbolStringA.length > params->phaseParams->referenceExpansionForStructuralVariants ?
-                                   getKmerAlignmentAnchors(alleleSymbolStringA, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
-                                   stList_construct();
-            double readSupportA = computeForwardProbability(alleleSymbolStringA, rS, anchorPairsA, params->polishParams->p, sM, 0, 0);
-            stList_destruct(anchorPairsA);
+                // align A
+                stList *anchorPairsA = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
+                                       alleleSymbolStringA.length > params->phaseParams->referenceExpansionForStructuralVariants ?
+                                       getKmerAlignmentAnchors(alleleSymbolStringA, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
+                                       stList_construct();
+                readSupportA = computeForwardProbability(alleleSymbolStringA, rS, anchorPairsA, params->polishParams->p, sM, 0, 0);
 
-            // align B
-            stList *anchorPairsB = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
-                                   alleleSymbolStringB.length > params->phaseParams->referenceExpansionForStructuralVariants ?
-                                   getKmerAlignmentAnchors(alleleSymbolStringB, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
-                                   stList_construct();
-            double readSupportB = computeForwardProbability(alleleSymbolStringB, rS, anchorPairsB, params->polishParams->p, sM, 0, 0);
-            stList_destruct(anchorPairsB);
+                // align B
+                stList *anchorPairsB = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
+                                       alleleSymbolStringB.length > params->phaseParams->referenceExpansionForStructuralVariants ?
+                                       getKmerAlignmentAnchors(alleleSymbolStringB, rS, (uint64_t) params->polishParams->p->diagonalExpansion) :
+                                       stList_construct();
+                readSupportB = computeForwardProbability(alleleSymbolStringB, rS, anchorPairsB, params->polishParams->p, sM, 0, 0);
+
+                // save cached scores
+                cachedScore = st_calloc(2, sizeof(double));
+                cachedScore[0] = readSupportA;
+                cachedScore[1] = readSupportB;
+                stHash_insert(cachedScores, rleString_copy(substring), cachedScore);
+
+                // cleanup
+                symbolString_destruct(rS);
+                stList_destruct(anchorPairsB);
+                stList_destruct(anchorPairsA);
+            }
 
 
             // save to cis and trans
@@ -2262,13 +2287,13 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
             totalTransH1A2H2A1Support += transH1A2H2A1Support;
 
             // cleanup
-            symbolString_destruct(rS);
             rleString_destruct(substring);
         }
 
         // cleanup
         symbolString_destruct(alleleSymbolStringA);
         symbolString_destruct(alleleSymbolStringB);
+        stHash_destruct(cachedScores);
 
         // calculate gt
         int64_t computedGt1 = -1;
@@ -2303,7 +2328,6 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
         }
 
         // update vcf read indices
-        int64_t unMatchedReads = 0;
         stSet *hap1RootVcfEntryReadIndices = stList_get(rootVcfEntry->alleleIdxToReads, computedGt1);
         stSet *hap2RootVcfEntryReadIndices = stList_get(rootVcfEntry->alleleIdxToReads, computedGt2);
         for (int64_t i = 0; i < stList_length(readSubstrings); i++) {
@@ -2315,15 +2339,8 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
                 stSet_insert(hap1RootVcfEntryReadIndices, (void*) readIdx);
             } else if (stSet_search(readNamesBelongingToHap2, bcr->readName) != NULL) {
                 stSet_insert(hap2RootVcfEntryReadIndices, (void*) readIdx);
-            } else {
-                unMatchedReads++;
             }
         }
-        if (unMatchedReads == stList_length(readSubstrings)) {
-            st_logInfo(" %s No reads (out of %"PRId64") were aligned to filtered VCF entry at pos %s:%"PRId64"\n",
-                       logIdentifier, unMatchedReads, rootVcfEntry->refSeqName, rootVcfEntry->rawRefPosInformativeOnly);
-        }
-
     }
 
     // cleanup
