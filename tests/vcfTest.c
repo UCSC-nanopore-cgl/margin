@@ -8,7 +8,8 @@
 #include "margin.h"
 
 
-static char* PARAMS = "../params/ont/r9.4/allParams.np.human.r94-g344.json";
+static char* PARAMS = "../params/base_params.json";
+static char* PARAMS_FOR_RLE = "../params/polish/ont/r9.4/allParams.np.human.r94-g344.json";
 static char* VCF1 = "../tests/data/vcfTest/vcfTest1.vcf";
 static char* VCF1_GZ = "../tests/data/vcfTest/vcfTest1.vcf.gz";
 static char* VCF2 = "../tests/data/vcfTest/vcfTest2.vcf";
@@ -38,6 +39,18 @@ void assertVcfEntryCorrect(CuTest *testCase, VcfEntry *entry, char *ref, int64_t
     CuAssertTrue(testCase, rleString_eq(rleA2, getVcfEntryAlleleH2(entry)));
     rleString_destruct(rleA1);
     rleString_destruct(rleA2);
+}
+
+void assertVcfEntryCorrect2(CuTest *testCase, VcfEntry *entry, char *ref, int64_t pos, char *allele1, char *allele2, bool indel, bool rle) {
+    RleString *rleA1 = rle ? rleString_construct(allele1) : rleString_construct_no_rle(allele1);
+    RleString *rleA2 = rle ? rleString_construct(allele2) : rleString_construct_no_rle(allele2);
+    CuAssertTrue(testCase, stString_eq(ref, entry->refSeqName));
+    CuAssertTrue(testCase, pos == entry->refPos);
+    CuAssertTrue(testCase, rleString_eq(rleA1, getVcfEntryAlleleH1(entry)));
+    CuAssertTrue(testCase, rleString_eq(rleA2, getVcfEntryAlleleH2(entry)));
+    rleString_destruct(rleA1);
+    rleString_destruct(rleA2);
+    CuAssertTrue(testCase, entry->isIndel == indel);
 }
 
 void test_vcfParseRLE(CuTest *testCase) {
@@ -98,16 +111,16 @@ void test_vcfParseRLESNP(CuTest *testCase) {
     stHash *vcfEntryMap = parseVcf(VCF1, params);
     stList *vcfEntries = stHash_search(vcfEntryMap, "chr20");
 
-    CuAssertTrue(testCase, stList_length(vcfEntries) == 4);
-    assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 0), "chr20", 1000, "G", "A", RLE);
-    //assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 1), "chr20", 2000, "T", "CCC", RLE); // indel
-    assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 1), "chr20", 3000, "C", "A", RLE);
-    assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 2), "chr20", 4000, "T", "C", RLE);
-    //assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 4), "chr20", 5000, "GATTACA", "A", RLE); // indel
-    //assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 5), "chr20", 6000, "T", "TC", RLE); // indel
+    CuAssertTrue(testCase, stList_length(vcfEntries) == 7);
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 0), "chr20", 1000, "G", "A", false, RLE);
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 1), "chr20", 2000, "T", "CCC", true, RLE); // indel
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 2), "chr20", 3000, "C", "A", false, RLE);
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 3), "chr20", 4000, "T", "C", false, RLE);
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 4), "chr20", 5000, "GATTACA", "A", true, RLE); // indel
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 5), "chr20", 6000, "T", "TC", true, RLE); // indel
     //assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 6), "chr20", 7000, "G", "G", RLE); //homozygous
     //assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 7), "chr20", 7000, "A", "A", RLE); //homozygous
-    assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 3), "chr20", 250000000, "A", "G", RLE);
+    assertVcfEntryCorrect2(testCase, stList_get(vcfEntries, 6), "chr20", 250000000, "A", "G", false, RLE);
 
     stHash_destruct(vcfEntryMap);
     params_destruct(params);
@@ -118,6 +131,7 @@ void test_vcfParseRLEHOM(CuTest *testCase) {
     Params *params = params_readParams(PARAMS);
     params->polishParams->useRunLengthEncoding = RLE;
     params->phaseParams->includeHomozygousVCFEntries = TRUE;
+    params->phaseParams->onlyUseSNPVCFEntries = FALSE;
 
     stHash *vcfEntryMap = parseVcf(VCF1, params);
     stList *vcfEntries = stHash_search(vcfEntryMap, "chr20");
@@ -207,7 +221,6 @@ void test_vcfAlleleSubstrings(CuTest *testCase) {
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 8), "vcfTest2", 96, "CCC", "A", RLE);
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 9), "vcfTest2", 126, "A", "G", RLE);
     assertVcfEntryCorrect(testCase, stList_get(vcfEntries, 10), "vcfTest2", 127, "C", "A", RLE);
-    stList_destruct(vcfEntries);
 
     // get substrings
     // this conversion is to put things in poa-space, which should be countered by allele substrings
@@ -341,7 +354,9 @@ void test_vcfBinarySearchForVcfEntryStartIdx(CuTest *testCase) {
 void test_vcfAdaptiveSampling1(CuTest *testCase) {
     Params *params = params_readParams(PARAMS);
     params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold = 30;
-    params->phaseParams->minVariantQuality = 10;
+    params->phaseParams->minSnpVariantQuality = 10;
+    params->phaseParams->minIndelVariantQuality = 10;
+    params->phaseParams->minSvVariantQuality = 10;
     params->phaseParams->useVariantSelectionAdaptiveSampling = true;
     params->phaseParams->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
 
@@ -383,7 +398,9 @@ void test_vcfAdaptiveSampling1(CuTest *testCase) {
 void test_vcfAdaptiveSampling2(CuTest *testCase) {
     Params *params = params_readParams(PARAMS);
     params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold = 30;
-    params->phaseParams->minVariantQuality = 30;
+    params->phaseParams->minSnpVariantQuality = 30;
+    params->phaseParams->minIndelVariantQuality = 30;
+    params->phaseParams->minSvVariantQuality = 30;
     params->phaseParams->useVariantSelectionAdaptiveSampling = true;
     params->phaseParams->variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant = 1000;
 

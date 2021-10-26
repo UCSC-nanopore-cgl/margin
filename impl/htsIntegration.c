@@ -1207,7 +1207,11 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
                                          bamChunk->chunkOverlapStart, bamChunk->chunkOverlapEnd);
     }
     char *haplotaggedBamOutFile = stString_print("%s%s.haplotagged.bam", outputBamFileBase, chunkIdentifier);
-    st_logInfo(" %s Writing BAM haplotype output to: %s \n", logIdentifier, haplotaggedBamOutFile);
+    if (bamChunk == NULL) {
+        st_logCritical("> Writing haplotagged BAM to %s \n", logIdentifier, haplotaggedBamOutFile);
+    } else {
+        st_logInfo(" %s Writing chunk haplotagged BAM to: %s \n", logIdentifier, haplotaggedBamOutFile);
+    }
 
     int64_t h1Count = 0;
     int64_t h2Count = 0;

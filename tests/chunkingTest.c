@@ -8,7 +8,7 @@
 #include "CuTest.h"
 #include "margin.h"
 
-#define INPUT_PARAMS "../params/misc/allParams.no_rle.json"
+#define INPUT_PARAMS "../params/polish/misc/allParams.no_rle.json"
 #define INPUT_BAM "../tests/data/chunkingTest/chunkingTest.bam"
 #define INPUT_MVVP_BAM "../tests/data/chunkingTest/chunkingTestMVVP.bam"
 #define INPUT_MVVP_VCF "../tests/data/chunkingTest/chunkingTestMVVP.vcf"

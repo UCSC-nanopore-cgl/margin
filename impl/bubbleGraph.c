@@ -2231,6 +2231,7 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
                 readIsHap1 = FALSE;
             } else {
                 //read is untagged
+                rleString_destruct(substring);
                 continue;
             }
 
@@ -2271,7 +2272,12 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
 
             // cleanup
             symbolString_destruct(rS);
+            rleString_destruct(substring);
         }
+
+        // cleanup
+        symbolString_destruct(alleleSymbolStringA);
+        symbolString_destruct(alleleSymbolStringB);
 
         // calculate gt
         int64_t computedGt1 = -1;
@@ -2329,8 +2335,11 @@ void bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(stList *bamChunkReads, stLi
 
     }
 
+    // cleanup
     free(logIdentifier);
     stHash_destruct(vcfEntriesToReadSubstrings);
+    stSet_destruct(readNamesBelongingToHap1);
+    stSet_destruct(readNamesBelongingToHap2);
 }
 
 

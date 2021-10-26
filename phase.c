@@ -489,14 +489,13 @@ int phase_main(int argc, char *argv[]) {
     outputChunkers_destruct(outputChunkers);
     free(tds);
     tds = getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime);
-    st_logCritical("> Merge cleanup took %s\n", tds);
+    st_logInfo("> Merge cleanup took %s\n", tds);
     free(tds);
 
     // maybe write final haplotyped bams
     if (shouldOutputHaplotaggedBam) {
         // logging
         time_t hapBamStart = time(NULL);
-        st_logInfo("> Writing final haplotyped BAMs\n");
 
         // get all reads
         stSet *allReadIdsForHaplotypingHap1 = stSet_construct3(stHash_stringKey, stHash_stringEqualKey, NULL);
@@ -514,7 +513,7 @@ int phase_main(int argc, char *argv[]) {
 
         // loggit
         char *hapBamTDS = getTimeDescriptorFromSeconds(time(NULL) - hapBamStart);
-        st_logCritical("> Wrote haplotyped bams in %s\n", hapBamTDS);
+        st_logCritical("> Wrote haplotagged BAM in %s\n", hapBamTDS);
 
         // cleanup
         free(hapBamTDS);

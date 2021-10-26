@@ -3,17 +3,17 @@
 	"polish": {
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
-		"maxDepth": 64
+		"filterAlignmentsWithMapQBelowThisThreshold": 5,
+		"maxDepth": 32
 	},
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": false,
-		"indelSizeForSVHandling": 32,
-		"referenceExpansionForStructuralVariants": 512,
+		"indelSizeForSVHandling": 0,
 		"useVariantSelectionAdaptiveSampling": false,
-		"minSnpVariantQuality": 0,
-		"minIndelVariantQuality": 10,
+		"minSnpVariantQuality": 3,
+		"minIndelVariantQuality": 5,
 		"minSvVariantQuality": 10,
 		"updateAllOutputVCFFormatFields": true
 	}

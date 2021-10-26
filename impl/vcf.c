@@ -373,6 +373,9 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
     }
     assert(stList_length(unusableFilteredVcfEntries) == 0);
     stList_sort(filteredRegionEntries, vcfEntry_positionCmp);
+
+    // cleanup
+    stList_destruct(unusableFilteredVcfEntries);
 }
 
 
