@@ -73,6 +73,7 @@
 	"phase" : {
 		  "maxNotSumTransitions" : true,
 		  "minPartitionsInAColumn" : 100,
+		  "maxPartitionsInAColumn" : 100,
 		  "minPosteriorProbabilityForPartition" : 0.0,
 		  "maxCoverageDepth" : 64,
 		  "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 2,

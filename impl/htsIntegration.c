@@ -1208,7 +1208,7 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
     }
     char *haplotaggedBamOutFile = stString_print("%s%s.haplotagged.bam", outputBamFileBase, chunkIdentifier);
     if (bamChunk == NULL) {
-        st_logCritical("> Writing haplotagged BAM to %s \n", logIdentifier, haplotaggedBamOutFile);
+        st_logCritical("> Writing haplotagged BAM to %s \n", haplotaggedBamOutFile);
     } else {
         st_logInfo(" %s Writing chunk haplotagged BAM to: %s \n", logIdentifier, haplotaggedBamOutFile);
     }
