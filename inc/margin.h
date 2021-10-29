@@ -309,6 +309,9 @@ struct _stRPHmmParameters {
     // ratio of discordant reads to all reads for phase set determination
     double phasesetMaxDiscordantRatio;
 
+    // number of required reads spanning adjacent hets to maintain phase set
+    int64_t phasesetMinSpanningReads;
+
 	// Number of iterations to search for bubbles (and remove bubbles with strand or read split below some threshold)
 	int64_t bubbleFindingIterations;
 

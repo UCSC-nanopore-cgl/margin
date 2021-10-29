@@ -96,6 +96,7 @@
           "updateAllOutputVCFFormatFields": true,
           "phasesetMinBinomialReadSplitLikelihood": 0.0,
           "phasesetMaxDiscordantRatio": 0.5,
+          "phasesetMinSpanningReads": 1,
           "bubbleFindingIterations": 1,
           "bubbleMinBinomialStrandLikelihood": 0.05,
           "bubbleMinBinomialReadSplitLikelihood": 0.05

@@ -907,10 +907,10 @@ void writePhasedVcf(char *inputVcfFile, char *regionStr, char *outputVcfFile, ch
             newPhaseSetReason = stString_print("NoHet\t");
         } else if (determinedHetConcordancy) {
             //TODO switched to AND not OR for primary phasing detection
-            if (hcpv1 == 0 && hcpv2 == 0) {
+            if (hcpv1 + hcpv2 < params->phaseParams->phasesetMinSpanningReads) {
                 newPhaseSet = TRUE;
-                st_logInfo("  Calling new phase set at %s:%"PRId64" because missing concordancy (H1:%"PRId32", H2:%"PRId32")\n",
-                        chrom, pos, hcpv1, hcpv2);
+                st_logInfo("  Calling new phase set at %s:%"PRId64" because missing concordancy (H1:%"PRId32"+H2:%"PRId32"<%"PRId64")\n",
+                        chrom, pos, hcpv1, hcpv2, params->phaseParams->phasesetMinSpanningReads);
                 newPhaseSetReason = stString_print("MissingConcordancy\tH1-%"PRId32"_H2-%"PRId32, hcpv1, hcpv2);
             } else if (binomialPValue(hcpv1 + hcpv2, hcpv1) < params->phaseParams->phasesetMinBinomialReadSplitLikelihood) {
                 newPhaseSet = TRUE;

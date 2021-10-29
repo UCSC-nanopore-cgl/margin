@@ -47,6 +47,7 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->updateAllOutputVCFFormatFields = TRUE;
     params->phasesetMinBinomialReadSplitLikelihood = .0001;
     params->phasesetMaxDiscordantRatio = .1;
+    params->phasesetMinSpanningReads = 1;
     params->bubbleFindingIterations = 1;
     params->bubbleMinBinomialStrandLikelihood = .05;
     params->bubbleMinBinomialReadSplitLikelihood = .05;
@@ -90,6 +91,7 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->updateAllOutputVCFFormatFields = toCopy->updateAllOutputVCFFormatFields;
     params->phasesetMinBinomialReadSplitLikelihood = toCopy->phasesetMinBinomialReadSplitLikelihood;
     params->phasesetMaxDiscordantRatio = toCopy->phasesetMaxDiscordantRatio;
+    params->phasesetMinSpanningReads = toCopy->phasesetMinSpanningReads;
     params->bubbleFindingIterations = toCopy->bubbleFindingIterations;
     params->bubbleMinBinomialStrandLikelihood = toCopy->bubbleMinBinomialStrandLikelihood;
     params->bubbleMinBinomialReadSplitLikelihood = toCopy->bubbleMinBinomialReadSplitLikelihood;
@@ -159,6 +161,8 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->phasesetMinBinomialReadSplitLikelihood = stJson_parseFloat(js, tokens, ++i);
         } else if (strcmp(keyString, "phasesetMaxDiscordantRatio") == 0) {
             params->phasesetMaxDiscordantRatio = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "phasesetMinSpanningReads") == 0) {
+            params->phasesetMinSpanningReads = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "bubbleFindingIterations") == 0) {
             params->bubbleFindingIterations = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "bubbleMinBinomialStrandLikelihood") == 0) {
