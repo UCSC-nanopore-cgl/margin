@@ -481,7 +481,7 @@ int phase_main(int argc, char *argv[]) {
             chunkWasSwitched);
     time_t mergeEndTime = time(NULL);
     char *tds = getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime);
-    st_logCritical("> Merging took %s\n", tds);
+    st_logCritical("  Merging took %s\n", tds);
     outputChunkers_destruct(outputChunkers);
     free(tds);
     tds = getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime);

@@ -1595,7 +1595,7 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
     char *referenceSequenceName = stString_copy(chunks[0]->seqName);
     stList *contigChunkPositions = stList_construct3(0, (void(*)(void*))stIntTuple_destruct);
     stList *contigNames = stList_construct3(0, (void(*)(void*))free);
-    st_logCritical("> Merging results from %"PRIu64" chunks.\n", chunkCount);
+    st_logInfo("  Merging results from %"PRIu64" chunks.\n", chunkCount);
 
     // find which chunks belong to each contig
     for (int64_t chunkIdx = 1; chunkIdx <= chunkCount; chunkIdx++) {
