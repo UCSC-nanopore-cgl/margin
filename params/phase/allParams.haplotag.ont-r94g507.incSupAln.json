@@ -1,0 +1,18 @@
+{
+	"include" : "../base_params.json",
+	"polish": {
+		"useRunLengthEncoding" : false,
+		"useRepeatCountsInAlignment": false,
+		"maxDepth": 64,
+		"includeSupplementaryAlignments": true
+	},
+	"phase" : {
+		"includeHomozygousVCFEntries": false,
+		"onlyUsePassVCFEntries": true,
+		"onlyUseSNPVCFEntries": false,
+		"useVariantSelectionAdaptiveSampling": false,
+		"minSnpVariantQuality": 3,
+		"minIndelVariantQuality": 5,
+		"updateAllOutputVCFFormatFields": true
+	}
+}

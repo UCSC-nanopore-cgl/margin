@@ -291,8 +291,8 @@ stHash *getReadNames(stList *readPartitionLines) {
     for (int64_t i = 1; i < stList_length(readPartitionLines); i++) {
         char *line = stList_get(readPartitionLines, i);
         stList *tokens = stString_splitByString(line, ",");
-        assert(stHash_search(readNames, stList_get(tokens, 0)) ==
-               NULL); // Sanity check that read name is not present twice
+        char *readName = stList_get(tokens, 0);
+        assert(stHash_search(readNames, readName) == NULL); // Sanity check that read name is not present twice
         double *prob = st_calloc(1, sizeof(double));
         *prob = strtof(stList_peek(tokens), NULL); // Get the log prob of the read being in the partition
         stHash_insert(readNames, stList_removeFirst(tokens), prob); // First field is the read name
@@ -1109,7 +1109,9 @@ outputChunkers_construct(int64_t noOfOutputChunkers, Params *params, char *outpu
         //TODO if inMemoryBuffers and !shouldOutputReadPartition, this results in shouldOutputReadPartition
         if (outputReadPartitionFile == NULL) {
             outputReadPartitionFileForStitching = "temp_read_phasing_file.csv";
-            st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFileForStitching);
+            if (!inMemoryBuffers) {
+                st_logInfo("> Making a temporary file to store read phasing in: %s\n", outputReadPartitionFileForStitching);
+            }
         } else {
             outputReadPartitionFileForStitching = outputReadPartitionFile;
         }
