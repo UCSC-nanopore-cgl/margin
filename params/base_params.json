@@ -50,6 +50,7 @@
           "filterAlignmentsWithMapQBelowThisThreshold": 5,
           "includeSecondaryAlignments": false,
           "includeSupplementaryAlignments": false,
+          "synchronizeSupplementaryAlignments": false,
           "pairwiseAlignmentParameters": {
                 "threshold": 0.01,
                 "minDiagsBetweenTraceBack": 5000,

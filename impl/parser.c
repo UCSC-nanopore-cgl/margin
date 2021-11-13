@@ -263,6 +263,7 @@ PolishParams  *polishParams_constructEmpty() {
     params->excessiveDepthThreshold = 512;
     params->includeSecondaryAlignments = FALSE;
     params->includeSupplementaryAlignments = FALSE;
+    params->synchronizeSupplementaryAlignments = FALSE;
     params->filterAlignmentsWithMapQBelowThisThreshold = 10;
     params->candidateVariantWeight = 0.2;
     params->columnAnchorTrim = 5;
@@ -397,6 +398,8 @@ void polishParams_jsonParse(PolishParams *params, char *buf, size_t r) {
             params->includeSecondaryAlignments = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "includeSupplementaryAlignments") == 0) {
             params->includeSupplementaryAlignments = stJson_parseBool(js, tokens, ++tokenIndex);
+        } else if (strcmp(keyString, "synchronizeSupplementaryAlignments") == 0) {
+            params->synchronizeSupplementaryAlignments = stJson_parseBool(js, tokens, ++tokenIndex);
         } else if (strcmp(keyString, "filterAlignmentsWithMapQBelowThisThreshold") == 0) {
             if (stJson_parseInt(js, tokens, ++tokenIndex) < 0) {
                 st_errAbort("ERROR: filterAlignmentsWithMapQBelowThisThreshold parameter must zero or greater\n");

@@ -4,7 +4,8 @@
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
 		"maxDepth": 64,
-		"includeSupplementaryAlignments": true
+		"includeSupplementaryAlignments": true,
+        "synchronizeSupplementaryAlignments": true
 	},
 	"phase" : {
 		"includeHomozygousVCFEntries": false,

@@ -570,6 +570,8 @@ struct _polishParams {
 	uint64_t excessiveDepthThreshold; // depth threshold where we randomly discard reads on initial reading
 	bool includeSecondaryAlignments;
 	bool includeSupplementaryAlignments;
+	// force all supplementary alignments of the same read to have the same haplotype
+	bool synchronizeSupplementaryAlignments;
     uint64_t filterAlignmentsWithMapQBelowThisThreshold;
     // other configuration
     double candidateVariantWeight; // The fraction (from 0 to 1) of the average position coverage needed to define a candidate variant
