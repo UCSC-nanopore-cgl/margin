@@ -1216,6 +1216,97 @@ bool downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(int
 }
 
 
+void synchronizeReadHaplotags(char *inputBamLocation, stSet *readsInH1, stSet *readsInH2, 
+							  Params *params, char *logIdentifier,
+							  stHash *readNamesToMappingLenHp1,
+							  stHash *readNamesToMappingLenHp2) {
+
+	st_logCritical("> Synchronizing read haplotags\n");
+
+    // input file management
+    samFile *in = hts_open(inputBamLocation, "r");
+    hts_idx_t *idx = NULL;
+    hts_itr_multi_t *iter = NULL;
+    if (in == NULL) {
+        st_errAbort("ERROR: Cannot open bam file %s\n", inputBamLocation);
+    }
+    // bam index
+    if ((idx = sam_index_load(in, inputBamLocation)) == 0) {
+        st_errAbort("ERROR: Cannot open index for bam file %s\n", inputBamLocation);
+    }
+    bam_hdr_t *bamHdr = sam_hdr_read(in);
+    bam1_t *aln = bam_init1();
+
+    // thread stuff
+    htsThreadPool threadPool = {NULL, 0};
+    # ifdef _OPENMP
+    int tc = omp_get_max_threads();
+    # else
+    int tc = 1;
+    # endif
+    if (!(threadPool.pool = hts_tpool_init(tc))) {
+        fprintf(stderr, "Error creating thread pool\n");
+    }
+    hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool);
+
+    //stHash *readNamesToMappingLenHp1 = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, free);
+    //stHash *readNamesToMappingLenHp2 = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, free);
+
+    // fetch alignments (either all reads or without reads)
+    while (sam_read1(in,bamHdr,aln) >= 0) {
+        // basic filtering (no read length, no cigar)
+        if (aln->core.l_qseq <= 0) continue;
+        if (aln->core.n_cigar == 0) continue;
+        if ((aln->core.flag & (uint16_t) 0x4) != 0)
+            continue; //unaligned
+        if (!params->polishParams->includeSecondaryAlignments && (aln->core.flag & (uint16_t) 0x100) != 0)
+            continue; //secondary
+        if (!params->polishParams->includeSupplementaryAlignments && isSupplementaryAlignment(aln))
+            continue; //supplementary
+
+        char *fragmentName = getReadName(bamHdr, aln);
+		int32_t seqLength = aln->core.l_qseq;
+		char *originalReadName = bam_get_qname(aln);
+
+        bool inH1 = stSet_search(readsInH1, fragmentName);
+        bool inH2 = stSet_search(readsInH2, fragmentName);
+
+		stHash* hashSet = NULL;
+		if (inH1 & !inH2)
+		{
+			hashSet = readNamesToMappingLenHp1;
+		}
+		else if (!inH1 & inH2)
+		{
+			hashSet = readNamesToMappingLenHp2;
+		}
+
+		if (hashSet)
+		{
+			/*int32_t* test = stHash_search(hashSet, originalReadName);
+			if (test)
+			{
+				st_logCritical("Exists: %s, %d\n", originalReadName, *test);
+			}*/
+
+			int32_t* val = stHash_search(hashSet, originalReadName);
+			int32_t* newVal = st_calloc(1, sizeof(int32_t));
+
+			*newVal = val ? *val + seqLength : seqLength;
+			stHash_insert(hashSet, stString_copy(originalReadName), newVal);
+
+			//st_logCritical("%s %d\n", originalReadName, *newVal);
+			//st_logCritical("%s %s %d\n", originalReadName, fragmentName, seqLength);
+		}
+    }
+
+    hts_idx_destroy(idx);
+    bam_destroy1(aln);
+    bam_hdr_destroy(bamHdr);
+    sam_close(in);
+    hts_tpool_destroy(threadPool.pool);
+}
+
 void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *regionStr, stSet *readsInH1, stSet *readsInH2,
                          BamChunk *bamChunk, Params *params, char *logIdentifier) {
     /*
@@ -1223,6 +1314,16 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
      */
 
     // Prep
+	
+	bool synchronizeReads = params->polishParams->synchronizeSupplementaryAlignments;
+	
+    stHash *readNamesToMappingLenHp1 = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, free);
+    stHash *readNamesToMappingLenHp2 = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, free);
+	if (synchronizeReads)
+	{
+		synchronizeReadHaplotags(inputBamLocation, readsInH1, readsInH2, params, logIdentifier, 
+								 readNamesToMappingLenHp1, readNamesToMappingLenHp2);
+	}
 
     char *chunkIdentifier = NULL;
     if (bamChunk == NULL) {
@@ -1331,33 +1432,48 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
 
         char *readName = getReadName(bamHdr, aln);
         bool has_tag = bam_aux_get(aln, "HP") != NULL;
-        bool inH1 = stSet_search(readsInH1, readName);
-        bool inH2 = stSet_search(readsInH2, readName);
-        if (inH1 & !inH2) {
-            int32_t ht = 1;
-            if (has_tag) {
-                bam_aux_update_int(aln, "HP", ht);
-            } else {
-                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
-            }
-            h1Count++;
-        } else if (!inH1 & inH2) {
-            int32_t ht = 2;
-            if (has_tag) {
-                bam_aux_update_int(aln, "HP", ht);
-            } else {
-                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
-            }
-            h2Count++;
-        } else {
-            int32_t ht = 0;
-            if (has_tag) {
-                bam_aux_update_int(aln, "HP", ht);
-            } else {
-                bam_aux_append(aln, "HP", 'i', sizeof(ht), (uint8_t*) &ht);
-            }
-            h0Count++;
-        }
+		int32_t haplotype = 0;
+
+		if (synchronizeReads)
+		{
+			char *originalReadName = bam_get_qname(aln);
+			int32_t* mappedLengthHp1 = stHash_search(readNamesToMappingLenHp1, originalReadName);
+			int32_t* mappedLengthHp2 = stHash_search(readNamesToMappingLenHp2, originalReadName);
+			int32_t lenHp1 = mappedLengthHp1 ? *mappedLengthHp1 : 0;
+			int32_t lenHp2 = mappedLengthHp2 ? *mappedLengthHp2 : 0;
+
+    		//st_logCritical("%s %d %d\n", originalReadName, lenHp1, lenHp2);
+
+			if (lenHp1 > lenHp2) {
+				haplotype = 1;
+				h1Count++;
+			} else if (lenHp1 < lenHp2) {
+				haplotype = 2;
+				h2Count++;
+			} else {
+				h0Count++;
+			}
+		}
+		else
+		{
+			bool inH1 = stSet_search(readsInH1, readName);
+			bool inH2 = stSet_search(readsInH2, readName);
+			if (inH1 & !inH2) {
+				haplotype = 1;
+				h1Count++;
+			} else if (!inH1 & inH2) {
+				haplotype = 2;
+				h2Count++;
+			} else {
+				h0Count++;
+			}
+		}
+
+		if (has_tag) {
+			bam_aux_update_int(aln, "HP", haplotype);
+		} else {
+			bam_aux_append(aln, "HP", 'i', sizeof(haplotype), (uint8_t*) &haplotype);
+		}
         r = sam_write1(out, bamHdr, aln);
     }
     st_logCritical(" %s Separated reads with divisions: H1 %"PRId64", H2 %"PRId64", and H0 %"PRId64"\n", logIdentifier,
@@ -1377,6 +1493,8 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
     hts_tpool_destroy(threadPool.pool);
     free(chunkIdentifier);
     free(haplotaggedBamOutFile);
+	stHash_destruct(readNamesToMappingLenHp1);
+	stHash_destruct(readNamesToMappingLenHp2);
 }
 
 
