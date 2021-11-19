@@ -3,7 +3,7 @@
         "polish": {
                 "useRunLengthEncoding" : false,
                 "useRepeatCountsInAlignment": false,
-                "maxDepth": 64
+                "maxDepth": 32
         },
         "phase" : {
                 "includeHomozygousVCFEntries": false,
@@ -13,7 +13,7 @@
                 "useVariantSelectionAdaptiveSampling": true,
                 "variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
                 "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
-                "minSnpVariantQuality": 5,
+                "minSnpVariantQuality": 7,
                 "updateAllOutputVCFFormatFields": true
         }
 }
