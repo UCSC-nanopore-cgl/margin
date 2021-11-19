@@ -12,10 +12,10 @@
 		"onlyUseSNPVCFEntries": false,
 		"indelSizeForSVHandling": 0,
 		"useVariantSelectionAdaptiveSampling": true,
-		"variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
+		"variantSelectionAdaptiveSamplingPrimaryThreshold": 15,
 		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
-		"minSnpVariantQuality": 0,
-		"minIndelVariantQuality": 5,
+		"minSnpVariantQuality": 10,
+		"minIndelVariantQuality": 15,
 		"updateAllOutputVCFFormatFields": true
 	}
 }
