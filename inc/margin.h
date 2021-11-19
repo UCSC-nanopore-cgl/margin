@@ -253,6 +253,13 @@ struct _stRPHmmParameters {
 	int64_t maxCoverageDepth;
 	int64_t minReadCoverageToSupportPhasingBetweenHeterozygousSites;
 
+	// Read depth to use for phasing is average read depth (for full input) times this factor
+	double readDepthFactor;
+	// ..unless it is below this param
+	int64_t minReadDepth;
+	// ..or above this param
+	int64_t maxReadDepth;
+
 	// Ensure symmetry in the HMM such that the inverted partition of each partition is included in the HMM
 	bool includeInvertedPartitions;
 
@@ -1073,6 +1080,7 @@ typedef struct _bamChunker {
 	stList *chunks;
 	uint64_t chunkCount;
 	stHash *readEnumerator;
+	double avgDepth;
 } BamChunker;
 
 typedef struct _bamChunk {

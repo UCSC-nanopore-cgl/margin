@@ -3,11 +3,12 @@
 	"polish": {
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
-		"maxDepth": 64,
 		"includeSupplementaryAlignments": true,
         "synchronizeSupplementaryAlignments": true
 	},
 	"phase" : {
+		"minReadDepth": 64,
+		"maxReadDepth": 64,
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,

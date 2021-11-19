@@ -233,6 +233,7 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
     chunker->chunks = stList_construct3(0, (void *) bamChunk_destruct);
     chunker->chunkCount = 0;
     chunker->readEnumerator = stHash_construct3(stHash_stringKey, stHash_stringEqualKey, free, NULL);
+    chunker->avgDepth = 0;
     int64_t readIdx = 1;
 
     // file initialization
@@ -283,6 +284,10 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
             st_errAbort("ERROR: Cannot open iterator for region %s for bam file %s\n", region[0], bamFile);
         }
     }
+
+    // for calculating average depth
+    int64_t totalDepth = 0;
+    int64_t nonzeroPositionCount = 0;
 
     // list of chunk boundaries
     char *currentContig = NULL;
@@ -343,10 +348,23 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
         } else {
             // new contig (this should never happen if we're filtering by region)
             assert(!filterByRegion);
+
+            // save chunks
             int64_t savedChunkCount = saveContigChunks(chunker->chunks, chunker, currentContig,
                                                        contigStartPos, contigEndPos, chunkSize, chunkBoundary,
                                                        estimatedChunkDepths);
             chunker->chunkCount += savedChunkCount;
+            // save depth
+            for (int64_t d = 0; d < stList_length(estimatedChunkDepths); d++) {
+                int64_t depth = (int64_t) stList_get(estimatedChunkDepths, d);
+                assert(depth >= 0);
+                if (depth > 0) {
+                    totalDepth += depth;
+                    nonzeroPositionCount += 1;
+                }
+            }
+
+            // cleanup and iterate
             free(currentContig);
             currentContig = stString_copy(contig);
             contigStartPos = readStartPos;
@@ -369,15 +387,30 @@ BamChunker *bamChunker_construct2(char *bamFile, char *regionStr, stSet *validCo
             contigStartPos = (contigStartPos < regionStart ? regionStart : contigStartPos);
             contigEndPos = (contigEndPos > regionEnd ? regionEnd : contigEndPos);
         }
+        // save chunks
         int64_t savedChunkCount = saveContigChunks(chunker->chunks, chunker, currentContig,
                                                    contigStartPos, contigEndPos, chunkSize, chunkBoundary,
                                                    estimatedChunkDepths);
         chunker->chunkCount += savedChunkCount;
+        // save depth
+        for (int64_t d = 0; d < stList_length(estimatedChunkDepths); d++) {
+            int64_t depth = (int64_t) stList_get(estimatedChunkDepths, d);
+            assert(depth >= 0);
+            if (depth > 0) {
+                totalDepth += depth;
+                nonzeroPositionCount += 1;
+            }
+        }
+        // cleanup
         free(currentContig);
     }
 
     // sanity check
     assert(stList_length(chunker->chunks) == chunker->chunkCount);
+
+    // store depth
+    chunker->avgDepth = 1.0 * totalDepth / nonzeroPositionCount;
+    st_logInfo("  Calculated average depth of %.3f from %"PRId64" nonzero positions with %"PRId64" total positional depth\n", chunker->avgDepth, nonzeroPositionCount, totalDepth);
 
     // shut everything down
     if (regionStr != NULL) {

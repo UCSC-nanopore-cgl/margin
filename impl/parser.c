@@ -30,6 +30,9 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->includeAncestorSubProb = true;
     params->minPhredScoreForHaplotypePartition = 0;
     params->stitchWithPrimaryReadsOnly = TRUE;
+    params->readDepthFactor = 1.0;
+    params->minReadDepth = 24;
+    params->maxReadDepth = 72;
 
     // bubble parameters
     params->includeHomozygousVCFEntries = FALSE;
@@ -74,6 +77,9 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->includeAncestorSubProb = toCopy->includeAncestorSubProb;
     params->minPhredScoreForHaplotypePartition = toCopy->minPhredScoreForHaplotypePartition;
     params->stitchWithPrimaryReadsOnly = toCopy->stitchWithPrimaryReadsOnly;
+    params->readDepthFactor = toCopy->readDepthFactor;
+    params->minReadDepth = toCopy->minReadDepth;
+    params->maxReadDepth = toCopy->maxReadDepth;
 
     // bubble parameters
     params->includeHomozygousVCFEntries = toCopy->includeHomozygousVCFEntries;
@@ -110,7 +116,6 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
     for (int64_t i = 1; i < tokenNumber; i++) {
         jsmntok_t key = tokens[i];
         char *keyString = stJson_token_tostr(js, &key);
-
         if (strcmp(keyString, "maxNotSumTransitions") == 0) {
             params->maxNotSumTransitions = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "minPartitionsInAColumn") == 0) {
@@ -123,6 +128,12 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->maxCoverageDepth = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "minReadCoverageToSupportPhasingBetweenHeterozygousSites") == 0) {
             params->minReadCoverageToSupportPhasingBetweenHeterozygousSites = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "readDepthFactor") == 0) {
+            params->readDepthFactor = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "minReadDepth") == 0) {
+            params->minReadDepth = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "maxReadDepth") == 0) {
+            params->maxReadDepth = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "includeInvertedPartitions") == 0) {
             params->includeInvertedPartitions = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "roundsOfIterativeRefinement") == 0) {

@@ -4,11 +4,12 @@
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
 		"filterAlignmentsWithMapQBelowThisThreshold": 10,
-		"maxDepth": 32,
 		"includeSupplementaryAlignments": true,
 		"synchronizeSupplementaryAlignments": true
 	},
 	"phase" : {
+		"minReadDepth": 32,
+		"maxReadDepth": 32,
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": false,

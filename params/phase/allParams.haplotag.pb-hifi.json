@@ -3,10 +3,11 @@
 	"polish": {
 		"useRunLengthEncoding" : false,
 		"useRepeatCountsInAlignment": false,
-		"filterAlignmentsWithMapQBelowThisThreshold": 10,
-		"maxDepth": 32
+		"filterAlignmentsWithMapQBelowThisThreshold": 10
 	},
 	"phase" : {
+		"minReadDepth": 32,
+		"maxReadDepth": 32,
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": false,

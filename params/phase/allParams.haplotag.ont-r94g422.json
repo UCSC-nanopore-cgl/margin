@@ -2,10 +2,11 @@
 	"include" : "../base_params.json",
 	"polish": {
 		"useRunLengthEncoding" : false,
-		"useRepeatCountsInAlignment": false,
-		"maxDepth": 64
+		"useRepeatCountsInAlignment": false
 	},
 	"phase" : {
+		"minReadDepth": 64,
+		"maxReadDepth": 64,
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
 		"onlyUseSNPVCFEntries": true,

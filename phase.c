@@ -201,13 +201,6 @@ int phase_main(int argc, char *argv[]) {
     st_logCritical("> Parsing model parameters from file: %s\n", paramsFile);
     Params *params = params_readParams(paramsFile);
 
-    // update depth (if set)
-    if (maxDepth >= 0) {
-        st_logCritical("> Changing maxDepth parameter from %"PRId64" to %"PRId64"\n", params->polishParams->maxDepth,
-                       maxDepth);
-        params->polishParams->maxDepth = (uint64_t) maxDepth;
-    }
-
     // Print a report of the parsed parameters
     if (st_getLogLevel() == debug) {
         params_printParameters(params, stderr);
@@ -240,6 +233,23 @@ int phase_main(int argc, char *argv[]) {
     free(regionStrInformative);
     stList_destruct(vcfContigsTmp);
     stSet_destruct(vcfContigs);
+
+    // update depth (if set)
+    if (maxDepth == 0) {
+        st_logCritical("> Not using max read depth because of program argument\n");
+    } else if (maxDepth > 0) {
+        st_logCritical("> Using configured max read depth of %"PRId64"\n", maxDepth);
+    } else if (params->phaseParams->readDepthFactor == 0.0) {
+        st_logCritical("> Not using max read depth because of parameterization\n");
+    } else {
+        maxDepth = (int64_t) round(bamChunker->avgDepth * params->phaseParams->readDepthFactor);
+        if (params->phaseParams->minReadDepth > maxDepth) maxDepth = params->phaseParams->minReadDepth;
+        if (params->phaseParams->maxReadDepth < maxDepth) maxDepth = params->phaseParams->maxReadDepth;
+        st_logCritical("> Using derived max read depth of %"PRId64" = avg:%.2f * factor:%.2f (min:%"PRId64" max:%"PRId64")\n",
+                maxDepth, bamChunker->avgDepth, params->phaseParams->readDepthFactor, params->phaseParams->minReadDepth,
+                params->phaseParams->maxReadDepth);
+
+    }
 
     // print chunk info
     char *outputChunksFile = stString_print("%s.chunks.csv", outputBase);
@@ -364,12 +374,12 @@ int phase_main(int argc, char *argv[]) {
         }
 
         // do downsampling if appropriate
-        if (params->polishParams->maxDepth > 0) {
+        if (maxDepth > 0) {
             // get downsampling structures
             stList *maintainedReads = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
 
             bool didDownsample = downsampleBamChunkReadWithVcfEntrySubstringsViaFullReadLengthLikelihood(
-                    params->polishParams->maxDepth, chunkVcfEntries, reads, maintainedReads, filteredReads);
+                    maxDepth, chunkVcfEntries, reads, maintainedReads, filteredReads);
 
             // we need to destroy the discarded reads and structures
             if (didDownsample) {
