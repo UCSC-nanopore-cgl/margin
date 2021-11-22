@@ -25,7 +25,7 @@
 void phase_usage() {
     fprintf(stderr, "usage: margin phase <ALIGN_BAM> <REFERENCE_FASTA> <VARIANT_VCF> <PARAMS> [options]\n");
     fprintf(stderr, "Version: %s \n\n", MARGIN_POLISH_VERSION_H);
-    fprintf(stderr, "Tags reads in ALIGN_BAM using variants in VARIANT_VCF.\n");
+    fprintf(stderr, "Tags reads in ALIGN_BAM and phases variants in VARIANT_VCF.\n");
 
     fprintf(stderr, "\nRequired arguments:\n");
     fprintf(stderr, "    ALIGN_BAM is the alignment of reads to the reference.\n");

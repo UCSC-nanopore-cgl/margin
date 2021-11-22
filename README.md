@@ -1,6 +1,6 @@
 # Margin #
 
-**Margin** is a suite of tools used for analysis of long-read data using Hidden Markov Models.  It has two submodules: `polish` and `phase`.
+**Margin** is a suite of tools used for analysis of long-read data using Hidden Markov Models.  It has two submodules: `phase` and `polish`.
 
 **MarginPhase** is a utility for read haplotyping and variant phasing.  
 
@@ -8,60 +8,91 @@
 
 ## Quickstart ##
 
-The PEPPER-Margin-DeepVariant pipeline is documented [here](https://github.com/kishwarshafin/pepper).
+The PEPPER-Margin-DeepVariant variant calling pipeline is documented [here](https://github.com/kishwarshafin/pepper).
 
 Margin as a standalone tool is most easily used with a Docker image available here:
 ```
-docker pull kishwars/pepper_deepvariant:r0.4
-docker run kishwars/pepper_deepvariant:r0.4 margin phase -h
+docker pull kishwars/pepper_deepvariant:latest
+docker run kishwars/pepper_deepvariant:latest margin phase -h
 ```
 
-Margin requires an indexed BAM, a reference FASTA, and a VCF (supports .vcf and .vcf.gz)
+Margin requires an indexed BAM, a reference FASTA, and a VCF as user-supplied input.  The quickstart command below assumes that these source files are in your current working directory.  
 
-To haplotag ONT reads:
+Margin requires selection of a parameter file, which is supplied in the docker container and in the repository. 
+For best performance, a parameter file specific to your read data and desired output should be used: 
+* to haplotag ONT data use `allParams.haplotag.ont-r94g507.json`
+* to haplotag PacBio HiFi data use `allParams.haplotag.pb-hifi.json`
+* to phase a VCF generated using ONT data use `allParams.phase_vcf.ont.json`
+* to phase a VCF generated using PacBio-HiFi data use: `allParams.phase_vcf.pb-hifi.json`
+
 ```
 docker run \
     -v `pwd`:/data \
-    kishwars/pepper_deepvariant:r0.4 \
+    kishwars/pepper_deepvariant:latest \
     margin phase \
     /data/$YOUR_ALIGNMENT_HERE.bam \
     /data/$YOUR_REFERENCE_HERE.fasta \
     /data/$YOUR_VARIANTS_HERE.vcf \
-    /opt/margin_dir/params/misc/allParams.ont_haplotag.json \
+    /opt/margin_dir/params/phase/$PARAMETER_FILE \
     -t $THREAD_COUNT \
-    -o /data/$OUTPUT_PREFIX \
-    --skipPhasedVCF
+    -o /data/$OUTPUT_PREFIX
 ```
 
-To haplotag PacBio-HiFi reads:
+## Running MarginPhase ##
+
+### Usage ###
 ```
-docker run \
-    -v `pwd`:/data \
-    kishwars/pepper_deepvariant:r0.4 \
-    margin phase \
-    /data/$YOUR_ALIGNMENT_HERE.bam \
-    /data/$YOUR_REFERENCE_HERE.fasta \
-    /data/$YOUR_VARIANTS_HERE.vcf \
-    /opt/margin_dir/params/misc/allParams.ccs_haplotag.json \
-    -t $THREAD_COUNT \
-    -o /data/$OUTPUT_PREFIX \
-    --skipPhasedVCF
+margin phase <ALIGN_BAM> <REFERENCE_FASTA> <VARIANT_VCF> <PARAMS> [options]
 ```
 
-To phase a VCF:
-```
-docker run \
-    -v `pwd`:/data \
-    kishwars/pepper_deepvariant:r0.4 \
-    margin phase \
-    /data/$YOUR_ALIGNMENT_HERE.bam \
-    /data/$YOUR_REFERENCE_HERE.fasta \
-    /data/$YOUR_VARIANTS_HERE.vcf \
-    /opt/margin_dir/params/misc/allParams.phase_vcf.json \
-    -t $THREAD_COUNT \
-    -o /data/$OUTPUT_PREFIX \
-    --skipHaplotypeBAM 
-```
+
+### Input/Output Files ###
+
+Margin requires an indexed BAM, a reference FASTA, a VCF, and a parameter file.  See the section below for a description of the parameterization.
+
+Margin produces:
+* **OUTPUT_PREFIX.haplotagged.bam**: a BAM file with all reads tagged (HP) as 1, 2, or 0, with 0 indicating no haplotype assignment was made.  If a region was specified, only reads from that region are included in the output.  This output can be suppressed by using the `--skipHaplotypeBAM` parameter.
+* **OUTPUT_PREFIX.chunks.csv**: a CSV describing the boundaries of each chunk
+* **OUTPUT_PREFIX.phased.vcf**: a VCF with phased variants and phasesets. If a region was specified, only variants from that region are included in the output. This output can be suppressed by using the `--skipPhasedVcf` parameter.
+* **OUTPUT_PREFIX.phaseset.bed**: a BED file describing the phasesets and the reason why phasing was broken with respect to the previous phaseset. This output can be suppressed by using the `--skipPhasedVcf` parameter.
+
+### Parameterization ### 
+
+All testing and tuning has been performed with variants called by the [PEPPER-Margin-DeepVariant](https://github.com/kishwarshafin/pepper) pipeline, although margin will work with any variant set.
+
+Pre-configured parameter files are provided in the code repository. 
+The bulk of the parameters are described in the file `params/base_params.json`, with mode- and sequencing-specific modifications provided in the `params/polish/` directory.
+
+Params are divided into two modes: `haplotag` and `phase_vcf`. 
+While the core algorithm determines both read haplotags and phasing of variants, there are mode-specific thresholds that should be used for best performance. 
+The `haplotag` parameters are tuned to produce more phased reads and more accurate local read phasing, and were tuned using variants generated by PEPPER.
+The `phase_vcf` parameters are tuned to produce long and accurate phase sets, and were tuned using variants genotyped by DeepVariant.
+
+Margin has parameterizations for multiple sequencing technologies. 
+For ONT data, there are models for the R9.4 pore basecalled with Guppy 4.2.2 and 5.0.7 (`ont-r94g422` and `ont-r94g507`). 
+The `ont-r94g507` parameter file is recommended if the data is from a different pore or basecaller.
+For PacBio data, there are models for CLR and HiFi (`pb-clr`, `pb-hifi`).  The `pb-hifi` parameter is recommended if your PacBio data has a different source.
+
+### Runtime Configuration ###
+
+The following runtime configuration options are available:
+* **-a / --logLevel**: the values `critical`, `info`, and `debug` options are available. The default value is `critical`. If a user is experiencing an issue with Margin, a log file generated using the `info` setting is preferred.  Use of `debug` is not recommendced.
+* **-t / --threads**: number of threads to use concurrently
+* **-o / --outputBase**: the prefix given to output files, by default "output" in the current working directory.  If a directory is supplied, it must already exist.  If only a directory is supplied, the output prefix will be `/user/specified/directory/output`.
+* **-r / --region**: a specific region to run in, such as `chr3` or `chr19:1000000-2000000`.  If supplied, output will only be written for data falling within this region. 
+
+### High-Level Workflow ###
+
+MarginPhase first selects a set of primary reads and variants for use in the intial variant phasing workflow. 
+This selection process preferentially takes longer reads and higher-quality variants, up until certain parameterized thresholds are met. 
+The tool uses the read-based evidence of linkage between heterozygous variant sites to find the most likely assignment of alleles to haplotypes. 
+Using the phased variants, the tool then identifies which haplotype each primary read most likely originated from.
+
+Using this set of high-quality phased variants and reads, we assign haplotypes to the filtered variants and reads. 
+Filtered reads are compared to each set of phased variants, and filtered variants are compared to each set of haplotagged reads. 
+The methodolgy of dividing reads and variants into primary and filtered categories enables the use of only trusted data during the primary analysis, while still allowing a haplotype to be assigned to all input data.
+
+Work is divided into overlapping chunks to enable multithreading.  Stitching is performed using set similarity between haplotype assignments for primary reads found in adjacent chunks.
 
 ## Installation ##
 
@@ -105,7 +136,7 @@ make
     ../tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
     ../tests/data/realData/hg38.chr20_59M_100k.fa \
     ../tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf \
-    ../params/misc/allParams.ont_haplotag.json \
+    ../params/phase/allParams.haplotag.ont-r94g507.json \
     --skipPhasedVCF
 # verification: expect 145, 137
 samtools view output.haplotagged.bam | grep "HP:i:1" | wc -l
@@ -116,7 +147,7 @@ samtools view output.haplotagged.bam | grep "HP:i:2" | wc -l
     ../tests/data/realData/HG002.r94g360.chr20_59M_100k.bam \
     ../tests/data/realData/hg38.chr20_59M_100k.fa \
     ../tests/data/realData/HG002.r94g360.chr20_59M_100k.vcf \
-    ../params/misc/allParams.phase_vcf.json \
+    ../params/phase/allParams.phase_vcf.ont.json \
     --skipHaplotypeBAM
 # verification: expect 105
 cat output.phased.vcf | grep -e "1|0\|0|1" | wc -l
