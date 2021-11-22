@@ -11,7 +11,6 @@
                 "onlyUseSNPVCFEntries": true,
                 "indelSizeForSVHandling": 0,
                 "useVariantSelectionAdaptiveSampling": false,
-                "minSnpVariantQuality": 10,
-                "updateAllOutputVCFFormatFields": true
+                "minSnpVariantQuality": 10
         }
 }

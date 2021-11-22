@@ -94,7 +94,7 @@
           "minSnpVariantQuality": 0,
           "minIndelVariantQuality": 0,
           "minSvVariantQuality": 0,
-          "updateAllOutputVCFFormatFields": true,
+          "updateAllOutputVCFFormatFields": false,
           "phasesetMinBinomialReadSplitLikelihood": 0.0,
           "phasesetMaxDiscordantRatio": 0.5,
           "phasesetMinSpanningReads": 1,

@@ -13,7 +13,6 @@
                 "phasesetMaxDiscordantRatio": 0.5,
                 "phasesetMinSpanningReads": 2,
                 "minSnpVariantQuality": 0,
-                "minIndelVariantQuality": 5,
-                "updateAllOutputVCFFormatFields": false
+                "minIndelVariantQuality": 5
         }
 }

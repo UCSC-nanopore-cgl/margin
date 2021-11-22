@@ -13,7 +13,6 @@
 		"phasesetMinBinomialReadSplitLikelihood": 0.0,
 		"phasesetMaxDiscordantRatio": 0.5,
 		"phasesetMinSpanningReads": 3,
-		"minSnpVariantQuality": 3,
-		"updateAllOutputVCFFormatFields": false
+		"minSnpVariantQuality": 3
 	}
 }

@@ -16,7 +16,6 @@
 		"variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
 		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
 		"minSnpVariantQuality": 5,
-		"phasesetMinSpanningReads": 3,
-		"updateAllOutputVCFFormatFields": true
+		"phasesetMinSpanningReads": 3
 	}
 }
