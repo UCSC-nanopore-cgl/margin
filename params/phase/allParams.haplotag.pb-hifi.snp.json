@@ -1,0 +1,19 @@
+{
+	"include" : "../base_params.json",
+	"polish": {
+		"useRunLengthEncoding" : false,
+		"useRepeatCountsInAlignment": false,
+		"filterAlignmentsWithMapQBelowThisThreshold": 10,
+		"maxDepth": 32
+	},
+	"phase" : {
+		"includeHomozygousVCFEntries": false,
+		"onlyUsePassVCFEntries": true,
+		"onlyUseSNPVCFEntries": true,
+		"indelSizeForSVHandling": 0,
+		"useVariantSelectionAdaptiveSampling": true,
+		"variantSelectionAdaptiveSamplingPrimaryThreshold": 15,
+		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
+		"minSnpVariantQuality": 10
+	}
+}
