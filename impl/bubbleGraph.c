@@ -1440,9 +1440,9 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
                 *index = k;
                 stHash_insert(cachedScores, readSubstring, index);
                 for (int64_t j = 0; j < b->alleleNo; j++) {
-                    struct timeval start, stop;
+                    /*struct timeval start, stop;
                     double secs = 0;
-                    gettimeofday(&start, NULL);
+                    gettimeofday(&start, NULL);*/
 
                     // get kmer alignment anchors if we're an SV
                     stList *anchorPairs = rS.length > params->phaseParams->referenceExpansionForStructuralVariants ||
@@ -1452,10 +1452,10 @@ BubbleGraph *bubbleGraph_constructFromVCFAndBamChunkReadVcfEntrySubstrings(stLis
 
                     b->alleleReadSupports[j * b->readNo + k] = (float) computeForwardProbability(
                             alleleSymbolStrings[j], rS, anchorPairs, params->polishParams->p, sM, 0, 0);
-                    gettimeofday(&stop, NULL);
+                    /*gettimeofday(&stop, NULL);
                     secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 + (double)(stop.tv_sec - start.tv_sec);
                     st_logDebug("\t\tCalculated forward prob for strings of length %"PRId64",%"PRId64" in %.3f sec\n",
-                               alleleSymbolStrings[j].length, rS.length, secs);
+                               alleleSymbolStrings[j].length, rS.length, secs);*/
                     stList_destruct(anchorPairs);
                 }
             }
@@ -2733,11 +2733,11 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     phaseParamsCopy->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
 
     st_logInfo(" %s Phasing forward strand reads\n", logIdentifier);
-    stList *tilingPathForward = getRPHmms(forwardStrandProfileSeqs, params->phaseParams);
+    stList *tilingPathForward = getRPHmms(forwardStrandProfileSeqs, phaseParamsCopy);
     stList_setDestructor(tilingPathForward, NULL);
 
     st_logInfo(" %s Phasing reverse strand reads\n", logIdentifier);
-    stList *tilingPathReverse = getRPHmms(reverseStrandProfileSeqs, params->phaseParams);
+    stList *tilingPathReverse = getRPHmms(reverseStrandProfileSeqs, phaseParamsCopy);
     stList_setDestructor(tilingPathReverse, NULL);
 
     // Join the hmms

@@ -359,8 +359,9 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
     // loggit
     int64_t totalKeptEntries = stList_length(regionEntries);
     char *logIdentifier = getLogIdentifier();
-    st_logInfo(" %s Found %"PRIu64" unusable VCF records for quality < %.2f (%"PRId64") and for indel (%"PRId64").  Kept %"PRId64" variants with quality < {SNP:%.2f, INDEL:%.2f, SV:%.2f}, totalling %"PRIu64" (every %"PRId64"bp).\n",
-               logIdentifier, qualityUnusableCount, indelUnusableCount, params->phaseParams->minSnpVariantQuality,
+    st_logInfo(" %s Found %"PRIu64" unusable VCF records for quality < %.2f (%"PRId64") and for indel (%"PRId64").  Kept %"PRId64" variants with quality < {SNP:%.2f, INDEL:%.2f, SV:%.2f}, totalling %"PRIu64" (every %"PRId64" bp).\n",
+               logIdentifier, stList_length(unusableFilteredVcfEntries) + stList_length(filteredRegionEntries),
+               qualityUnusableCount, indelUnusableCount, params->phaseParams->minSnpVariantQuality,
                params->phaseParams->minIndelVariantQuality, params->phaseParams->minSvVariantQuality,
                initiallyFilteredCount - stList_length(filteredRegionEntries),
                params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold,  stList_length(regionEntries),
