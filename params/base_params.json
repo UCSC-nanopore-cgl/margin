@@ -80,7 +80,7 @@
 		  "minReadCoverageToSupportPhasingBetweenHeterozygousSites" : 2,
 		  "includeInvertedPartitions" : true,
 		  "roundsOfIterativeRefinement": 10,
-          "minPhredScoreForHaplotypePartition": 10,
+          "minPhredScoreForHaplotypePartition": 0,
           "includeHomozygousVCFEntries": false,
           "onlyUsePassVCFEntries": true,
           "onlyUseSNPVCFEntries": false,
