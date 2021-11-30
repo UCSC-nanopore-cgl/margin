@@ -259,7 +259,7 @@ void stGenomeFragment_phaseBamChunkReads(stGenomeFragment *gf, stHash *readsToPS
             if (phred < params->minPhredScoreForHaplotypePartition) {
                 discardedForPhredCount++;
             } else {
-                st_logDebug("    Assigning %s to hap %d\n", read->readName, hap1 ? 1 : 2);
+                st_logDebug("    Assigning %s to hap %d with score %f\n", read->readName, hap1 ? 1 : 2, phred);
                 stSet_insert(hap1 ? *readsBelongingToHap1 : *readsBelongingToHap2, read);
             }
             consideredForPhasing += 1;

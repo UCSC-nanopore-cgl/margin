@@ -1431,7 +1431,8 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
             continue; //supplementary
 
         char *readName = getReadName(bamHdr, aln);
-        bool has_tag = bam_aux_get(aln, "HP") != NULL;
+        uint8_t *hpTag = bam_aux_get(aln, "HP");
+        bool has_tag = hpTag != NULL;
 		int32_t haplotype = 0;
 
 		if (synchronizeReads)
@@ -1470,8 +1471,12 @@ void writeHaplotaggedBam(char *inputBamLocation, char *outputBamFileBase, char *
 		}
 
 		if (has_tag) {
-			bam_aux_update_int(aln, "HP", haplotype);
-		} else {
+		    if (haplotype != 0) {
+                bam_aux_update_int(aln, "HP", haplotype);
+            } else {
+		        bam_aux_del(aln, hpTag);
+		    }
+		} else if (haplotype != 0) {
 			bam_aux_append(aln, "HP", 'i', sizeof(haplotype), (uint8_t*) &haplotype);
 		}
         r = sam_write1(out, bamHdr, aln);
