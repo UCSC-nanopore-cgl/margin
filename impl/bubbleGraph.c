@@ -2699,9 +2699,11 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     stSet *discardedReadsSet = filterReadsByCoverageDepth2(profileSeqs, params);
 
     // Partition reads based upon strand
-    st_logInfo(" %s Partitioning reads by strand for phasing\n", logIdentifier);
     stList *forwardStrandProfileSeqs = stList_construct();
     stList *reverseStrandProfileSeqs = stList_construct();
+
+    //TODO removing code that split reads by strand.. not sure we need this anymore
+    /*st_logInfo(" %s Partitioning reads by strand for phasing\n", logIdentifier);
     for (int64_t i = 0; i < stList_length(reads); i++) {
         BamChunkRead *r = stList_get(reads, i);
         stProfileSeq *pSeq = stHash_search(*readsToPSeqs, r);
@@ -2742,7 +2744,26 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
 
     // Join the hmms
     st_logInfo(" %s Joining forward and reverse strand phasing\n", logIdentifier);
-    stRPHmm *hmm = fuseTilingPath(mergeTwoTilingPaths(tilingPathForward, tilingPathReverse));
+    stRPHmm *hmm = fuseTilingPath(mergeTwoTilingPaths(tilingPathForward, tilingPathReverse));*/
+
+
+    //TODO this code makes one tiling path irrespective of strand
+    stList *pSeqs = stList_construct();
+    for (int64_t i = 0; i < stList_length(reads); i++) {
+        BamChunkRead *r = stList_get(reads, i);
+        stProfileSeq *pSeq = stHash_search(*readsToPSeqs, r);
+        if (pSeq != NULL && stSet_search(discardedReadsSet, pSeq) == NULL) { // Has a pSeq and is not one of the filtered reads
+            stList_append(pSeqs, pSeq);
+        }
+    }
+    st_logInfo(" %s Got %" PRIi64 " reads for phasing\n", logIdentifier, stList_length(pSeqs));
+    stRPHmmParameters *phaseParamsCopy = stRPHmmParameters_copy(params->phaseParams);
+    phaseParamsCopy->includeAncestorSubProb = 0; // Switch off using ancestor substitution probabilities in calculating the hmm probs
+    st_logInfo(" %s Phasing reads\n", logIdentifier);
+    stList *tilingPath = getRPHmms(pSeqs, phaseParamsCopy);
+    stList_setDestructor(tilingPath, NULL);
+    stRPHmm *hmm = fuseTilingPath(tilingPath);
+    //TODO end of stranded titling path change
 
     // Run the forward-backward algorithm
     phaseParamsCopy->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
@@ -2792,6 +2813,7 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     stSet_destruct(discardedReadsSet);
     stList_destruct(forwardStrandProfileSeqs);
     stList_destruct(reverseStrandProfileSeqs);
+    stList_destruct(pSeqs);
     stList_destruct(profileSeqs);
     stRPHmm_destruct(hmm, true);
     stList_destruct(path);
