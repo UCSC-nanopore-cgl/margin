@@ -42,7 +42,7 @@
           "minRealignmentPolishIterations": 1,
           "skipHaploidPolishingIfDiploid": true,
           "filterReadsWhileHaveAtLeastThisCoverage": 15,
-          "hetSubstitutionProbability": 0.0001,
+          "hetSubstitutionProbability": 0.0,
           "hetRunLengthSubstitutionProbability": 0.01,
           "useReadAlleles": true,
           "useReadAllelesInPhasing": true,

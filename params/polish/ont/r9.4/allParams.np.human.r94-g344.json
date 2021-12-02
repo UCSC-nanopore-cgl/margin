@@ -1,6 +1,7 @@
 {
 	"include" : "../../../base_params.json",
 	"polish": {
+		"hetSubstitutionProbability": 0.0001,
 		"repeatCountSubstitutionMatrix" : {
 			"repeatCountLogProbabilities_A_F": [
 				-1.707570195198059,

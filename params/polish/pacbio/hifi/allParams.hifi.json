@@ -21,7 +21,8 @@
     },
     "chunkSize": 50000,
     "chunkBoundary": 5000,
-    "maxDepth": 96,
+    "maxDepth": 64,
+    "hetSubstitutionProbability": 0.0001,
     "repeatCountSubstitutionMatrix" : {
       "repeatCountLogProbabilities_A_F": [
         -1.707570195198059,
