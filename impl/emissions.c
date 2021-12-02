@@ -249,6 +249,7 @@ static uint64_t getMLAllele(stSite *site, uint64_t *alleleLogProbs, uint64_t max
      */
     uint64_t maxAllele = 0;
     uint64_t maxProb = alleleLogProbs[0] + *stSite_getSubstitutionProb(site, maxProbAncestorAllele, 0);
+    uint64_t ancestorProb = maxProb;
     for (uint64_t i = 1; i < site->alleleNumber; i++) {
         uint64_t hapProb = alleleLogProbs[i] + *stSite_getSubstitutionProb(site, maxProbAncestorAllele, i);
         if (hapProb < maxProb) {
@@ -256,6 +257,8 @@ static uint64_t getMLAllele(stSite *site, uint64_t *alleleLogProbs, uint64_t max
             maxAllele = i;
         }
     }
+    st_logDebug("      Got ML allele %"PRIu64" with prob %3"PRIu64" (ancestor allele %"PRIu64" with prob %3"PRIu64")\n",
+            maxAllele, maxProb, maxProbAncestorAllele, ancestorProb);
     return maxAllele;
 }
 
@@ -297,8 +300,22 @@ static void fillInPredictedGenomePosition(stGenomeFragment *gF, uint64_t siteInd
     }
 
     // Given ml ancestor allele, figure prob of haplotype alleles
+    st_logDebug("  Calculating alleles for site %"PRIu64" with ancestor allele %"PRIu64" and prob %"PRIu64":\n", siteIndex, ancestorAllele, maxLogColumnProb);
+    st_logDebug("    Hap 1:\n", siteIndex);
     uint64_t hapAllele1 = getMLAllele(site, alleleLogProbsHap1, ancestorAllele);
+    st_logDebug("        Allele log hap probs / ancestor hap probs:  ");
+    for (int i = 0 ; i < site->alleleNumber; i++) {
+        st_logDebug("%04"PRIu64"/%04"PRIu64"\t", alleleLogProbsHap1[i], ancestorAlleleProbsHap1[i]);
+    }
+    st_logDebug("\n");
+
+    st_logDebug("    Hap 2:\n", siteIndex);
     uint64_t hapAllele2 = getMLAllele(site, alleleLogProbsHap2, ancestorAllele);
+    st_logDebug("        Allele log hap probs / ancestor hap probs:  ");
+    for (int i = 0 ; i < site->alleleNumber; i++) {
+        st_logDebug("%04"PRIu64"/%04"PRIu64"\t", alleleLogProbsHap2[i], ancestorAlleleProbsHap2[i]);
+    }
+    st_logDebug("\n");
 
     uint64_t k = siteIndex - gF->refStart;
     // Fill in the genome fragment

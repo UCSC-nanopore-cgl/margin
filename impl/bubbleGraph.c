@@ -2765,8 +2765,10 @@ stGenomeFragment *bubbleGraph_phaseBubbleGraph(BubbleGraph *bg, stReference *ref
     stRPHmm *hmm = fuseTilingPath(tilingPath);
     //TODO end of stranded titling path change
 
+    // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
+    // TODO I think this may be a bad thing, and it may not actually be used
+    phaseParamsCopy->includeAncestorSubProb = 1;
     // Run the forward-backward algorithm
-    phaseParamsCopy->includeAncestorSubProb = 1; // Now switch on using ancestor substitution probabilities in calculating the final, root hmm probs
     stRPHmm_forwardBackward(hmm);
 
     st_logInfo(" %s Forward probability of the hmm: %f, backward prob: %f\n", logIdentifier, (float) hmm->forwardLogProb,
