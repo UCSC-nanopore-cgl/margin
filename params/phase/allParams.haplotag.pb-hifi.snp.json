@@ -9,11 +9,10 @@
 	"phase" : {
 		"includeHomozygousVCFEntries": false,
 		"onlyUsePassVCFEntries": true,
-		"onlyUseSNPVCFEntries": true,
+		"onlyUseSNPVCFEntries": false,
 		"indelSizeForSVHandling": 0,
-		"useVariantSelectionAdaptiveSampling": true,
-		"variantSelectionAdaptiveSamplingPrimaryThreshold": 15,
-		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
-		"minSnpVariantQuality": 10
+		"useVariantSelectionAdaptiveSampling": false,
+		"minSnpVariantQuality": 10,
+		"minIndelVariantQuality": 40
 	}
 }
