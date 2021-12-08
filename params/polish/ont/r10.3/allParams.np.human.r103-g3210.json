@@ -19,6 +19,8 @@
 					0.25, 0.25, 0.25, 0.25
 				]
 			},
+		  "useRunLengthEncoding": true,
+		  "useRepeatCountsInAlignment": true,
 		  "hetSubstitutionProbability": 0.0001,
 		  "repeatCountSubstitutionMatrix" : {
 			  "repeatCountLogProbabilities_A_F": [

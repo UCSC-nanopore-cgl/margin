@@ -1,14 +1,10 @@
 {
         "include" : "../base_params.json",
         "polish": {
-                "useRunLengthEncoding" : false,
-                "useRepeatCountsInAlignment": false,
                 "filterAlignmentsWithMapQBelowThisThreshold": 5,
                 "maxDepth": 32
         },
         "phase" : {
-                "includeHomozygousVCFEntries": false,
-                "onlyUsePassVCFEntries": true,
                 "onlyUseSNPVCFEntries": false,
                 "indelSizeForSVHandling": 0,
                 "useVariantSelectionAdaptiveSampling": true,

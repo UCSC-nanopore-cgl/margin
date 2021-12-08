@@ -19,8 +19,8 @@
                       0.25, 0.25, 0.25, 0.25
                 ]
           },
-          "useRunLengthEncoding": true,
-          "useRepeatCountsInAlignment": true,
+          "useRunLengthEncoding": false,
+          "useRepeatCountsInAlignment": false,
           "includeSoftClipping": false,
           "chunkSize": 100000,
           "chunkBoundary": 10000,
