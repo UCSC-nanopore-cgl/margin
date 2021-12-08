@@ -56,7 +56,7 @@ Margin produces:
 * **OUTPUT_PREFIX.phased.vcf**: a VCF with phased variants and phasesets. If a region was specified, only variants from that region are included in the output. This output can be suppressed by using the `--skipPhasedVcf` parameter.
 * **OUTPUT_PREFIX.phaseset.bed**: a BED file describing the phasesets and the reason why phasing was broken with respect to the previous phaseset. This output can be suppressed by using the `--skipPhasedVcf` parameter.
 
-### Parameterization ### 
+### Parameter Files ### 
 
 All testing and tuning has been performed with variants called by the [PEPPER-Margin-DeepVariant](https://github.com/kishwarshafin/pepper) pipeline, although margin will work with any variant set.
 
@@ -83,16 +83,52 @@ The following runtime configuration options are available:
 
 ### High-Level Workflow ###
 
-MarginPhase first selects a set of primary reads and variants for use in the intial variant phasing workflow. 
-This selection process preferentially takes longer reads and higher-quality variants, up until certain parameterized thresholds are met. 
-The tool uses the read-based evidence of linkage between heterozygous variant sites to find the most likely assignment of alleles to haplotypes. 
-Using the phased variants, the tool then identifies which haplotype each primary read most likely originated from.
+MarginPhase uses the read-based evidence of linkage between heterozygous variant sites to find the most likely assignment of reads and alleles to haplotypes. 
+The tool first selects a set of high-quality primary reads and variants for use in the initial phasing workflow. 
+This selection process preferentially takes longer reads and variants with high allele quality scores, up until certain parameterized thresholds are met. 
 
-Using this set of high-quality phased variants and reads, we assign haplotypes to the filtered variants and reads. 
-Filtered reads are compared to each set of phased variants, and filtered variants are compared to each set of haplotagged reads. 
-The methodolgy of dividing reads and variants into primary and filtered categories enables the use of only trusted data during the primary analysis, while still allowing a haplotype to be assigned to all input data.
+The Hidden Markov Model describes read partitions at each variant site, enforces compatiblity between partitions at adjacent sites, and determines allele support with read substring alignment likelihoods.
+The Forward-Backward algorithm is run to determine partition likelihoods at each site, and a most-likely path through the per-site partitions is produced.
+The read partition described by this path is used to calculate allele support per partition, which is used to assign alleles to haplotypes.
+Haplotypes for primary reads are determined from this partition, after an iterative refinement step.
 
-Work is divided into overlapping chunks to enable multithreading.  Stitching is performed using set similarity between haplotype assignments for primary reads found in adjacent chunks.
+Using this set of high-quality phased variants and reads, haplotypes are assigned to the low-quality variants and reads. 
+Low-quality reads are compared to the high-quality phased variants, and low-quality variants are compared to each set of haplotagged high-quality reads. 
+The methodolgy of dividing reads and variants into high- and low-quality categories enables the use of only trusted data during the primary analysis, while still allowing a haplotype to be assigned to all input data.
+
+Work is divided into overlapping chunks to enable multithreading.  Stitching is performed using set similarity between haplotype assignments for all reads found in adjacent chunks.
+
+Phasesets are determined after stitching has occurred. 
+It is assumed that all phasing is consistent across a contig unless certain parameterized thresholds are not met.
+The haplotype assignment of the reads which were used to determine the variant's haplotype are tracked during the primary phasing algorithm and are used during this step.
+If one of these thresholds (described below) is not met, a new phaseset is created and the reason is described in the `OUTPUT_PREFIX.phaseset.bed` output file.
+
+### Parameterization ###
+
+The following parameters are used to exclude reads and variants from the high-quality dataset:
+
+* `phase.onlyUseSNPVCFEntries`: toggles whether INDEL candidates are excluded
+* `phase.minSnpVariantQuality`: all SNP variants with a QUAL score below this are excluded
+* `phase.minIndelVariantQuality`: all INDEL variants with a QUAL score below this are excluded
+* `polish.filterAlignmentsWithMapQBelowThisThreshold`: all reads with a MQ score below this are excluded
+
+The following parameters are used during adaptive sampling. 
+Adaptive sampling first selects all variants above a threshold, then determines the average distance in basepairs between variants for the chunk. 
+If the average distance is greater than a threshold (ie, if there are too few variants), then variants are selected in descending order of QUAL score until there are enough variants.
+
+* `phase.useVariantSelectionAdaptiveSampling`: whether to use adaptive sampling
+* `phase.variantSelectionAdaptiveSamplingPrimaryThreshold`: above this threshold, all variants are used
+* `phase.variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant`: desired average distance between variants
+
+The following parameters are used to select reads:
+
+* `phase.maxDepth`: reads are downsampled to an expected depth of this parameter.  Longer reads are preferentially selected during downsampling.
+
+The following parameters are used to determine if phasing is questionable or whether the current phaseset should be extended:
+
+* `phase.phasesetMinBinomialReadSplitLikelihood`: the cumulative binomial probability of the read partition at this variant (ie a partition of 10/10 has likelihood .588, and 5/15 has likelihood .021) must be above this threshold
+* `phase.phasesetMaxDiscordantRatio`: the ratio of concordant to discordant reads assigned to the current and previous phased variants' haplotypes
+* `phase.phasesetMinSpanningReads`: the total number of phased reads spanning two adjacent phased variants
 
 ## Installation ##
 
