@@ -5,12 +5,10 @@
                 "maxDepth": 32
         },
         "phase" : {
-                "onlyUseSNPVCFEntries": false,
-                "indelSizeForSVHandling": 0,
+                "onlyUseSNPVCFEntries": true,
                 "useVariantSelectionAdaptiveSampling": true,
                 "variantSelectionAdaptiveSamplingPrimaryThreshold": 15,
                 "variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
-                "minSnpVariantQuality": 5,
-                "minIndelVariantQuality": 20
+                "minSnpVariantQuality": 10
         }
 }

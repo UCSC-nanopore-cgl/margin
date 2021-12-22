@@ -58,10 +58,10 @@ Margin produces:
 
 ### Parameter Files ### 
 
-All testing and tuning has been performed with variants called by the [PEPPER-Margin-DeepVariant](https://github.com/kishwarshafin/pepper) pipeline, although margin will work with any variant set.
+All testing and tuning has been performed with variants called by the [PEPPER-Margin-DeepVariant](https://github.com/kishwarshafin/pepper) pipeline, although Margin will work with any variant set.
 
 Pre-configured parameter files are provided in the code repository. 
-The bulk of the parameters are described in the file `params/base_params.json`, with mode- and sequencing-specific modifications provided in the `params/polish/` directory.
+The bulk of the parameters are described in the file `params/base_params.json`, with mode- and sequencing-specific modifications provided in the `params/phase/` directory.
 
 Params are divided into two modes: `haplotag` and `phase_vcf`. 
 While the core algorithm determines both read haplotags and phasing of variants, there are mode-specific thresholds that should be used for best performance. 
@@ -69,9 +69,12 @@ The `haplotag` parameters are tuned to produce more phased reads and more accura
 The `phase_vcf` parameters are tuned to produce long and accurate phase sets, and were tuned using variants genotyped by DeepVariant.
 
 Margin has parameterizations for multiple sequencing technologies. 
-For ONT data, there are models for the R9.4 pore basecalled with Guppy 4.2.2 and 5.0.7 (`ont-r94g422` and `ont-r94g507`). 
+For ONT data, there are models for the R9.4 pore basecalled with Guppy 4.2.2 (`ont-r94g422`) and 5.0.7 (`ont-r94g507`),
+and for R10.4 Q20 data (`ont-r104q20`).
 The `ont-r94g507` parameter file is recommended if the data is from a different pore or basecaller.
-For PacBio data, there are models for CLR and HiFi (`pb-clr`, `pb-hifi`).  The `pb-hifi` parameter is recommended if your PacBio data has a different source.
+For PacBio data, there are params for CLR and HiFi (`pb-clr`, `pb-hifi`).  The `pb-hifi` parameter is recommended if your PacBio data has a different source.
+Parameter files annotated with `hp` are for use with [PEPPER-HP](https://github.com/kishwarshafin/pepper/blob/r0.7/docs/misc/pepper_v0.7_method_update.md#step-3-pepper-hp-only-used-for-ont), 
+and with `hapDup` are for a SV calling pipeline [HapDup](https://github.com/fenderglass/hapdup).
 
 ### Runtime Configuration ###
 
@@ -113,8 +116,12 @@ The following parameters are used to exclude reads and variants from the high-qu
 * `polish.filterAlignmentsWithMapQBelowThisThreshold`: all reads with a MQ score below this are excluded
 
 The following parameters are used during adaptive sampling. 
-Adaptive sampling first selects all variants above a threshold, then determines the average distance in basepairs between variants for the chunk. 
-If the average distance is greater than a threshold (ie, if there are too few variants), then variants are selected in descending order of QUAL score until there are enough variants.
+Adaptive sampling first selects all variants above a threshold, 
+then determines the average distance in basepairs between variants for the chunk. 
+If the average distance is greater than a threshold 
+(ie, if there are too few variants), 
+then variants are selected in descending order of QUAL score until 
+enough variants are selected or there are no more variants above the min quality threshold.
 
 * `phase.useVariantSelectionAdaptiveSampling`: whether to use adaptive sampling
 * `phase.variantSelectionAdaptiveSamplingPrimaryThreshold`: above this threshold, all variants are used
@@ -126,8 +133,8 @@ The following parameters are used to select reads:
 
 The following parameters are used to determine if phasing is questionable or whether the current phaseset should be extended:
 
-* `phase.phasesetMinBinomialReadSplitLikelihood`: the cumulative binomial probability of the read partition at this variant (ie a partition of 10/10 has likelihood .588, and 5/15 has likelihood .021) must be above this threshold
-* `phase.phasesetMaxDiscordantRatio`: the ratio of concordant to discordant reads assigned to the current and previous phased variants' haplotypes
+* `phase.phasesetMinBinomialReadSplitLikelihood`: the cumulative binomial probability of the read partition at this variant (ie a partition of 10:10 has likelihood .588, and 5:15 has likelihood .021) must be above this threshold
+* `phase.phasesetMaxDiscordantRatio`: the maximum allowed ratio of discordant reads to all tagged reads assigned to the current and previous phased variants' haplotypes
 * `phase.phasesetMinSpanningReads`: the total number of phased reads spanning two adjacent phased variants
 
 ## Installation ##

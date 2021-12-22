@@ -6,7 +6,6 @@
 	},
 	"phase" : {
 		"onlyUseSNPVCFEntries": false,
-		"indelSizeForSVHandling": 0,
 		"useVariantSelectionAdaptiveSampling": true,
 		"variantSelectionAdaptiveSamplingPrimaryThreshold": 15,
 		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,

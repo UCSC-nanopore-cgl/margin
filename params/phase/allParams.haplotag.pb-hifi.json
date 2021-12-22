@@ -6,7 +6,6 @@
 	},
 	"phase" : {
 		"onlyUseSNPVCFEntries": false,
-		"indelSizeForSVHandling": 0,
 		"useVariantSelectionAdaptiveSampling": false,
 		"minSnpVariantQuality": 10,
 		"minIndelVariantQuality": 40
