@@ -94,7 +94,10 @@ stList *readChunk(FILE *fh, char **seqName, int64_t *chunkOrdinal) {
     stList *tokens = stString_splitByString(headerLine, ",");
 
     if (stList_length(tokens) != 3) {
-        st_errAbort("Expected three tokens in header line, got %" PRIi64 "\n", stList_length(tokens));
+        st_errAbort("Expected three tokens in header line, got %" PRIi64 "\n"
+                    "This usually means you have multiple primary alignments with the same read ID.\n"
+                    "You can identify whether this is the case with this command:\n\n\t"
+                    "samtools view -F 0x904 YOUR.bam | cut -f 1 | sort | uniq -c | awk '$1 > 1'", stList_length(tokens));
     }
 
     *seqName = stList_removeFirst(tokens); // Set seqName
