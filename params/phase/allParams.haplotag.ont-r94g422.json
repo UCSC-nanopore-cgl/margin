@@ -6,8 +6,8 @@
 	"phase" : {
 		"onlyUseSNPVCFEntries": true,
 		"useVariantSelectionAdaptiveSampling": true,
-		"variantSelectionAdaptiveSamplingPrimaryThreshold": 10,
+		"variantSelectionAdaptiveSamplingPrimaryThreshold": 20,
 		"variantSelectionAdaptiveSamplingDesiredBasepairsPerVariant": 2000,
-		"minSnpVariantQuality": 3
+		"minSnpVariantQuality": 15
 	}
 }
