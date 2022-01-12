@@ -1,0 +1,9 @@
+{
+        "include" : "../base_params.json",
+        "phase" : {
+                "onlyUseSNPVCFEntries": false,
+                "useVariantSelectionAdaptiveSampling": false,
+                "minSnpVariantQuality": 0,
+                "minIndelVariantQuality": 0
+        }
+}

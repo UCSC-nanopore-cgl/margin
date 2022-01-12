@@ -1407,6 +1407,7 @@ typedef struct _chunkToStitch {
 
     // For tracking which chunks were stitched
     bool wasSwitched;
+    bool doNotSwitch; // for tagFromPhasedVcf
 } ChunkToStitch;
 
 ChunkToStitch *chunkToStitch_construct(char *seqName, int64_t chunkOrdinal, bool phased,
@@ -1434,7 +1435,8 @@ void outputChunkers_processChunkSequencePhased(OutputChunkers *outputChunkers, i
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount);
 void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,
-                                            stList *readIdsHap1, stList *readIdsHap2, bool* switchedState);
+                                            stList *readIdsHap1, stList *readIdsHap2, bool* switchedState,
+                                            bool preventSwitching);
 
 void outputChunkers_stitchLinear(OutputChunkers *outputChunkers, bool phased, Params *params);
 

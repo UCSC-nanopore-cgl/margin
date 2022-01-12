@@ -485,7 +485,7 @@ int phase_main(int argc, char *argv[]) {
     time_t mergeStartTime = time(NULL);
     st_logCritical("> Starting merge\n");
     outputChunkers_stitchAndTrackExtraData(outputChunkers, TRUE, bamChunker->chunkCount, allReadIdsHap1, allReadIdsHap2,
-            chunkWasSwitched);
+            chunkWasSwitched, FALSE);
     time_t mergeEndTime = time(NULL);
     char *tds = getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime);
     st_logCritical("  Merging took %s\n", tds);

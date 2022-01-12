@@ -380,13 +380,18 @@ void chunkToStitch_phaseAdjacentChunks(ChunkToStitch *chunk, stHash *readsInHap1
 
     // Switch the relative phasing if the trans phase configuration has more support
     if (cisPhase < transPhase) {
-        st_logInfo(" %s Flipping phase of chunk\n", logIdentifier);
-        swap((void *) &chunk->seqHap1, (void *) &chunk->seqHap2);
-        swap((void *) &chunk->poaHap1StringsLines, (void *) &chunk->poaHap2StringsLines);
-        swap((void *) &chunk->readsHap1Lines, (void *) &chunk->readsHap2Lines);
-        swap((void *) &chunk->repeatCountLinesHap1, (void *) &chunk->repeatCountLinesHap2);
-        swap((void *) &chunkHap1Reads, (void *) &chunkHap2Reads);
-        chunk->wasSwitched = TRUE;
+        if (chunk->doNotSwitch) {
+            st_logInfo(" %s Not flipping phase of chunk due to configuration; otherwise would have\n", logIdentifier);
+        } else {
+            st_logInfo(" %s Flipping phase of chunk\n", logIdentifier);
+            swap((void *) &chunk->seqHap1, (void *) &chunk->seqHap2);
+            swap((void *) &chunk->poaHap1StringsLines, (void *) &chunk->poaHap2StringsLines);
+            swap((void *) &chunk->readsHap1Lines, (void *) &chunk->readsHap2Lines);
+            swap((void *) &chunk->repeatCountLinesHap1, (void *) &chunk->repeatCountLinesHap2);
+            swap((void *) &chunkHap1Reads, (void *) &chunkHap2Reads);
+            chunk->wasSwitched = TRUE;
+
+        }
     }
 
     //Remove duplicated reads from output
@@ -1548,10 +1553,11 @@ ChunkToStitch *mergeContigChunkzThreaded(ChunkToStitch **chunks, int64_t startId
 }
 
 void outputChunkers_stitch(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount) {
-    outputChunkers_stitchAndTrackExtraData(outputChunkers, phased, chunkCount, NULL, NULL, NULL);
+    outputChunkers_stitchAndTrackExtraData(outputChunkers, phased, chunkCount, NULL, NULL, NULL, FALSE);
 }
 void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool phased, int64_t chunkCount,
-                                            stList *readIdsHap1, stList *readIdsHap2, bool* switchedState) {
+                                            stList *readIdsHap1, stList *readIdsHap2, bool* switchedState,
+                                            bool preventSwitching) {
 
     // prep for merge
     assert(chunkCount > 0);
@@ -1576,6 +1582,8 @@ void outputChunkers_stitchAndTrackExtraData(OutputChunkers *outputChunkers, bool
             }
             chunks[chunk->chunkOrdinal] = chunk;
             foundChunksPerThread[i]++;
+            // for tagWithPhasedVCF where we should not switch chunks
+            if (preventSwitching) chunk->doNotSwitch = TRUE;
         }
     }
 

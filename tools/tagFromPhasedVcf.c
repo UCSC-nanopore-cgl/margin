@@ -345,14 +345,11 @@ int main(int argc, char *argv[]) {
     time_t mergeStartTime = time(NULL);
     st_logCritical("> Starting merge\n");
     outputChunkers_stitchAndTrackExtraData(outputChunkers, TRUE, bamChunker->chunkCount, allReadIdsHap1, allReadIdsHap2,
-            NULL);
+            NULL, TRUE);
     time_t mergeEndTime = time(NULL);
     char *tds = getTimeDescriptorFromSeconds((int) mergeEndTime - mergeStartTime);
     st_logCritical("> Merging took %s\n", tds);
     outputChunkers_destruct(outputChunkers);
-    free(tds);
-    tds = getTimeDescriptorFromSeconds((int) time(NULL) - mergeEndTime);
-    st_logCritical("> Merge cleanup took %s\n", tds);
     free(tds);
 
     // maybe write final haplotyped bams
