@@ -1,7 +1,7 @@
 {
 	"include" : "../base_params.json",
 	"polish": {
-		"filterAlignmentsWithMapQBelowThisThreshold": 10,
+		"filterAlignmentsWithMapQBelowThisThreshold": 5,
 		"maxDepth": 32
 	},
 	"phase" : {
@@ -9,6 +9,6 @@
 		"indelSizeForSVHandling": 0,
 		"useVariantSelectionAdaptiveSampling": false,
 		"minSnpVariantQuality": 10,
-		"minIndelVariantQuality": 40
+		"minIndelVariantQuality": 20
 	}
 }
