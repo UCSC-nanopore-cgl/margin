@@ -165,6 +165,9 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         }
 
         double quality = rec->qual;
+        if (quality != quality) {
+            quality = 0;
+        }
 
         // get alleles
         bool isSV = FALSE;
