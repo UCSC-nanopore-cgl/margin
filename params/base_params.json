@@ -84,6 +84,7 @@
           "includeHomozygousVCFEntries": false,
           "onlyUsePassVCFEntries": true,
           "onlyUseSNPVCFEntries": false,
+          "useSVsForPhasing": false,
           "indelSizeForSVHandling": 0,
           "referenceExpansionForSmallVariants": 12,
           "referenceExpansionForStructuralVariants": 512,

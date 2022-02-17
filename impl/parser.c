@@ -36,6 +36,7 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->onlyUsePassVCFEntries = TRUE;
     params->onlyUseSNPVCFEntries = FALSE;
     params->indelSizeForSVHandling = 0;
+    params->useSVsForPhasing = FALSE;
     params->referenceExpansionForSmallVariants = 12;
     params->referenceExpansionForStructuralVariants = 1024;
     params->useVariantSelectionAdaptiveSampling = TRUE;
@@ -80,6 +81,7 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->onlyUsePassVCFEntries = toCopy->onlyUsePassVCFEntries;
     params->onlyUseSNPVCFEntries = toCopy->onlyUseSNPVCFEntries;
     params->indelSizeForSVHandling = toCopy->indelSizeForSVHandling;
+    params->useSVsForPhasing = toCopy->useSVsForPhasing;
     params->referenceExpansionForSmallVariants = toCopy->referenceExpansionForSmallVariants;
     params->referenceExpansionForStructuralVariants = toCopy->referenceExpansionForStructuralVariants;
     params->useVariantSelectionAdaptiveSampling = toCopy->useVariantSelectionAdaptiveSampling;
@@ -139,6 +141,8 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->onlyUseSNPVCFEntries = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "indelSizeForSVHandling") == 0) {
             params->indelSizeForSVHandling = stJson_parseInt(js, tokens, ++i);
+        } else if (strcmp(keyString, "useSVsForPhasing") == 0) {
+            params->useSVsForPhasing = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "referenceExpansionForSmallVariants") == 0) {
             params->referenceExpansionForSmallVariants = stJson_parseInt(js, tokens, ++i);
         } else if (strcmp(keyString, "referenceExpansionForStructuralVariants") == 0) {

@@ -277,6 +277,9 @@ struct _stRPHmmParameters {
     // the size of an indel to trigger special SV handling.  0 means no special handling
 	int64_t indelSizeForSVHandling;
 
+	// whether to use SVs (regarldess of onlyUseSNPVCFEntries status) for phasing
+	bool useSVsForPhasing;
+
 	// boundary around a small variant to include for allele/read alignment
 	int64_t referenceExpansionForSmallVariants;
 
