@@ -19,7 +19,7 @@ execute_process(
 set(MARGIN_VERSION_MAJOR 2)
 set(MARGIN_VERSION_MINOR 3)
 set(MARGIN_VERSION_COMMIT dev-${GIT_COMMIT_HASH})
-#set(MARGIN_VERSION_COMMIT 0)
+#set(MARGIN_VERSION_COMMIT 1)
 configure_file(
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h.in"
         "${PROJECT_SOURCE_DIR}/inc/marginVersion.h"
@@ -406,6 +406,8 @@ else ()
             tests/stRPHmmTest.c
             tests/viewTest.c
             tests/stitchingTest.c
-            tests/vcfTest.c)
+            tests/vcfTest.c
+            tests/lpcTest.c
+            )
 endif ()
 target_link_libraries(allTests marginLib)
