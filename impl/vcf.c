@@ -165,6 +165,9 @@ stHash *parseVcf2(char *vcfFile, char *regionStr, Params *params) {
         }
 
         double quality = rec->qual;
+        if (quality != quality) {
+            quality = 0;
+        }
 
         // get alleles
         bool isSV = FALSE;
@@ -278,6 +281,7 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
     // get all entries from start until we're out
     int64_t qualityUnusableCount = 0;
     int64_t indelUnusableCount = 0;
+    int64_t svUsedCount = 0;
     for (int64_t i = startIdx; i < stList_length(vcfEntries); i++) {
         VcfEntry *e = stList_get(vcfEntries, i);
         assert(stString_eq(refSeqName, e->refSeqName));
@@ -308,8 +312,12 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
             }
         }
         if (params->phaseParams->onlyUseSNPVCFEntries && e->isIndel) {
-            indelUnusableCount++;
-            unusable = TRUE;
+            if (params->phaseParams->useSVsForPhasing && e->isStructuralVariant) {
+                svUsedCount++;
+            } else {
+                indelUnusableCount++;
+                unusable = TRUE;
+            }
         }
 
         // make variant
@@ -366,6 +374,9 @@ void getVcfEntriesForRegion(stHash *vcfEntryMap, stList *regionEntries, stList *
                initiallyFilteredCount - stList_length(filteredRegionEntries),
                params->phaseParams->variantSelectionAdaptiveSamplingPrimaryThreshold,  stList_length(regionEntries),
                (int64_t) ((endPos - startPos) / (totalKeptEntries == 0 ? -1 : totalKeptEntries)));
+    if (params->phaseParams->useSVsForPhasing) {
+        st_logInfo(" %s Using %"PRId64" SVs for phasing\n", logIdentifier, svUsedCount);
+    }
     free(logIdentifier);
 
     // now save all the unusable entries
