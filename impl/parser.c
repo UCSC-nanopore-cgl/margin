@@ -45,6 +45,7 @@ stRPHmmParameters *stRPHmmParameters_construct() {
     params->minSnpVariantQuality = 0;
     params->minIndelVariantQuality = 0;
     params->minSvVariantQuality = 0;
+    params->phasePrimaryVariantsOnly = false;
     params->updateAllOutputVCFFormatFields = TRUE;
     params->phasesetMinBinomialReadSplitLikelihood = .0001;
     params->phasesetMaxDiscordantRatio = .1;
@@ -90,6 +91,7 @@ stRPHmmParameters *stRPHmmParameters_copy(stRPHmmParameters *toCopy) {
     params->minSnpVariantQuality = toCopy->minSnpVariantQuality;
     params->minIndelVariantQuality = toCopy->minIndelVariantQuality;
     params->minSvVariantQuality = toCopy->minSvVariantQuality;
+    params->phasePrimaryVariantsOnly = toCopy->phasePrimaryVariantsOnly;
     params->updateAllOutputVCFFormatFields = toCopy->updateAllOutputVCFFormatFields;
     params->phasesetMinBinomialReadSplitLikelihood = toCopy->phasesetMinBinomialReadSplitLikelihood;
     params->phasesetMaxDiscordantRatio = toCopy->phasesetMaxDiscordantRatio;

@@ -47,7 +47,6 @@ void phase_usage() {
 
     fprintf(stderr, "\nOutput options:\n");
     fprintf(stderr, "    -M --skipHaplotypeBAM         : Do not write out phased BAM\n");
-    fprintf(stderr, "    -v --phasePrimaryVariantsOnly : Skip step where filtered variants are phased using read haplotypes\n");
     fprintf(stderr, "    -V --skipPhasedVCF            : Do not write out phased VCF\n");
 
     fprintf(stderr, "\n");
@@ -69,7 +68,6 @@ int phase_main(int argc, char *argv[]) {
     bool inMemory = TRUE;
     bool shouldOutputHaplotaggedBam = TRUE;
     bool shouldOutputPhasedVcf = TRUE;
-    bool phasePrimaryVariantsOnly = FALSE;
 
     if (argc < 4) {
         free(outputBase);
@@ -96,12 +94,11 @@ int phase_main(int argc, char *argv[]) {
                 { "depth", required_argument, 0, 'p'},
                 { "tempFilesToDisk", no_argument, 0, 'k'},
                 { "skipHaplotypeBAM", no_argument, 0, 'M'},
-                { "phasePrimaryVariantsOnly", no_argument, 0, 'v'},
                 { "skipPhasedVCF", no_argument, 0, 'V'},
                 { 0, 0, 0, 0 } };
 
         int option_index = 0;
-        int key = getopt_long(argc-2, &argv[2], "ha:o:p:t:r:kMvV", long_options, &option_index);
+        int key = getopt_long(argc-2, &argv[2], "ha:o:p:t:r:kMV", long_options, &option_index);
 
         if (key == -1) {
             break;
@@ -142,10 +139,6 @@ int phase_main(int argc, char *argv[]) {
             break;
         case 'V':
             shouldOutputPhasedVcf = FALSE;
-            phasePrimaryVariantsOnly = TRUE;
-            break;
-        case 'v':
-            phasePrimaryVariantsOnly = TRUE;
             break;
         default:
             phase_usage();
@@ -345,7 +338,7 @@ int phase_main(int argc, char *argv[]) {
         // update vcf alleles
         updateVcfEntriesWithSubstringsAndPositions(chunkVcfEntries, chunkReference, strlen(chunkReference),
                                                    FALSE, params);
-        if (!phasePrimaryVariantsOnly) {
+        if (!params->phaseParams->phasePrimaryVariantsOnly) {
             updateVcfEntriesWithSubstringsAndPositions(filteredChunkVcfEntries, chunkReference, strlen(chunkReference),
                                                        FALSE, params);
         }
@@ -358,7 +351,7 @@ int phase_main(int argc, char *argv[]) {
         stList *filteredReadsForFilteredVcfEntries = stList_construct3(0, (void (*)(void *)) bamChunkRead_destruct);
 
         extractReadSubstringsAtVariantPositions(bamChunk, chunkVcfEntries, reads, filteredReads, params);
-        if (!phasePrimaryVariantsOnly) {
+        if (!params->phaseParams->phasePrimaryVariantsOnly) {
             extractReadSubstringsAtVariantPositions(bamChunk, filteredChunkVcfEntries, readsForFilteredVcfEntries,
                                                     filteredReadsForFilteredVcfEntries, params);
         }
@@ -415,7 +408,7 @@ int phase_main(int argc, char *argv[]) {
         st_logInfo(" %s Phased primary reads in %d sec\n", logIdentifier, time(NULL) - primaryPhasingStart);
 
         // phase filtered variants (if we're generating a VCF)
-        if (!phasePrimaryVariantsOnly) {
+        if (!params->phaseParams->phasePrimaryVariantsOnly) {
             bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
                                                             readsBelongingToHap1, readsBelongingToHap2, bamChunk,
                                                             bamChunker->readEnumerator, params);

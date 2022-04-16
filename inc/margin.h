@@ -303,6 +303,9 @@ struct _stRPHmmParameters {
     double minIndelVariantQuality;
     double minSvVariantQuality;
 
+    // whether we should phase primary or primary+filtered
+    bool phasePrimaryVariantsOnly;
+
     // for output vcf
     bool updateAllOutputVCFFormatFields;
 
