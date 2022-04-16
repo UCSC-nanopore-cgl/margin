@@ -161,6 +161,8 @@ void stRPHmmParameters_parseParametersFromJson(stRPHmmParameters *params, char *
             params->minIndelVariantQuality = stJson_parseFloat(js, tokens, ++i);
         } else if (strcmp(keyString, "minSvVariantQuality") == 0) {
             params->minSvVariantQuality = stJson_parseFloat(js, tokens, ++i);
+        } else if (strcmp(keyString, "phasePrimaryVariantsOnly") == 0) {
+            params->phasePrimaryVariantsOnly = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "updateAllOutputVCFFormatFields") == 0) {
             params->updateAllOutputVCFFormatFields = stJson_parseBool(js, tokens, ++i);
         } else if (strcmp(keyString, "phasesetMinBinomialReadSplitLikelihood") == 0) {
