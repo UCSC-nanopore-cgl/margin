@@ -407,8 +407,9 @@ int phase_main(int argc, char *argv[]) {
                           stSet_size(readsBelongingToHap2)));
         st_logInfo(" %s Phased primary reads in %d sec\n", logIdentifier, time(NULL) - primaryPhasingStart);
 
-        // phase filtered variants (if we're generating a VCF)
+        // phase filtered variants (if we're generating a VCF, and if configured)
         if (!params->phaseParams->phasePrimaryVariantsOnly) {
+            st_logInfo(" %s Phasing %"PRId64" filtered variants\n", logIdentifier, stList_length(filteredChunkVcfEntries));
             bubbleGraph_phaseVcfEntriesFromHaplotaggedReads(readsForFilteredVcfEntries, filteredChunkVcfEntries,
                                                             readsBelongingToHap1, readsBelongingToHap2, bamChunk,
                                                             bamChunker->readEnumerator, params);
