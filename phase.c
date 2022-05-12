@@ -314,7 +314,7 @@ int phase_main(int argc, char *argv[]) {
             char *timeElapsedDescriptor = getTimeDescriptorFromSeconds(timeTaken);
             char *timeLeftDescriptor = (secondsRemaining == 0 && currentPercentage <= 50 ?
                                     stString_print("unknown") : getTimeDescriptorFromSeconds(secondsRemaining));
-            st_logCritical("> Polishing %2"PRId64"%% complete (%"PRId64"/%"PRId64", %s).  Estimated time remaining: %s\n",
+            st_logCritical("> Phasing %2"PRId64"%% complete (%"PRId64"/%"PRId64", %s).  Estimated time remaining: %s\n",
                            currentPercentage, i, bamChunker->chunkCount, timeElapsedDescriptor, timeLeftDescriptor);
             free(timeLeftDescriptor);
             free(timeElapsedDescriptor);
