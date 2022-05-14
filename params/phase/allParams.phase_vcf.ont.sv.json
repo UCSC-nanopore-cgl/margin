@@ -7,13 +7,13 @@
 		"onlyUseSNPVCFEntries": false,
 		"useSVsForPhasing": true,
 		"indelSizeForSVHandling": 50,
-        "referenceExpansionForStructuralVariants": 64,
+		"referenceExpansionForStructuralVariants": 64,
 		"useVariantSelectionAdaptiveSampling": false,
 		"phasesetMinBinomialReadSplitLikelihood": 0.0,
 		"phasesetMaxDiscordantRatio": 0.5,
-		"phasesetMinSpanningReads": 3,
+		"phasesetMinSpanningReads": 2,
 		"minSnpVariantQuality": 3,
 		"minIndelVariantQuality": 10,
-        "phasePrimaryVariantsOnly": true
+		"phasePrimaryVariantsOnly": true
 	}
 }
