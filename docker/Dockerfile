@@ -27,7 +27,7 @@ RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9
     autoconf -Wno-header && \
     ./configure --without-curses --disable-lzma && \
     make && \
-    ln -s /opt/samtools-1.9/samtools /usr/local/bin/samtools
+    ln -s /opt/samtools/samtools-1.9/samtools /usr/local/bin/samtools
 
 # get marginPolish
 WORKDIR /opt
