@@ -541,19 +541,34 @@ int phase_main(int argc, char *argv[]) {
     }
 
     // cleanup
+    time_t cleanupStartTime = time(NULL);
+    st_logCritical("Starting cleanup at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(chunkWasSwitched);
+    st_logCritical("free(chunkWasSwitched) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     bamChunker_destruct(bamChunker);
+    st_logCritical("bamChunker_destruct(bamChunker) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     params_destruct(params);
+    st_logCritical("params_destruct(params) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     if (regionStr != NULL) free(regionStr);
+    st_logCritical("if (regionStr != NULL) free(regionStr) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     stList_destruct(chunkOrder);
+    st_logCritical("stList_destruct(chunkOrder) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(vcfFile);
+    st_logCritical("free(vcfFile) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     stHash_destruct(vcfEntries);
+    st_logCritical("stHash_destruct(vcfEntries) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     if (allReadIdsHap1 != NULL) stList_destruct(allReadIdsHap1);
+    st_logCritical(" if (allReadIdsHap1 != NULL) stList_destruct(allReadIdsHap1) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     if (allReadIdsHap2 != NULL) stList_destruct(allReadIdsHap2);
+    st_logCritical("if (allReadIdsHap2 != NULL) stList_destruct(allReadIdsHap2) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(outputBase);
+    st_logCritical("free(outputBase) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(bamInFile);
+    st_logCritical("free(bamInFile) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(referenceFastaFile);
+    st_logCritical("free(referenceFastaFile) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
     free(paramsFile);
+    st_logCritical("free(paramsFile) at %s\n", getTimeDescriptorFromSeconds(time(NULL) - cleanupStartTime));
 
     // log completion
     char *timeDescriptor = getTimeDescriptorFromSeconds(time(NULL) - startTime);
