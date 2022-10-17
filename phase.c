@@ -423,13 +423,17 @@ int phase_main(int argc, char *argv[]) {
                 stList_append(filteredReads, bamChunkRead_constructCopy(bcr));
             }
         }
-        st_logInfo(" %s Assigning %"PRId64" filtered reads to haplotypes\n", logIdentifier,
-                   stList_length(filteredReads));
-        time_t filteredPhasingStart = time(NULL);
-        bubbleGraph_partitionFilteredReadsFromVcfEntries(filteredReads, gf, bg, vcfEntriesToBubbles,
-                                                         readsBelongingToHap1,
-                                                         readsBelongingToHap2, params, logIdentifier);
-        st_logInfo(" %s Partitioned filtered reads in %d sec.\n", logIdentifier, time(NULL) - filteredPhasingStart);
+
+        // only partition filtered reads if we are writing the bam
+        if (shouldOutputHaplotaggedBam) {
+            st_logInfo(" %s Assigning %"PRId64" filtered reads to haplotypes\n", logIdentifier,
+                       stList_length(filteredReads));
+            time_t filteredPhasingStart = time(NULL);
+            bubbleGraph_partitionFilteredReadsFromVcfEntries(filteredReads, gf, bg, vcfEntriesToBubbles,
+                                                             readsBelongingToHap1,
+                                                             readsBelongingToHap2, params, logIdentifier);
+            st_logInfo(" %s Partitioned filtered reads in %d sec.\n", logIdentifier, time(NULL) - filteredPhasingStart);
+        }
 
 
         // Output
