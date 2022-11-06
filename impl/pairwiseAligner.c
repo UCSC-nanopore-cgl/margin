@@ -1566,7 +1566,7 @@ stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t a
     }
 
     // Get the kmers in seqX
-    uint64_t l[seqX.length - KMER_SIZE + 1];
+    uint64_t *l = st_calloc(seqX.length - KMER_SIZE + 1, sizeof(uint64_t));
     stHash *kmerOccurrences = getKmers(seqX, l);
 
     // Get the kmers shared in both seqX and seqY
@@ -1621,6 +1621,7 @@ stList *getKmerAlignmentAnchors(SymbolString seqX, SymbolString seqY, uint64_t a
 
     // Cleanup
     stHash_destruct(kmerOccurrences);
+    free(l);
 
     return anchorPairs;
 }
